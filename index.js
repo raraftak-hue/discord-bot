@@ -3,6 +3,13 @@ const { REST, Routes } = require('discord.js');
 const express = require('express');
 const app = express();
 
+// ==================== 🔒 إعدادات الحماية 🔒 ====================
+// ⚠️ ضع هنا ID سيرفراتك فقط!
+const ALLOWED_GUILDS = [
+  '1387902577496297523' // ⬅️ هذا ID سيرفرك
+];
+// ==================== 🔒 🔒 🔒 🔒 🔒 🔒 🔒 ====================
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -76,8 +83,54 @@ const commands = [
   }
 ];
 
+// ==================== 🔒 حدث الحماية مع الرسالة 🔒 ====================
+client.on('guildCreate', async guild => {
+  if (!ALLOWED_GUILDS.includes(guild.id)) {
+    console.log(`🚫 ${guild.name} (${guild.id}) حاول يضيف البوت!`);
+    
+    // أرسل رسالة للمالك
+    try {
+      const owner = await guild.fetchOwner();
+      
+      const embed = new EmbedBuilder()
+        .setTitle('🚫 البوت خاص!')
+        .setDescription(
+          '**هذا البوت خاص ويشتغل فقط في سيرفرات المطور!**\n\n' +
+          '📍 **إذا تبي تستخدم البوت في سيرفرك:**\n' +
+          '**1. راسل المطور:** ابحث عن **SEIYAGOD**\n' +
+          '**2. لا تحاول تضيف البوت ثاني!**\n' +
+          '**3. البوت حيمسح نفسه خلال 10 ثواني**'
+        )
+        .setColor(0xFF0000)
+        .setFooter({ text: '© SEIYAGOD - جميع الحقوق محفوظة' })
+        .setTimestamp();
+      
+      await owner.send({ embeds: [embed] });
+      console.log(`📩 أرسلت رسالة تحذير لمالك ${guild.name}`);
+      
+    } catch (err) {
+      console.log('❌ ما قدرت أرسل رسالة للمالك');
+    }
+    
+    // انتظر 10 ثواني ثم اطلع
+    setTimeout(async () => {
+      await guild.leave();
+      console.log(`✅ طلعت من ${guild.name}`);
+    }, 10000);
+  }
+});
+// ==================== 🔒 🔒 🔒 🔒 🔒 🔒 🔒 ====================
+
 client.once('ready', async () => {
   console.log(`✅ ${client.user.tag} جاهز!`);
+  
+  // طباعة السيرفرات الحالية
+  console.log('📊 السيرفرات المصرحة:');
+  client.guilds.cache.forEach(guild => {
+    if (ALLOWED_GUILDS.includes(guild.id)) {
+      console.log(`✅ ${guild.name} (${guild.memberCount} أعضاء)`);
+    }
+  });
   
   try {
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
@@ -90,6 +143,10 @@ client.once('ready', async () => {
 
 client.on('guildMemberAdd', async (member) => {
   if (!welcomeSettings.channelId) return;
+  
+  // ==================== 🔒 تحقق من السيرفر 🔒 ====================
+  if (!ALLOWED_GUILDS.includes(member.guild.id)) return;
+  // ==============================================================
   
   try {
     const channel = member.guild.channels.cache.get(welcomeSettings.channelId);
@@ -117,7 +174,7 @@ client.on('guildMemberAdd', async (member) => {
     }
 
     await channel.send({ 
-      content: '', // ✅ بدون منشن
+      content: '',
       embeds: [welcomeEmbed] 
     });
     
@@ -127,6 +184,12 @@ client.on('guildMemberAdd', async (member) => {
 });
 
 client.on('interactionCreate', async interaction => {
+  // ==================== 🔒 الحماية الرئيسية 🔒 ====================
+  if (interaction.guild && !ALLOWED_GUILDS.includes(interaction.guild.id)) {
+    return; // ⛔ لا ترد على أي أمر من سيرفر غير مصرح
+  }
+  // ==============================================================
+
   if (interaction.isButton() && interaction.customId === 'open_ticket') {
     if (activeTickets.has(interaction.user.id)) {
       return interaction.reply({ content: 'لديك تذكرة مفتوحة.', ephemeral: true });
@@ -308,7 +371,7 @@ client.on('interactionCreate', async interaction => {
     }
 
     await channel.send({ 
-      content: '', // ✅ بدون منشن
+      content: '',
       embeds: [testEmbed] 
     });
 
@@ -369,6 +432,7 @@ app.get('/health', (req, res) => res.json({ status: 'healthy' }));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ السيرفر شغال على port: ${PORT}`);
+  console.log(`🔒 الحماية مفعلة للسيرفرات: ${ALLOWED_GUILDS.length} سيرفر`);
   client.login(process.env.TOKEN)
     .then(() => console.log('✅ البوت متصل!'))
     .catch(err => {
