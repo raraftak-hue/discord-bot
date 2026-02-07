@@ -3,21 +3,20 @@ const { REST, Routes, SlashCommandBuilder } = require('discord.js');
 const express = require('express');
 const app = express();
 
-// BOT SETUP - جمعنا كل الـ Intents المهمة
+// BOT SETUP
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.MessageContent
   ]
 });
 
-// BOT & GUILD IDs
+// BOT ID فقط
 const BOT_ID = '1469663065518899292';
-const GUILD_ID = '1387902577496297523';
 
-// تخزين بيانات الترحيب (فاضية تماماً)
+// تخزين بيانات الترحيب
 const welcomeSettings = {
   channelId: null,
   title: '',
@@ -30,7 +29,7 @@ const welcomeSettings = {
 const panelAdminRoles = new Map();
 const activeTickets = new Map();
 
-// الأوامر الكاملة
+// الأوامر
 const commands = [
   new SlashCommandBuilder()
     .setName('ticketpanel')
@@ -38,7 +37,7 @@ const commands = [
     .addRoleOption(option => option.setName('admin_role_1').setDescription('رتبة الإدارة الأولى').setRequired(false))
     .addRoleOption(option => option.setName('admin_role_2').setDescription('رتبة الإدارة الثانية').setRequired(false))
     .addRoleOption(option => option.setName('admin_role_3').setDescription('رتبة الإدارة الثالثة').setRequired(false)),
-
+  
   new SlashCommandBuilder()
     .setName('editembed')
     .setDescription('تعديل رسالة الإيمبد')
@@ -50,7 +49,7 @@ const commands = [
     .addRoleOption(option => option.setName('admin_role_1').setDescription('رتبة الإدارة الأولى').setRequired(false))
     .addRoleOption(option => option.setName('admin_role_2').setDescription('رتبة الإدارة الثانية').setRequired(false))
     .addRoleOption(option => option.setName('admin_role_3').setDescription('رتبة الإدارة الثالثة').setRequired(false)),
-
+  
   new SlashCommandBuilder()
     .setName('setwelcome')
     .setDescription('تعيين روم الترحيب')
@@ -58,7 +57,7 @@ const commands = [
       option.setName('channel')
         .setDescription('روم الترحيب')
         .setRequired(true)),
-
+  
   new SlashCommandBuilder()
     .setName('welcomeembed')
     .setDescription('تخصيص إيمبد الترحيب')
@@ -67,12 +66,12 @@ const commands = [
     .addStringOption(option => option.setName('color').setDescription('لون الإيمبد HEX (#2b2d31)').setRequired(false))
     .addStringOption(option => option.setName('image').setDescription('رابط صورة خلفية').setRequired(false))
     .addStringOption(option => option.setName('thumbnail').setDescription('رابط صورة مصغرة').setRequired(false)),
-
+  
   new SlashCommandBuilder()
     .setName('testwelcome')
     .setDescription('تجربة رسالة الترحيب')
     .addUserOption(option => option.setName('user').setDescription('العضو لتجربة الترحيب').setRequired(false)),
-
+  
   new SlashCommandBuilder()
     .setName('welcomeinfo')
     .setDescription('عرض إعدادات الترحيب الحالية')
@@ -82,7 +81,7 @@ const commands = [
 (async () => {
   try {
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-    await rest.put(Routes.applicationGuildCommands(BOT_ID, GUILD_ID), { body: commands });
+    await rest.put(Routes.applicationCommands(BOT_ID), { body: commands });
     console.log('✅ تم تسجيل الأوامر');
   } catch (error) {
     console.error('❌ خطأ:', error);
@@ -92,16 +91,12 @@ const commands = [
 // البوت جاهز
 client.once('ready', () => {
   console.log(`✅ ${client.user.tag} جاهز!`);
-  console.log('🎫 نظام التذاكر + 👋 نظام الترحيب');
-  console.log('🚀 كل شيء مدمج وجاهز!');
 });
 
-// حدث الترحيب (بسيط وسهل)
+// حدث الترحيب - بدون زر التذاكر
 client.on('guildMemberAdd', async (member) => {
-  if (!welcomeSettings.channelId || !welcomeSettings.title && !welcomeSettings.description) {
-    return;
-  }
-
+  if (!welcomeSettings.channelId) return;
+  
   try {
     const channel = member.guild.channels.cache.get(welcomeSettings.channelId);
     if (!channel) return;
@@ -110,7 +105,7 @@ client.on('guildMemberAdd', async (member) => {
       .replace(/{user}/g, member.user.username)
       .replace(/{server}/g, member.guild.name)
       .replace(/{mention}/g, `<@${member.user.id}>`);
-
+    
     let description = welcomeSettings.description
       .replace(/{user}/g, member.user.username)
       .replace(/{server}/g, member.guild.name)
@@ -125,23 +120,20 @@ client.on('guildMemberAdd', async (member) => {
     if (welcomeSettings.image) welcomeEmbed.setImage(welcomeSettings.image);
     if (welcomeSettings.thumbnail) welcomeEmbed.setThumbnail(welcomeSettings.thumbnail);
 
+    // أزرار الترحيب فقط - بدون زر فتح التذاكر
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setLabel('📖 القوانين')
-        .setURL('https://example.com/rules')
-        .setStyle(ButtonStyle.Link),
-      new ButtonBuilder()
-        .setLabel('🎫 التذاكر')
-        .setCustomId('open_ticket')
-        .setStyle(ButtonStyle.Secondary)
+        .setURL('https://example.com/rules') // غير الرابط لرابط قوانينك
+        .setStyle(ButtonStyle.Link)
     );
 
-    // بدون منشن خارجي أبداً
     await channel.send({ 
+      content: `${member}`, 
       embeds: [welcomeEmbed], 
       components: [row] 
     });
-
+    
     console.log(`👋 تم ترحيب ${member.user.tag}`);
   } catch (error) {
     console.error('❌ خطأ في الترحيب:', error);
@@ -157,7 +149,7 @@ client.on('interactionCreate', async interaction => {
     }
 
     const adminRoles = panelAdminRoles.get(interaction.message.id) || [];
-
+    
     const ticketChannel = await interaction.guild.channels.create({
       name: `ticket-${interaction.user.username}`,
       type: ChannelType.GuildText,
@@ -173,7 +165,7 @@ client.on('interactionCreate', async interaction => {
     activeTickets.set(interaction.user.id, ticketChannel.id);
 
     const mentions = `${interaction.user}${adminRoles.length > 0 ? `\n${adminRoles.map(id => `<@&${id}>`).join(' ')}` : ''}`;
-
+    
     await ticketChannel.send({ 
       content: mentions, 
       embeds: [new EmbedBuilder()
@@ -248,7 +240,7 @@ client.on('interactionCreate', async interaction => {
     const color = interaction.options.getString('color');
     const image = interaction.options.getString('image');
     const thumbnail = interaction.options.getString('thumbnail');
-
+    
     const adminRoles = [
       interaction.options.getRole('admin_role_1'),
       interaction.options.getRole('admin_role_2'),
@@ -291,7 +283,7 @@ client.on('interactionCreate', async interaction => {
   if (interaction.isChatInputCommand() && interaction.commandName === 'setwelcome') {
     const channel = interaction.options.getChannel('channel');
     welcomeSettings.channelId = channel.id;
-
+    
     await interaction.reply({ 
       content: `✅ تم تعيين روم الترحيب: ${channel}\n\nاستخدم \`/welcomeembed\` لتخصيص الرسالة.`,
       ephemeral: false 
@@ -333,7 +325,7 @@ client.on('interactionCreate', async interaction => {
 
     const user = interaction.options.getUser('user') || interaction.user;
     const channel = interaction.guild.channels.cache.get(welcomeSettings.channelId);
-
+    
     if (!channel) {
       return interaction.reply({ 
         content: '❌ روم الترحيب غير موجود.',
@@ -345,7 +337,7 @@ client.on('interactionCreate', async interaction => {
       .replace(/{user}/g, user.username)
       .replace(/{server}/g, interaction.guild.name)
       .replace(/{mention}/g, `<@${user.id}>`);
-
+    
     let description = welcomeSettings.description
       .replace(/{user}/g, user.username)
       .replace(/{server}/g, interaction.guild.name)
@@ -360,7 +352,10 @@ client.on('interactionCreate', async interaction => {
     if (welcomeSettings.image) testEmbed.setImage(welcomeSettings.image);
     if (welcomeSettings.thumbnail) testEmbed.setThumbnail(welcomeSettings.thumbnail);
 
-    await channel.send({ embeds: [testEmbed] });
+    await channel.send({ 
+      content: `${user}`, 
+      embeds: [testEmbed] 
+    });
 
     await interaction.reply({ 
       content: `✅ تم إرسال رسالة ترحيب تجريبية في ${channel}`,
@@ -372,7 +367,7 @@ client.on('interactionCreate', async interaction => {
   if (interaction.isChatInputCommand() && interaction.commandName === 'welcomeinfo') {
     const channel = welcomeSettings.channelId ? 
       interaction.guild.channels.cache.get(welcomeSettings.channelId) : null;
-
+    
     const infoEmbed = new EmbedBuilder()
       .setTitle('⚙️ إعدادات الترحيب الحالية')
       .setColor(0x2b2d31)
@@ -392,10 +387,28 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-// سيرفر ويب
-app.get('/', (req, res) => res.send('✅ Bot is running'));
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => console.log(`🌐 Port ${PORT}`));
+// سيرفر ويب لـ Railway
+app.get('/', (req, res) => {
+  res.json({
+    status: 'online',
+    bot: client.isReady() ? 'connected' : 'disconnected',
+    uptime: process.uptime(),
+    timestamp: Date.now(),
+    service: 'discord-ticket-welcome-bot'
+  });
+});
 
-// تشغيل البوت
-client.login(process.env.TOKEN);
+app.get('/health', (req, res) => {
+  if (client.isReady()) {
+    res.status(200).json({ status: 'healthy', bot: 'online' });
+  } else {
+    res.status(503).json({ status: 'unhealthy', bot: 'offline' });
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 البوت شغال على port ${PORT}`);
+});
+
+client.login(process.env.TOKEN).catch(console.error);
