@@ -79,16 +79,18 @@ const commands = [
 (async () => {
   try {
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-    await rest.put(Routes.applicationCommands(BOT_ID), { body: commands });
-    console.log('✅ تم تسجيل 7 أوامر');
+    const data = await rest.put(Routes.applicationCommands(BOT_ID), { body: commands });
+    console.log(`✅ تم تسجيل ${data.length} أمر: ${commands.map(c => c.name).join(', ')}`);
   } catch (error) {
-    console.error('❌ خطأ:', error);
+    console.error('❌ خطأ في تسجيل الأوامر:', error);
   }
 })();
 
 // البوت جاهز
 client.once('ready', () => {
   console.log(`✅ ${client.user.tag} جاهز!`);
+  console.log(`🆔 ID: ${client.user.id}`);
+  console.log(`📊 ${client.guilds.cache.size} سيرفر`);
 });
 
 // حدث الترحيب
@@ -384,9 +386,36 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'healthy' });
 });
 
+// 🔥🔥🔥 الجزء المهم - التسلسل الصحيح 🔥🔥🔥
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 البوت شغال`);
+
+// 1. ابدأ سيرفر الويب أول
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ السيرفر شغال على port: ${PORT}`);
+  
+  // 2. بعدين سجل البوت
+  client.login(process.env.TOKEN)
+    .then(() => console.log('✅ البوت متصل بـ Discord!'))
+    .catch(err => {
+      console.error('❌ فشل تسجيل الدخول:', err);
+      server.close();
+      process.exit(1);
+    });
 });
 
-client.login(process.env.TOKEN).catch(console.error);
+// 🔧 منع الإغلاق المفاجئ
+process.on('SIGTERM', () => {
+  console.log('🛑 إغلاق نظيف...');
+  server.close(() => {
+    console.log('✅ السيرفر أغلق بنجاح');
+    process.exit(0);
+  });
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('⚠️ Unhandled rejection:', err);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('⚠️ Uncaught exception:', err);
+});
