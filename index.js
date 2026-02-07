@@ -13,14 +13,13 @@ const client = new Client({
   ]
 });
 
-const BOT_ID = '1469663065518899292';
-
 // تخزين البيانات
 const welcomeSettings = {
   channelId: null,
-  title: '',
-  description: '',
-  color: '2b2d31'
+  title: 'أهلاً بك في {server}!',
+  description: 'مرحباً {mention} في **{server}**!\nأنت العضو رقم **{count}** 🌟',
+  color: '2b2d31',
+  image: null
 };
 
 const panelAdminRoles = new Map();
@@ -56,7 +55,8 @@ const commands = [
     .setDescription('تعديل رسالة الترحيب')
     .addStringOption(option => option.setName('title').setDescription('العنوان (استخدم {user} {mention} {server})').setRequired(false))
     .addStringOption(option => option.setName('description').setDescription('الوصف (استخدم {user} {mention} {server} {count})').setRequired(false))
-    .addStringOption(option => option.setName('color').setDescription('اللون (#2b2d31)').setRequired(false)),
+    .addStringOption(option => option.setName('color').setDescription('اللون (#2b2d31)').setRequired(false))
+    .addStringOption(option => option.setName('image').setDescription('رابط صورة خلفية (اختياري)').setRequired(false)),
   
   // 5. تجربة الترحيب
   new SlashCommandBuilder()
@@ -79,7 +79,7 @@ const commands = [
 (async () => {
   try {
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-    const data = await rest.put(Routes.applicationCommands(BOT_ID), { body: commands });
+    const data = await rest.put(Routes.applicationCommands(client.user?.id || process.env.CLIENT_ID), { body: commands });
     console.log(`✅ تم تسجيل ${data.length} أمر: ${commands.map(c => c.name).join(', ')}`);
   } catch (error) {
     console.error('❌ خطأ في تسجيل الأوامر:', error);
@@ -115,13 +115,20 @@ client.on('guildMemberAdd', async (member) => {
       .replace(/{mention}/g, `<@${member.user.id}>`);
 
     const welcomeEmbed = new EmbedBuilder()
-      .setColor(parseInt(welcomeSettings.color.replace('#', ''), 16) || 0x2b2d31);
+      .setColor(parseInt(welcomeSettings.color.replace('#', ''), 16) || 0x2b2d31)
+      .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 256 }))
+      .setFooter({ 
+        text: `ID: ${member.user.id} | العضو رقم: ${member.guild.memberCount}`,
+        iconURL: member.guild.iconURL({ dynamic: true })
+      })
+      .setTimestamp();
 
     if (title.trim()) welcomeEmbed.setTitle(title);
     if (description.trim()) welcomeEmbed.setDescription(description);
+    if (welcomeSettings.image) welcomeEmbed.setImage(welcomeSettings.image);
 
     await channel.send({ 
-      content: `${member}`, 
+      content: `${member}`,
       embeds: [welcomeEmbed] 
     });
     
@@ -269,10 +276,12 @@ client.on('interactionCreate', async interaction => {
     const title = interaction.options.getString('title');
     const description = interaction.options.getString('description');
     const color = interaction.options.getString('color');
+    const image = interaction.options.getString('image');
 
     if (title !== null) welcomeSettings.title = title || '';
     if (description !== null) welcomeSettings.description = description || '';
     if (color) welcomeSettings.color = color.startsWith('#') ? color.replace('#', '') : color;
+    if (image) welcomeSettings.image = image;
 
     await interaction.reply({ 
       content: `✅ تم تحديث إعدادات الترحيب!`,
@@ -311,10 +320,17 @@ client.on('interactionCreate', async interaction => {
       .replace(/{mention}/g, `<@${user.id}>`);
 
     const testEmbed = new EmbedBuilder()
-      .setColor(parseInt(welcomeSettings.color.replace('#', ''), 16) || 0x2b2d31);
+      .setColor(parseInt(welcomeSettings.color.replace('#', ''), 16) || 0x2b2d31)
+      .setThumbnail(user.displayAvatarURL({ dynamic: true, size: 256 }))
+      .setFooter({ 
+        text: `[تجربة] | العضو رقم: ${interaction.guild.memberCount}`,
+        iconURL: interaction.guild.iconURL({ dynamic: true })
+      })
+      .setTimestamp();
 
-    if (title.trim()) testEmbed.setTitle(`[تجربة] ${title}`);
+    if (title.trim()) testEmbed.setTitle(title);
     if (description.trim()) testEmbed.setDescription(description);
+    if (welcomeSettings.image) testEmbed.setImage(welcomeSettings.image);
 
     await channel.send({ 
       content: `${user}`, 
@@ -335,11 +351,16 @@ client.on('interactionCreate', async interaction => {
     const infoEmbed = new EmbedBuilder()
       .setTitle('⚙️ إعدادات الترحيب')
       .setColor(0x2b2d31)
+      .setThumbnail(interaction.guild.iconURL({ dynamic: true }))
       .addFields(
         { name: '📌 الروم', value: channel ? `${channel}` : '❌ غير معين', inline: true },
-        { name: '🎨 اللون', value: `#${welcomeSettings.color}`, inline: true }
+        { name: '🎨 اللون', value: `#${welcomeSettings.color}`, inline: true },
+        { name: '🖼️ صورة', value: welcomeSettings.image ? '✅ معين' : '❌ غير معين', inline: true }
       )
-      .setDescription(`**العنوان:** ${welcomeSettings.title || 'لا يوجد'}\n**الوصف:** ${welcomeSettings.description || 'لا يوجد'}`)
+      .setDescription(
+        `**العنوان:**\n${welcomeSettings.title || 'لا يوجد'}\n\n` +
+        `**الوصف:**\n${welcomeSettings.description || 'لا يوجد'}`
+      )
       .setTimestamp();
 
     await interaction.reply({ 
@@ -353,6 +374,7 @@ client.on('interactionCreate', async interaction => {
     const helpEmbed = new EmbedBuilder()
       .setTitle('🛠️ أوامر البوت')
       .setColor(0x2b2d31)
+      .setThumbnail(client.user.displayAvatarURL({ dynamic: true }))
       .addFields(
         { 
           name: '🎫 التذاكر', 
@@ -377,14 +399,12 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-// 🔥🔥🔥 الكود المثبت لعدم الإغلاق 🔥🔥🔥
-// 🔁 ping تلقائي
+// 🔥 Health check تلقائي
+let lastPing = Date.now();
 setInterval(() => {
-  console.log('🫀 Ping - البوت شغال');
-  if (client.isReady()) {
-    console.log(`📊 ${client.guilds.cache.size} سيرفر`);
-  }
-}, 5 * 60 * 1000);
+  console.log('❤️ Health check ping');
+  lastPing = Date.now();
+}, 30 * 1000);
 
 // سيرفر ويب
 app.get('/', (req, res) => {
@@ -395,6 +415,7 @@ app.get('/', (req, res) => {
 });
 
 app.get('/ping', (req, res) => {
+  lastPing = Date.now();
   res.status(200).json({ 
     status: 'alive', 
     timestamp: Date.now(),
@@ -403,10 +424,23 @@ app.get('/ping', (req, res) => {
 });
 
 app.get('/health', (req, res) => {
+  lastPing = Date.now();
   res.status(200).json({ 
     status: 'healthy',
     bot: client.isReady(),
-    guilds: client.guilds.cache.size
+    guilds: client.guilds.cache.size,
+    uptime: process.uptime()
+  });
+});
+
+app.get('/status', (req, res) => {
+  const uptime = process.uptime();
+  const memory = process.memoryUsage();
+  res.json({
+    status: 'running',
+    uptime: `${Math.floor(uptime / 60)} دقائق`,
+    memory: `${Math.round(memory.heapUsed / 1024 / 1024)}MB`,
+    lastPing: Date.now() - lastPing
   });
 });
 
@@ -431,27 +465,19 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     });
 });
 
-// 🔧 منع الإغلاق المفاجئ
+// 🔧 منع الإغلاق
 process.on('SIGTERM', () => {
   console.log('🛑 إغلاق نظيف...');
-  client.destroy();
-  server.close(() => {
-    console.log('✅ السيرفر أغلق بنجاح');
+  setTimeout(() => {
+    console.log('⏳ تأخير الإغلاق...');
     process.exit(0);
-  });
+  }, 10000);
 });
 
-process.on('unhandledRejection', (err) => {
-  console.error('⚠️ Unhandled rejection:', err);
-});
-
-process.on('uncaughtException', (err) => {
-  console.error('⚠️ Uncaught exception:', err);
-});
-
-// ⏰ طباعة حالة البوت كل ساعة
+// ping تلقائي كل 5 دقائق
 setInterval(() => {
+  console.log('🫀 Ping - البوت شغال');
   if (client.isReady()) {
-    console.log(`⏰ [${new Date().toLocaleTimeString()}] البوت شغال | ${client.guilds.cache.size} سيرفر`);
+    console.log(`📊 ${client.guilds.cache.size} سيرفر`);
   }
-}, 60 * 60 * 1000);
+}, 5 * 60 * 1000);
