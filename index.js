@@ -377,25 +377,53 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
+// 🔥🔥🔥 الكود المثبت لعدم الإغلاق 🔥🔥🔥
+// 🔁 ping تلقائي
+setInterval(() => {
+  console.log('🫀 Ping - البوت شغال');
+  if (client.isReady()) {
+    console.log(`📊 ${client.guilds.cache.size} سيرفر`);
+  }
+}, 5 * 60 * 1000);
+
 // سيرفر ويب
 app.get('/', (req, res) => {
-  res.json({ status: 'online', bot: client.isReady() });
+  res.json({ 
+    status: 'online', 
+    bot: client.isReady() ? 'connected' : 'disconnected'
+  });
+});
+
+app.get('/ping', (req, res) => {
+  res.status(200).json({ 
+    status: 'alive', 
+    timestamp: Date.now(),
+    uptime: process.uptime()
+  });
 });
 
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'healthy' });
+  res.status(200).json({ 
+    status: 'healthy',
+    bot: client.isReady(),
+    guilds: client.guilds.cache.size
+  });
 });
 
-// 🔥🔥🔥 الجزء المهم - التسلسل الصحيح 🔥🔥🔥
+// 🔥 الجزء المهم - التسلسل الصحيح
 const PORT = process.env.PORT || 3000;
 
 // 1. ابدأ سيرفر الويب أول
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ السيرفر شغال على port: ${PORT}`);
+  console.log(`🌐 Health check: http://0.0.0.0:${PORT}/health`);
   
   // 2. بعدين سجل البوت
   client.login(process.env.TOKEN)
-    .then(() => console.log('✅ البوت متصل بـ Discord!'))
+    .then(() => {
+      console.log('✅ البوت متصل بـ Discord!');
+      console.log(`👑 ${client.user.tag} جاهز للعمل`);
+    })
     .catch(err => {
       console.error('❌ فشل تسجيل الدخول:', err);
       server.close();
@@ -406,6 +434,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 // 🔧 منع الإغلاق المفاجئ
 process.on('SIGTERM', () => {
   console.log('🛑 إغلاق نظيف...');
+  client.destroy();
   server.close(() => {
     console.log('✅ السيرفر أغلق بنجاح');
     process.exit(0);
@@ -419,3 +448,10 @@ process.on('unhandledRejection', (err) => {
 process.on('uncaughtException', (err) => {
   console.error('⚠️ Uncaught exception:', err);
 });
+
+// ⏰ طباعة حالة البوت كل ساعة
+setInterval(() => {
+  if (client.isReady()) {
+    console.log(`⏰ [${new Date().toLocaleTimeString()}] البوت شغال | ${client.guilds.cache.size} سيرفر`);
+  }
+}, 60 * 60 * 1000);
