@@ -117,7 +117,7 @@ client.on('guildMemberAdd', async (member) => {
     }
 
     await channel.send({ 
-      content: `${member}`,
+      content: '', // ✅ بدون منشن
       embeds: [welcomeEmbed] 
     });
     
@@ -308,7 +308,7 @@ client.on('interactionCreate', async interaction => {
     }
 
     await channel.send({ 
-      content: `${user}`, 
+      content: '', // ✅ بدون منشن
       embeds: [testEmbed] 
     });
 
