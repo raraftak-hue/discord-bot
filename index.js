@@ -1,9 +1,8 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionsBitField } = require('discord.js');
-const { REST, Routes, SlashCommandBuilder } = require('discord.js');
+const { REST, Routes } = require('discord.js');
 const express = require('express');
 const app = express();
 
-// BOT SETUP
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -13,11 +12,10 @@ const client = new Client({
   ]
 });
 
-// تخزين البيانات
 const welcomeSettings = {
   channelId: null,
-  title: 'أهلاً بك في {server}!',
-  description: 'مرحباً {mention} في **{server}**!\nأنت العضو رقم **{count}** 🌟',
+  title: '',
+  description: '',
   color: '2b2d31',
   image: null
 };
@@ -25,79 +23,73 @@ const welcomeSettings = {
 const panelAdminRoles = new Map();
 const activeTickets = new Map();
 
-// ⭐⭐ الأوامر البسيطة - بدون Subcommands ⭐⭐
 const commands = [
-  // 1. لوحة التذاكر
-  new SlashCommandBuilder()
-    .setName('ticketpanel')
-    .setDescription('عرض لوحة التذاكر')
-    .addRoleOption(option => option.setName('admin1').setDescription('رتبة الإدارة الأولى').setRequired(false))
-    .addRoleOption(option => option.setName('admin2').setDescription('رتبة الإدارة الثانية').setRequired(false))
-    .addRoleOption(option => option.setName('admin3').setDescription('رتبة الإدارة الثالثة').setRequired(false)),
-  
-  // 2. تعديل اللوحة
-  new SlashCommandBuilder()
-    .setName('ticketedit')
-    .setDescription('تعديل لوحة التذاكر')
-    .addStringOption(option => option.setName('title').setDescription('عنوان جديد').setRequired(false))
-    .addStringOption(option => option.setName('description').setDescription('وصف جديد').setRequired(false))
-    .addStringOption(option => option.setName('color').setDescription('لون جديد').setRequired(false)),
-  
-  // 3. تعيين الترحيب
-  new SlashCommandBuilder()
-    .setName('welcomeset')
-    .setDescription('تعيين روم الترحيب')
-    .addChannelOption(option => option.setName('channel').setDescription('روم الترحيب').setRequired(true)),
-  
-  // 4. تعديل الترحيب
-  new SlashCommandBuilder()
-    .setName('welcomeedit')
-    .setDescription('تعديل رسالة الترحيب')
-    .addStringOption(option => option.setName('title').setDescription('العنوان (استخدم {user} {mention} {server})').setRequired(false))
-    .addStringOption(option => option.setName('description').setDescription('الوصف (استخدم {user} {mention} {server} {count})').setRequired(false))
-    .addStringOption(option => option.setName('color').setDescription('اللون (#2b2d31)').setRequired(false))
-    .addStringOption(option => option.setName('image').setDescription('رابط صورة خلفية (اختياري)').setRequired(false)),
-  
-  // 5. تجربة الترحيب
-  new SlashCommandBuilder()
-    .setName('welcometest')
-    .setDescription('تجربة رسالة الترحيب')
-    .addUserOption(option => option.setName('user').setDescription('لعضو للتجربة').setRequired(false)),
-  
-  // 6. معلومات الترحيب
-  new SlashCommandBuilder()
-    .setName('welcomeinfo')
-    .setDescription('عرض إعدادات الترحيب'),
-  
-  // 7. المساعدة
-  new SlashCommandBuilder()
-    .setName('bothelp')
-    .setDescription('عرض جميع الأوامر')
-].map(cmd => cmd.toJSON());
+  {
+    name: 'ticketpanel',
+    description: 'عرض لوحة التذاكر',
+    options: [
+      { name: 'admin1', description: 'رتبة الإدارة الأولى', type: 8, required: false },
+      { name: 'admin2', description: 'رتبة الإدارة الثانية', type: 8, required: false },
+      { name: 'admin3', description: 'رتبة الإدارة الثالثة', type: 8, required: false }
+    ]
+  },
+  {
+    name: 'ticketedit',
+    description: 'تعديل لوحة التذاكر',
+    options: [
+      { name: 'title', description: 'عنوان جديد', type: 3, required: false },
+      { name: 'description', description: 'وصف جديد', type: 3, required: false },
+      { name: 'color', description: 'لون جديد', type: 3, required: false }
+    ]
+  },
+  {
+    name: 'welcomeset',
+    description: 'تعيين روم الترحيب',
+    options: [
+      { name: 'channel', description: 'روم الترحيب', type: 7, required: true }
+    ]
+  },
+  {
+    name: 'welcomeedit',
+    description: 'تعديل رسالة الترحيب',
+    options: [
+      { name: 'title', description: 'العنوان', type: 3, required: false },
+      { name: 'description', description: 'الوصف', type: 3, required: false },
+      { name: 'color', description: 'اللون (#2b2d31)', type: 3, required: false },
+      { name: 'image', description: 'رابط صورة خلفية', type: 3, required: false }
+    ]
+  },
+  {
+    name: 'welcometest',
+    description: 'تجربة رسالة الترحيب',
+    options: [
+      { name: 'user', description: 'لعضو للتجربة', type: 6, required: false }
+    ]
+  },
+  {
+    name: 'welcomeinfo',
+    description: 'عرض إعدادات الترحيب'
+  },
+  {
+    name: 'bothelp',
+    description: 'عرض جميع الأوامر'
+  }
+];
 
-// تسجيل الأوامر
-(async () => {
+client.once('ready', async () => {
+  console.log(`✅ ${client.user.tag} جاهز!`);
+  
   try {
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-    const data = await rest.put(Routes.applicationCommands(client.user?.id || process.env.CLIENT_ID), { body: commands });
-    console.log(`✅ تم تسجيل ${data.length} أمر: ${commands.map(c => c.name).join(', ')}`);
+    await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
+    console.log(`✅ تم تسجيل ${commands.length} أوامر`);
   } catch (error) {
     console.error('❌ خطأ في تسجيل الأوامر:', error);
   }
-})();
-
-// البوت جاهز
-client.once('ready', () => {
-  console.log(`✅ ${client.user.tag} جاهز!`);
-  console.log(`🆔 ID: ${client.user.id}`);
-  console.log(`📊 ${client.guilds.cache.size} سيرفر`);
 });
 
-// حدث الترحيب
 client.on('guildMemberAdd', async (member) => {
-  if (!welcomeSettings.channelId || (!welcomeSettings.title && !welcomeSettings.description)) {
-    return;
-  }
+  if (!welcomeSettings.channelId) return;
   
   try {
     const channel = member.guild.channels.cache.get(welcomeSettings.channelId);
@@ -115,32 +107,26 @@ client.on('guildMemberAdd', async (member) => {
       .replace(/{mention}/g, `<@${member.user.id}>`);
 
     const welcomeEmbed = new EmbedBuilder()
-      .setColor(parseInt(welcomeSettings.color.replace('#', ''), 16) || 0x2b2d31)
-      .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 256 }))
-      .setFooter({ 
-        text: `ID: ${member.user.id} | العضو رقم: ${member.guild.memberCount}`,
-        iconURL: member.guild.iconURL({ dynamic: true })
-      })
-      .setTimestamp();
+      .setColor(parseInt(welcomeSettings.color.replace('#', ''), 16) || 0x2b2d31);
 
     if (title.trim()) welcomeEmbed.setTitle(title);
     if (description.trim()) welcomeEmbed.setDescription(description);
-    if (welcomeSettings.image) welcomeEmbed.setImage(welcomeSettings.image);
+    
+    if (welcomeSettings.image && welcomeSettings.image.startsWith('http')) {
+      welcomeEmbed.setImage(welcomeSettings.image);
+    }
 
     await channel.send({ 
       content: `${member}`,
       embeds: [welcomeEmbed] 
     });
     
-    console.log(`👋 تم ترحيب ${member.user.tag}`);
   } catch (error) {
     console.error('❌ خطأ في الترحيب:', error);
   }
 });
 
-// الأوامر
 client.on('interactionCreate', async interaction => {
-  // فتح تذكرة
   if (interaction.isButton() && interaction.customId === 'open_ticket') {
     if (activeTickets.has(interaction.user.id)) {
       return interaction.reply({ content: 'لديك تذكرة مفتوحة.', ephemeral: true });
@@ -179,7 +165,6 @@ client.on('interactionCreate', async interaction => {
     return interaction.reply({ content: `تم إنشاء تذكرتك: ${ticketChannel}`, ephemeral: true });
   }
 
-  // إغلاق تذكرة
   if (interaction.isButton() && interaction.customId === 'close_ticket') {
     if (!interaction.channel.name.startsWith('تذكرة-')) {
       return interaction.reply({ content: 'هذا الزر يعمل فقط في قنوات التذاكر.', ephemeral: true });
@@ -196,10 +181,8 @@ client.on('interactionCreate', async interaction => {
     setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
   }
 
-  // أوامر الشات
   if (!interaction.isChatInputCommand()) return;
 
-  // 1. ticketpanel
   if (interaction.commandName === 'ticketpanel') {
     const adminRoles = [
       interaction.options.getRole('admin1'),
@@ -234,7 +217,6 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // 2. ticketedit
   else if (interaction.commandName === 'ticketedit') {
     const title = interaction.options.getString('title');
     const description = interaction.options.getString('description');
@@ -260,7 +242,6 @@ client.on('interactionCreate', async interaction => {
     });
   }
 
-  // 3. welcomeset
   else if (interaction.commandName === 'welcomeset') {
     const channel = interaction.options.getChannel('channel');
     welcomeSettings.channelId = channel.id;
@@ -271,17 +252,16 @@ client.on('interactionCreate', async interaction => {
     });
   }
 
-  // 4. welcomeedit
   else if (interaction.commandName === 'welcomeedit') {
     const title = interaction.options.getString('title');
     const description = interaction.options.getString('description');
     const color = interaction.options.getString('color');
     const image = interaction.options.getString('image');
 
-    if (title !== null) welcomeSettings.title = title || '';
-    if (description !== null) welcomeSettings.description = description || '';
+    if (title !== null) welcomeSettings.title = title;
+    if (description !== null) welcomeSettings.description = description;
     if (color) welcomeSettings.color = color.startsWith('#') ? color.replace('#', '') : color;
-    if (image) welcomeSettings.image = image;
+    if (image !== null) welcomeSettings.image = image;
 
     await interaction.reply({ 
       content: `✅ تم تحديث إعدادات الترحيب!`,
@@ -289,7 +269,6 @@ client.on('interactionCreate', async interaction => {
     });
   }
 
-  // 5. welcometest
   else if (interaction.commandName === 'welcometest') {
     if (!welcomeSettings.channelId) {
       return interaction.reply({ 
@@ -320,17 +299,13 @@ client.on('interactionCreate', async interaction => {
       .replace(/{mention}/g, `<@${user.id}>`);
 
     const testEmbed = new EmbedBuilder()
-      .setColor(parseInt(welcomeSettings.color.replace('#', ''), 16) || 0x2b2d31)
-      .setThumbnail(user.displayAvatarURL({ dynamic: true, size: 256 }))
-      .setFooter({ 
-        text: `[تجربة] | العضو رقم: ${interaction.guild.memberCount}`,
-        iconURL: interaction.guild.iconURL({ dynamic: true })
-      })
-      .setTimestamp();
+      .setColor(parseInt(welcomeSettings.color.replace('#', ''), 16) || 0x2b2d31);
 
     if (title.trim()) testEmbed.setTitle(title);
     if (description.trim()) testEmbed.setDescription(description);
-    if (welcomeSettings.image) testEmbed.setImage(welcomeSettings.image);
+    if (welcomeSettings.image && welcomeSettings.image.startsWith('http')) {
+      testEmbed.setImage(welcomeSettings.image);
+    }
 
     await channel.send({ 
       content: `${user}`, 
@@ -343,25 +318,18 @@ client.on('interactionCreate', async interaction => {
     });
   }
 
-  // 6. welcomeinfo
   else if (interaction.commandName === 'welcomeinfo') {
     const channel = welcomeSettings.channelId ? 
       interaction.guild.channels.cache.get(welcomeSettings.channelId) : null;
     
     const infoEmbed = new EmbedBuilder()
-      .setTitle('⚙️ إعدادات الترحيب')
+      .setTitle('إعدادات الترحيب')
       .setColor(0x2b2d31)
-      .setThumbnail(interaction.guild.iconURL({ dynamic: true }))
       .addFields(
         { name: '📌 الروم', value: channel ? `${channel}` : '❌ غير معين', inline: true },
         { name: '🎨 اللون', value: `#${welcomeSettings.color}`, inline: true },
         { name: '🖼️ صورة', value: welcomeSettings.image ? '✅ معين' : '❌ غير معين', inline: true }
-      )
-      .setDescription(
-        `**العنوان:**\n${welcomeSettings.title || 'لا يوجد'}\n\n` +
-        `**الوصف:**\n${welcomeSettings.description || 'لا يوجد'}`
-      )
-      .setTimestamp();
+      );
 
     await interaction.reply({ 
       embeds: [infoEmbed],
@@ -369,28 +337,24 @@ client.on('interactionCreate', async interaction => {
     });
   }
 
-  // 7. bothelp
   else if (interaction.commandName === 'bothelp') {
     const helpEmbed = new EmbedBuilder()
-      .setTitle('🛠️ أوامر البوت')
+      .setTitle('أوامر البوت')
       .setColor(0x2b2d31)
-      .setThumbnail(client.user.displayAvatarURL({ dynamic: true }))
       .addFields(
         { 
-          name: '🎫 التذاكر', 
+          name: 'التذاكر', 
           value: '`/ticketpanel` - عرض لوحة التذاكر\n' +
                  '`/ticketedit` - تعديل لوحة التذاكر'
         },
         { 
-          name: '👋 الترحيب', 
+          name: 'الترحيب', 
           value: '`/welcomeset` - تعيين روم الترحيب\n' +
                  '`/welcomeedit` - تعديل رسالة الترحيب\n' +
                  '`/welcometest` - تجربة الترحيب\n' +
                  '`/welcomeinfo` - عرض الإعدادات'
         }
-      )
-      .setFooter({ text: 'شغال 24/7 على Railway' })
-      .setTimestamp();
+      );
 
     await interaction.reply({ 
       embeds: [helpEmbed],
@@ -399,85 +363,16 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-// 🔥 Health check تلقائي
-let lastPing = Date.now();
-setInterval(() => {
-  console.log('❤️ Health check ping');
-  lastPing = Date.now();
-}, 30 * 1000);
+app.get('/', (req, res) => res.json({ status: 'online' }));
+app.get('/health', (req, res) => res.json({ status: 'healthy' }));
 
-// سيرفر ويب
-app.get('/', (req, res) => {
-  res.json({ 
-    status: 'online', 
-    bot: client.isReady() ? 'connected' : 'disconnected'
-  });
-});
-
-app.get('/ping', (req, res) => {
-  lastPing = Date.now();
-  res.status(200).json({ 
-    status: 'alive', 
-    timestamp: Date.now(),
-    uptime: process.uptime()
-  });
-});
-
-app.get('/health', (req, res) => {
-  lastPing = Date.now();
-  res.status(200).json({ 
-    status: 'healthy',
-    bot: client.isReady(),
-    guilds: client.guilds.cache.size,
-    uptime: process.uptime()
-  });
-});
-
-app.get('/status', (req, res) => {
-  const uptime = process.uptime();
-  const memory = process.memoryUsage();
-  res.json({
-    status: 'running',
-    uptime: `${Math.floor(uptime / 60)} دقائق`,
-    memory: `${Math.round(memory.heapUsed / 1024 / 1024)}MB`,
-    lastPing: Date.now() - lastPing
-  });
-});
-
-// 🔥 الجزء المهم - التسلسل الصحيح
 const PORT = process.env.PORT || 3000;
-
-// 1. ابدأ سيرفر الويب أول
-const server = app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ السيرفر شغال على port: ${PORT}`);
-  console.log(`🌐 Health check: http://0.0.0.0:${PORT}/health`);
-  
-  // 2. بعدين سجل البوت
   client.login(process.env.TOKEN)
-    .then(() => {
-      console.log('✅ البوت متصل بـ Discord!');
-      console.log(`👑 ${client.user.tag} جاهز للعمل`);
-    })
+    .then(() => console.log('✅ البوت متصل!'))
     .catch(err => {
-      console.error('❌ فشل تسجيل الدخول:', err);
-      server.close();
+      console.error('❌ فشل الاتصال:', err);
       process.exit(1);
     });
 });
-
-// 🔧 منع الإغلاق
-process.on('SIGTERM', () => {
-  console.log('🛑 إغلاق نظيف...');
-  setTimeout(() => {
-    console.log('⏳ تأخير الإغلاق...');
-    process.exit(0);
-  }, 10000);
-});
-
-// ping تلقائي كل 5 دقائق
-setInterval(() => {
-  console.log('🫀 Ping - البوت شغال');
-  if (client.isReady()) {
-    console.log(`📊 ${client.guilds.cache.size} سيرفر`);
-  }
-}, 5 * 60 * 1000);
