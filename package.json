@@ -3,13 +3,17 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "build": "echo 'Building...'",  // ⬅️ مهم لـ Railway!
+    "test": "echo 'No tests'",
+    "dev": "node index.js"
   },
   "dependencies": {
     "discord.js": "^14.14.1",
     "express": "^4.18.2"
   },
   "engines": {
-    "node": "18.x"
+    "node": "20.x",  // ⬅️ غير من 18.x إلى 20.x!
+    "npm": "9.x"
   }
 }
