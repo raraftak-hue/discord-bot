@@ -13,7 +13,6 @@ const client = new Client({
   ]
 });
 
-// BOT ID فقط
 const BOT_ID = '1469663065518899292';
 
 // تخزين البيانات
@@ -21,110 +20,75 @@ const welcomeSettings = {
   channelId: null,
   title: '',
   description: '',
-  color: '2b2d31',
-  image: null,
-  thumbnail: null
+  color: '2b2d31'
 };
 
 const panelAdminRoles = new Map();
 const activeTickets = new Map();
 
-// ⭐⭐ الأوامر الجديدة - بدون تكرار ⭐⭐
+// ⭐⭐ الأوامر البسيطة - بدون Subcommands ⭐⭐
 const commands = [
-  // نظام التذاكر
+  // 1. لوحة التذاكر
   new SlashCommandBuilder()
-    .setName('ticket')
-    .setDescription('نظام التذاكر')
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('panel')
-        .setDescription('عرض لوحة التذاكر')
-        .addRoleOption(option => option.setName('admin1').setDescription('رتبة الإدارة الأولى').setRequired(false))
-        .addRoleOption(option => option.setName('admin2').setDescription('رتبة الإدارة الثانية').setRequired(false))
-        .addRoleOption(option => option.setName('admin3').setDescription('رتبة الإدارة الثالثة').setRequired(false))
-    )
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('edit')
-        .setDescription('تعديل لوحة التذاكر')
-        .addStringOption(option => option.setName('title').setDescription('عنوان جديد').setRequired(false))
-        .addStringOption(option => option.setName('description').setDescription('وصف جديد').setRequired(false))
-        .addStringOption(option => option.setName('color').setDescription('لون جديد (#2b2d31)').setRequired(false))
-        .addRoleOption(option => option.setName('admin1').setDescription('رتبة الإدارة الأولى').setRequired(false))
-        .addRoleOption(option => option.setName('admin2').setDescription('رتبة الإدارة الثانية').setRequired(false))
-        .addRoleOption(option => option.setName('admin3').setDescription('رتبة الإدارة الثالثة').setRequired(false))
-    ),
-
-  // نظام الترحيب
+    .setName('ticketpanel')
+    .setDescription('عرض لوحة التذاكر')
+    .addRoleOption(option => option.setName('admin1').setDescription('رتبة الإدارة الأولى').setRequired(false))
+    .addRoleOption(option => option.setName('admin2').setDescription('رتبة الإدارة الثانية').setRequired(false))
+    .addRoleOption(option => option.setName('admin3').setDescription('رتبة الإدارة الثالثة').setRequired(false)),
+  
+  // 2. تعديل اللوحة
   new SlashCommandBuilder()
-    .setName('welcome')
-    .setDescription('نظام الترحيب')
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('set')
-        .setDescription('تعيين روم الترحيب')
-        .addChannelOption(option => 
-          option.setName('channel')
-            .setDescription('روم الترحيب')
-            .setRequired(true))
-    )
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('edit')
-        .setDescription('تعديل رسالة الترحيب')
-        .addStringOption(option => option.setName('title').setDescription('عنوان (استخدم {user}, {server}, {mention})').setRequired(false))
-        .addStringOption(option => option.setName('description').setDescription('وصف (استخدم {user}, {server}, {count}, {mention})').setRequired(false))
-        .addStringOption(option => option.setName('color').setDescription('لون (#2b2d31)').setRequired(false))
-    )
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('test')
-        .setDescription('تجربة رسالة الترحيب')
-        .addUserOption(option => option.setName('user').setDescription('العضو للتجربة').setRequired(false))
-    )
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('info')
-        .setDescription('عرض إعدادات الترحيب')
-    ),
-
-  // أمر المساعدة
+    .setName('ticketedit')
+    .setDescription('تعديل لوحة التذاكر')
+    .addStringOption(option => option.setName('title').setDescription('عنوان جديد').setRequired(false))
+    .addStringOption(option => option.setName('description').setDescription('وصف جديد').setRequired(false))
+    .addStringOption(option => option.setName('color').setDescription('لون جديد').setRequired(false)),
+  
+  // 3. تعيين الترحيب
   new SlashCommandBuilder()
-    .setName('help')
+    .setName('welcomeset')
+    .setDescription('تعيين روم الترحيب')
+    .addChannelOption(option => option.setName('channel').setDescription('روم الترحيب').setRequired(true)),
+  
+  // 4. تعديل الترحيب
+  new SlashCommandBuilder()
+    .setName('welcomeedit')
+    .setDescription('تعديل رسالة الترحيب')
+    .addStringOption(option => option.setName('title').setDescription('العنوان (استخدم {user} {mention} {server})').setRequired(false))
+    .addStringOption(option => option.setName('description').setDescription('الوصف (استخدم {user} {mention} {server} {count})').setRequired(false))
+    .addStringOption(option => option.setName('color').setDescription('اللون (#2b2d31)').setRequired(false)),
+  
+  // 5. تجربة الترحيب
+  new SlashCommandBuilder()
+    .setName('welcometest')
+    .setDescription('تجربة رسالة الترحيب')
+    .addUserOption(option => option.setName('user').setDescription('لعضو للتجربة').setRequired(false)),
+  
+  // 6. معلومات الترحيب
+  new SlashCommandBuilder()
+    .setName('welcomeinfo')
+    .setDescription('عرض إعدادات الترحيب'),
+  
+  // 7. المساعدة
+  new SlashCommandBuilder()
+    .setName('bothelp')
     .setDescription('عرض جميع الأوامر')
 ].map(cmd => cmd.toJSON());
 
-// ⭐⭐ تسجيل الأوامر مرة واحدة فقط ⭐⭐
-let commandsRegistered = false;
-
+// تسجيل الأوامر
 (async () => {
-  if (commandsRegistered) return;
-  
   try {
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
     await rest.put(Routes.applicationCommands(BOT_ID), { body: commands });
-    console.log('✅ تم تسجيل الأوامر (مرة واحدة)');
-    commandsRegistered = true;
+    console.log('✅ تم تسجيل 7 أوامر');
   } catch (error) {
-    console.error('❌ خطأ في تسجيل الأوامر:', error);
+    console.error('❌ خطأ:', error);
   }
 })();
 
 // البوت جاهز
-client.once('ready', async () => {
+client.once('ready', () => {
   console.log(`✅ ${client.user.tag} جاهز!`);
-  
-  // تأخير بسيط لظهور الأوامر
-  setTimeout(() => {
-    console.log('📋 الأوامر المتاحة:');
-    console.log('  /ticket panel - عرض لوحة التذاكر');
-    console.log('  /ticket edit - تعديل اللوحة');
-    console.log('  /welcome set - تعيين روم الترحيب');
-    console.log('  /welcome edit - تعديل الترحيب');
-    console.log('  /welcome test - تجربة الترحيب');
-    console.log('  /welcome info - عرض الإعدادات');
-    console.log('  /help - المساعدة');
-  }, 2000);
 });
 
 // حدث الترحيب
@@ -153,8 +117,6 @@ client.on('guildMemberAdd', async (member) => {
 
     if (title.trim()) welcomeEmbed.setTitle(title);
     if (description.trim()) welcomeEmbed.setDescription(description);
-    if (welcomeSettings.image) welcomeEmbed.setImage(welcomeSettings.image);
-    if (welcomeSettings.thumbnail) welcomeEmbed.setThumbnail(welcomeSettings.thumbnail);
 
     await channel.send({ 
       content: `${member}`, 
@@ -167,7 +129,7 @@ client.on('guildMemberAdd', async (member) => {
   }
 });
 
-// الأوامر - نظيفة ومنظمة
+// الأوامر
 client.on('interactionCreate', async interaction => {
   // فتح تذكرة
   if (interaction.isButton() && interaction.customId === 'open_ticket') {
@@ -225,211 +187,185 @@ client.on('interactionCreate', async interaction => {
     setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
   }
 
-  // ⭐⭐ أوامر Subcommands نظيفة ⭐⭐
+  // أوامر الشات
   if (!interaction.isChatInputCommand()) return;
 
-  const { commandName, options } = interaction;
+  // 1. ticketpanel
+  if (interaction.commandName === 'ticketpanel') {
+    const adminRoles = [
+      interaction.options.getRole('admin1'),
+      interaction.options.getRole('admin2'),
+      interaction.options.getRole('admin3')
+    ].filter(r => r).map(r => r.id);
 
-  // أمر ticket
-  if (commandName === 'ticket') {
-    const subcommand = options.getSubcommand();
-    
-    if (subcommand === 'panel') {
-      const adminRoles = [
-        options.getRole('admin1'),
-        options.getRole('admin2'),
-        options.getRole('admin3')
-      ].filter(r => r).map(r => r.id);
+    const embed = new EmbedBuilder()
+      .setTitle('🎫 نظام التذاكر')
+      .setDescription('اضغط على الزر لفتح تذكرة دعم.\nسيتم إنشاء قناة خاصة بك.')
+      .setColor(0x2b2d31);
 
-      const embed = new EmbedBuilder()
-        .setTitle('🎫 نظام التذاكر')
-        .setDescription('اضغط على الزر لفتح تذكرة دعم.\nسيتم إنشاء قناة خاصة بك.')
-        .setColor(0x2b2d31);
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('open_ticket')
+        .setLabel('فتح تذكرة')
+        .setStyle(ButtonStyle.Secondary)
+    );
 
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId('open_ticket')
-          .setLabel('فتح تذكرة')
-          .setStyle(ButtonStyle.Secondary)
-      );
+    const reply = await interaction.reply({ 
+      embeds: [embed], 
+      components: [row], 
+      fetchReply: true 
+    });
 
-      const reply = await interaction.reply({ 
-        embeds: [embed], 
-        components: [row], 
-        fetchReply: true 
-      });
-
-      if (adminRoles.length > 0) {
-        panelAdminRoles.set(reply.id, adminRoles);
-        await interaction.followUp({ 
-          content: `✅ تم إضافة رتب الإدارة للوحة.`,
-          ephemeral: true 
-        });
-      }
-    }
-    
-    else if (subcommand === 'edit') {
-      const title = options.getString('title');
-      const description = options.getString('description');
-      const color = options.getString('color');
-      const adminRoles = [
-        options.getRole('admin1'),
-        options.getRole('admin2'),
-        options.getRole('admin3')
-      ].filter(r => r).map(r => r.id);
-
-      const embedColor = color ? parseInt(color.replace('#',''),16) : 0x2b2d31;
-
-      const embed = new EmbedBuilder()
-        .setTitle(title || '🎫 نظام التذاكر')
-        .setDescription(description || 'اضغط على الزر لفتح تذكرة دعم.\nسيتم إنشاء قناة خاصة بك.')
-        .setColor(embedColor);
-
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId('open_ticket')
-          .setLabel('فتح تذكرة')
-          .setStyle(ButtonStyle.Secondary)
-      );
-
-      const reply = await interaction.reply({ 
-        embeds: [embed], 
-        components: [row], 
-        fetchReply: true 
-      });
-
-      if (adminRoles.length > 0) {
-        panelAdminRoles.set(reply.id, adminRoles);
-        await interaction.followUp({ 
-          content: `✅ تم إضافة رتب الإدارة للوحة.`,
-          ephemeral: true 
-        });
-      }
-    }
-  }
-
-  // أمر welcome
-  else if (commandName === 'welcome') {
-    const subcommand = options.getSubcommand();
-    
-    if (subcommand === 'set') {
-      const channel = options.getChannel('channel');
-      welcomeSettings.channelId = channel.id;
-      
-      await interaction.reply({ 
-        content: `✅ تم تعيين روم الترحيب: ${channel}\n\nاستخدم \`/welcome edit\` لتخصيص الرسالة.`,
-        ephemeral: false 
-      });
-    }
-    
-    else if (subcommand === 'edit') {
-      const title = options.getString('title');
-      const description = options.getString('description');
-      const color = options.getString('color');
-
-      if (title !== null) welcomeSettings.title = title || '';
-      if (description !== null) welcomeSettings.description = description || '';
-      if (color) welcomeSettings.color = color.startsWith('#') ? color.replace('#', '') : color;
-
-      await interaction.reply({ 
-        content: `✅ تم تحديث إعدادات الترحيب!\n\n` +
-                 `**العنوان:** ${welcomeSettings.title || '❌ لا يوجد'}\n` +
-                 `**الوصف:** ${welcomeSettings.description || '❌ لا يوجد'}\n` +
-                 `**اللون:** #${welcomeSettings.color}`,
-        ephemeral: true 
-      });
-    }
-    
-    else if (subcommand === 'test') {
-      if (!welcomeSettings.channelId) {
-        return interaction.reply({ 
-          content: '❌ لم يتم تعيين روم الترحيب بعد.\nاستخدم `/welcome set` أولاً.',
-          ephemeral: true 
-        });
-      }
-
-      const user = options.getUser('user') || interaction.user;
-      const channel = interaction.guild.channels.cache.get(welcomeSettings.channelId);
-      
-      if (!channel) {
-        return interaction.reply({ 
-          content: '❌ روم الترحيب غير موجود.',
-          ephemeral: true 
-        });
-      }
-
-      let title = welcomeSettings.title
-        .replace(/{user}/g, user.username)
-        .replace(/{server}/g, interaction.guild.name)
-        .replace(/{mention}/g, `<@${user.id}>`);
-      
-      let description = welcomeSettings.description
-        .replace(/{user}/g, user.username)
-        .replace(/{server}/g, interaction.guild.name)
-        .replace(/{count}/g, interaction.guild.memberCount)
-        .replace(/{mention}/g, `<@${user.id}>`);
-
-      const testEmbed = new EmbedBuilder()
-        .setColor(parseInt(welcomeSettings.color.replace('#', ''), 16) || 0x2b2d31);
-
-      if (title.trim()) testEmbed.setTitle(`[تجربة] ${title}`);
-      if (description.trim()) testEmbed.setDescription(description);
-
-      await channel.send({ 
-        content: `${user}`, 
-        embeds: [testEmbed] 
-      });
-
-      await interaction.reply({ 
-        content: `✅ تم إرسال رسالة ترحيب تجريبية.`,
-        ephemeral: true 
-      });
-    }
-    
-    else if (subcommand === 'info') {
-      const channel = welcomeSettings.channelId ? 
-        interaction.guild.channels.cache.get(welcomeSettings.channelId) : null;
-      
-      const infoEmbed = new EmbedBuilder()
-        .setTitle('⚙️ إعدادات الترحيب')
-        .setColor(0x2b2d31)
-        .addFields(
-          { name: '📌 الروم', value: channel ? `${channel}` : '❌ غير معين', inline: true },
-          { name: '🎨 اللون', value: `#${welcomeSettings.color}`, inline: true }
-        )
-        .setDescription(`**العنوان:** ${welcomeSettings.title || 'لا يوجد'}\n**الوصف:** ${welcomeSettings.description || 'لا يوجد'}`)
-        .setTimestamp();
-
-      await interaction.reply({ 
-        embeds: [infoEmbed],
+    if (adminRoles.length > 0) {
+      panelAdminRoles.set(reply.id, adminRoles);
+      await interaction.followUp({ 
+        content: `✅ تم إضافة رتب الإدارة.`,
         ephemeral: true 
       });
     }
   }
 
-  // أمر help
-  else if (commandName === 'help') {
+  // 2. ticketedit
+  else if (interaction.commandName === 'ticketedit') {
+    const title = interaction.options.getString('title');
+    const description = interaction.options.getString('description');
+    const color = interaction.options.getString('color');
+
+    const embedColor = color ? parseInt(color.replace('#',''),16) : 0x2b2d31;
+
+    const embed = new EmbedBuilder()
+      .setTitle(title || '🎫 نظام التذاكر')
+      .setDescription(description || 'اضغط على الزر لفتح تذكرة دعم.\nسيتم إنشاء قناة خاصة بك.')
+      .setColor(embedColor);
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('open_ticket')
+        .setLabel('فتح تذكرة')
+        .setStyle(ButtonStyle.Secondary)
+    );
+
+    await interaction.reply({ 
+      embeds: [embed], 
+      components: [row] 
+    });
+  }
+
+  // 3. welcomeset
+  else if (interaction.commandName === 'welcomeset') {
+    const channel = interaction.options.getChannel('channel');
+    welcomeSettings.channelId = channel.id;
+    
+    await interaction.reply({ 
+      content: `✅ تم تعيين روم الترحيب: ${channel}`,
+      ephemeral: false 
+    });
+  }
+
+  // 4. welcomeedit
+  else if (interaction.commandName === 'welcomeedit') {
+    const title = interaction.options.getString('title');
+    const description = interaction.options.getString('description');
+    const color = interaction.options.getString('color');
+
+    if (title !== null) welcomeSettings.title = title || '';
+    if (description !== null) welcomeSettings.description = description || '';
+    if (color) welcomeSettings.color = color.startsWith('#') ? color.replace('#', '') : color;
+
+    await interaction.reply({ 
+      content: `✅ تم تحديث إعدادات الترحيب!`,
+      ephemeral: true 
+    });
+  }
+
+  // 5. welcometest
+  else if (interaction.commandName === 'welcometest') {
+    if (!welcomeSettings.channelId) {
+      return interaction.reply({ 
+        content: '❌ لم يتم تعيين روم الترحيب بعد.\nاستخدم `/welcomeset` أولاً.',
+        ephemeral: true 
+      });
+    }
+
+    const user = interaction.options.getUser('user') || interaction.user;
+    const channel = interaction.guild.channels.cache.get(welcomeSettings.channelId);
+    
+    if (!channel) {
+      return interaction.reply({ 
+        content: '❌ روم الترحيب غير موجود.',
+        ephemeral: true 
+      });
+    }
+
+    let title = welcomeSettings.title
+      .replace(/{user}/g, user.username)
+      .replace(/{server}/g, interaction.guild.name)
+      .replace(/{mention}/g, `<@${user.id}>`);
+    
+    let description = welcomeSettings.description
+      .replace(/{user}/g, user.username)
+      .replace(/{server}/g, interaction.guild.name)
+      .replace(/{count}/g, interaction.guild.memberCount)
+      .replace(/{mention}/g, `<@${user.id}>`);
+
+    const testEmbed = new EmbedBuilder()
+      .setColor(parseInt(welcomeSettings.color.replace('#', ''), 16) || 0x2b2d31);
+
+    if (title.trim()) testEmbed.setTitle(`[تجربة] ${title}`);
+    if (description.trim()) testEmbed.setDescription(description);
+
+    await channel.send({ 
+      content: `${user}`, 
+      embeds: [testEmbed] 
+    });
+
+    await interaction.reply({ 
+      content: `✅ تم إرسال رسالة ترحيب تجريبية.`,
+      ephemeral: true 
+    });
+  }
+
+  // 6. welcomeinfo
+  else if (interaction.commandName === 'welcomeinfo') {
+    const channel = welcomeSettings.channelId ? 
+      interaction.guild.channels.cache.get(welcomeSettings.channelId) : null;
+    
+    const infoEmbed = new EmbedBuilder()
+      .setTitle('⚙️ إعدادات الترحيب')
+      .setColor(0x2b2d31)
+      .addFields(
+        { name: '📌 الروم', value: channel ? `${channel}` : '❌ غير معين', inline: true },
+        { name: '🎨 اللون', value: `#${welcomeSettings.color}`, inline: true }
+      )
+      .setDescription(`**العنوان:** ${welcomeSettings.title || 'لا يوجد'}\n**الوصف:** ${welcomeSettings.description || 'لا يوجد'}`)
+      .setTimestamp();
+
+    await interaction.reply({ 
+      embeds: [infoEmbed],
+      ephemeral: true 
+    });
+  }
+
+  // 7. bothelp
+  else if (interaction.commandName === 'bothelp') {
     const helpEmbed = new EmbedBuilder()
       .setTitle('🛠️ أوامر البوت')
       .setColor(0x2b2d31)
       .addFields(
         { 
-          name: '🎫 نظام التذاكر', 
-          value: '`/ticket panel` - عرض لوحة التذاكر\n' +
-                 '`/ticket edit` - تعديل لوحة التذاكر\n' +
-                 '**زر:** فتح تذكرة\n' +
-                 '**زر:** إغلاق التذكرة (داخل القناة)'
+          name: '🎫 التذاكر', 
+          value: '`/ticketpanel` - عرض لوحة التذاكر\n' +
+                 '`/ticketedit` - تعديل لوحة التذاكر'
         },
         { 
-          name: '👋 نظام الترحيب', 
-          value: '`/welcome set` - تعيين روم الترحيب\n' +
-                 '`/welcome edit` - تعديل رسالة الترحيب\n' +
-                 '`/welcome test` - تجربة الترحيب\n' +
-                 '`/welcome info` - عرض الإعدادات\n' +
-                 '**المتغيرات:** {user} {mention} {server} {count}'
+          name: '👋 الترحيب', 
+          value: '`/welcomeset` - تعيين روم الترحيب\n' +
+                 '`/welcomeedit` - تعديل رسالة الترحيب\n' +
+                 '`/welcometest` - تجربة الترحيب\n' +
+                 '`/welcomeinfo` - عرض الإعدادات'
         }
       )
-      .setFooter({ text: 'البوت شغال 24/7 على Railway' })
+      .setFooter({ text: 'شغال 24/7 على Railway' })
       .setTimestamp();
 
     await interaction.reply({ 
@@ -441,25 +377,16 @@ client.on('interactionCreate', async interaction => {
 
 // سيرفر ويب
 app.get('/', (req, res) => {
-  res.json({
-    status: 'online',
-    bot: client.isReady() ? 'connected' : 'disconnected',
-    uptime: process.uptime(),
-    timestamp: Date.now()
-  });
+  res.json({ status: 'online', bot: client.isReady() });
 });
 
 app.get('/health', (req, res) => {
-  if (client.isReady()) {
-    res.status(200).json({ status: 'healthy', bot: 'online' });
-  } else {
-    res.status(503).json({ status: 'unhealthy', bot: 'offline' });
-  }
+  res.status(200).json({ status: 'healthy' });
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 البوت شغال على port ${PORT}`);
+  console.log(`🚀 البوت شغال`);
 });
 
 client.login(process.env.TOKEN).catch(console.error);
