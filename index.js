@@ -104,6 +104,9 @@ const activeTickets = new Map();
 // ==================== 💰 نظام الاقتصاد 💰 ====================
 class EconomySystem {
     getBalance(userId) {
+        // تحميل البيانات أولاً للتأكد من التحديث
+        economyData = loadEconomyData();
+        
         if (!economyData.users[userId]) {
             economyData.users[userId] = { 
                 balance: 50, 
@@ -115,11 +118,13 @@ class EconomySystem {
                 }],
                 joinedAt: Date.now()
             };
+            saveEconomyData(economyData);
         }
         return economyData.users[userId].balance;
     }
     
     addBalance(userId, amount, reason = '') {
+        economyData = loadEconomyData();
         const user = economyData.users[userId] || this.getBalance(userId);
         user.balance += amount;
         user.history.push({
@@ -130,6 +135,7 @@ class EconomySystem {
             balance: user.balance
         });
         economyData.users[userId] = user;
+        saveEconomyData(economyData);
         return user.balance;
     }
     
@@ -142,6 +148,10 @@ class EconomySystem {
     
     collectWeeklyZakat() {
         console.log('⏳ جاري جمع الزكاة الأسبوعية...');
+        
+        // 🔥 التصحيح: تحميل البيانات أولاً
+        economyData = loadEconomyData();
+        
         let totalZakat = 0;
         let affectedUsers = 0;
         
@@ -164,13 +174,21 @@ class EconomySystem {
         }
         
         economyData.zakatFund.balance += totalZakat;
-        console.log(`✅ تم جمع ${totalZakat} دينار زكاة من ${affectedUsers} مستخدم`);
+        
+        // 🔥 التصحيح: حفظ البيانات بعد التعديل
         saveEconomyData(economyData);
+        
+        console.log(`✅ تم جمع ${totalZakat} دينار زكاة من ${affectedUsers} مستخدم`);
     }
     
     collectWealthTax() {
         console.log('⏳ جاري جمع ضريبة الثروة...');
+        
+        // 🔥 التصحيح: تحميل البيانات أولاً
+        economyData = loadEconomyData();
+        
         let totalTax = 0;
+        let affectedUsers = 0;
         
         for (const userId in economyData.users) {
             const user = economyData.users[userId];
@@ -181,6 +199,7 @@ class EconomySystem {
                 if (tax > 0) {
                     user.balance -= tax;
                     totalTax += tax;
+                    affectedUsers++;
                     
                     user.history.push({
                         type: 'ضريبة ثروة',
@@ -193,11 +212,16 @@ class EconomySystem {
         }
         
         economyData.taxFund.balance += totalTax;
-        console.log(`✅ تم جمع ${totalTax} دينار ضريبة ثروة`);
+        
+        // 🔥 التصحيح: حفظ البيانات بعد التعديل
         saveEconomyData(economyData);
+        
+        console.log(`✅ تم جمع ${totalTax} دينار ضريبة ثروة من ${affectedUsers} مستخدم`);
     }
     
     transferBalance(senderId, receiverId, amount) {
+        economyData = loadEconomyData();
+        
         if (this.getBalance(senderId) < amount) {
             throw new Error('رصيدك غير كافي');
         }
@@ -236,6 +260,8 @@ class EconomySystem {
         
         economyData.taxFund.balance += tax;
         
+        saveEconomyData(economyData);
+        
         return {
             from: sender.balance,
             to: receiver.balance,
@@ -245,12 +271,14 @@ class EconomySystem {
     }
     
     getHistory(userId, limit = 10) {
+        economyData = loadEconomyData();
         const user = economyData.users[userId];
         if (!user || !user.history) return [];
         return user.history.slice(-limit).reverse();
     }
     
     topUsers(limit = 10) {
+        economyData = loadEconomyData();
         const users = Object.entries(economyData.users)
             .map(([id, data]) => ({ id, balance: data.balance }))
             .sort((a, b) => b.balance - a.balance)
@@ -262,8 +290,15 @@ class EconomySystem {
 const economy = new EconomySystem();
 
 // جدولة الزكاة والضرائب
-setInterval(() => economy.collectWeeklyZakat(), 7 * 24 * 60 * 60 * 1000);
-setInterval(() => economy.collectWealthTax(), 30 * 24 * 60 * 60 * 1000);
+setInterval(() => {
+    console.log('🔄 تشغيل جمع الزكاة الأسبوعية...');
+    economy.collectWeeklyZakat();
+}, 7 * 24 * 60 * 60 * 1000);
+
+setInterval(() => {
+    console.log('🔄 تشغيل جمع ضريبة الثروة...');
+    economy.collectWealthTax();
+}, 30 * 24 * 60 * 60 * 1000);
 // ==================== 💰 💰 💰 💰 💰 💰 💰 ====================
 
 // ==================== 📋 الأوامر 📋 ====================
@@ -381,12 +416,7 @@ client.on('guildCreate', async guild => {
 client.once('ready', async () => {
     console.log(`✅ ${client.user.tag} جاهز!`);
     console.log(`📊 السيرفرات المصرحة: ${ALLOWED_GUILDS.length} سيرفر`);
-    
-    client.guilds.cache.forEach(guild => {
-        if (ALLOWED_GUILDS.includes(guild.id)) {
-            console.log(`✅ ${guild.name} (${guild.memberCount} أعضاء)`);
-        }
-    });
+    console.log(`🏰 السيرفرات المتصلة:`, client.guilds.cache.map(g => `${g.name} (${g.id})`).join(', '));
     
     try {
         const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
@@ -398,11 +428,23 @@ client.once('ready', async () => {
 });
 
 client.on('guildMemberAdd', async (member) => {
-    if (!welcomeSettings.channelId || !ALLOWED_GUILDS.includes(member.guild.id)) return;
+    console.log(`👤 عضو جديد: ${member.user.tag} في ${member.guild.name}`);
+    console.log(`🔍 ALLOWED_GUILDS: ${ALLOWED_GUILDS.includes(member.guild.id)}`);
+    console.log(`📌 welcomeSettings:`, welcomeSettings);
+    
+    if (!welcomeSettings.channelId || !ALLOWED_GUILDS.includes(member.guild.id)) {
+        console.log(`❌ الترحيب معطل: ${!welcomeSettings.channelId ? 'قناة غير معينة' : 'سيرفر غير مصرح'}`);
+        return;
+    }
     
     try {
         const channel = member.guild.channels.cache.get(welcomeSettings.channelId);
-        if (!channel) return;
+        if (!channel) {
+            console.log(`❌ القناة ${welcomeSettings.channelId} غير موجودة`);
+            return;
+        }
+
+        console.log(`✅ وجدت قناة الترحيب: ${channel.name}`);
 
         let title = welcomeSettings.title
             .replace(/{user}/g, member.user.username)
@@ -430,13 +472,18 @@ client.on('guildMemberAdd', async (member) => {
             embeds: [welcomeEmbed] 
         });
         
+        console.log(`✅ تم ترحيب ${member.user.tag} في ${channel.name}`);
+        
     } catch (error) {
         console.error('❌ خطأ في الترحيب:', error);
     }
 });
 
 client.on('interactionCreate', async interaction => {
-    if (interaction.guild && !ALLOWED_GUILDS.includes(interaction.guild.id)) return;
+    if (interaction.guild && !ALLOWED_GUILDS.includes(interaction.guild.id)) {
+        console.log(`🚫 محاولة استخدام من سيرفر غير مصرح: ${interaction.guild.id}`);
+        return;
+    }
     
     if (interaction.isButton() && interaction.customId === 'open_ticket') {
         if (activeTickets.has(interaction.user.id)) {
@@ -506,6 +553,7 @@ client.on('interactionCreate', async interaction => {
             botSettings.welcome = welcomeSettings;
             saveBotSettings(botSettings);
             
+            console.log(`✅ تم تعيين قناة الترحيب: ${channel.id} (${channel.name})`);
             await interaction.reply({ content: `✅ تم تعيين روم الترحيب: ${channel}`, ephemeral: false });
         }
         
@@ -524,6 +572,7 @@ client.on('interactionCreate', async interaction => {
             botSettings.welcome = welcomeSettings;
             saveBotSettings(botSettings);
 
+            console.log(`✅ تم تحديث إعدادات الترحيب`);
             await interaction.reply({ content: `✅ تم تحديث إعدادات الترحيب!`, ephemeral: true });
         }
         
@@ -566,6 +615,7 @@ client.on('interactionCreate', async interaction => {
             }
 
             await channel.send({ content: '', embeds: [testEmbed] });
+            console.log(`✅ تم إرسال ترحيب تجريبي لـ ${user.tag}`);
             await interaction.reply({ content: `✅ تم إرسال رسالة ترحيب تجريبية.`, ephemeral: true });
         }
         
