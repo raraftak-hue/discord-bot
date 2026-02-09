@@ -154,7 +154,7 @@ client.on('messageCreate', async (message) => {
           .setDescription(`-# **تم اسكات العضو ${member} ليش ما يستحي هو يارب ما يعيدها عشان ما يبلع مره ثانيه <a:DancingShark:1469030444774199439>**`)
           .setColor(0x2b2d31)] 
       });
-    } catch (e) { message.reply('-# **فشل التايم (تأكد من الرتب).**'); }
+    } catch (e) { message.reply('-# **ذا ما تقدرله يقدر يدعس عليك <:emoji_84:1389404919672340592> **'); }
   }
 
   // 2. أمر الطرد (المعدل)
@@ -162,7 +162,7 @@ client.on('messageCreate', async (message) => {
     if (!message.member.permissions.has(PermissionsBitField.Flags.KickMembers)) return;
     const member = message.mentions.members.first();
     const reason = args.slice(2).join(' ') || 'بدون سبب';
-    if (!member) return message.reply('-# **منشن العضو للطرد.**');
+    if (!member) return message.reply('-# **منشن العضو عشان اطرده، كيف تبيني اعرف مين هو كذا <:emoji_464:1388211597197050029> **');
     
     try { 
       await member.kick(reason); 
@@ -172,7 +172,7 @@ client.on('messageCreate', async (message) => {
           .setDescription(`-# ** تم طرد العضو ${member} احسن انطرد  كان غاثني من اول المسكين باي <a:Hiiiii:1470461001085354148>**`)
           .setColor(0x2b2d31)] 
       }); 
-    } catch (e) { message.reply('-# **فشل الطرد.**'); }
+    } catch (e) { message.reply('-# **ذا ما تقدرله يقدر يدعس عليك <:emoji_84:1389404919672340592> **'); }
   }
 
   // 3. أمر الحذف
