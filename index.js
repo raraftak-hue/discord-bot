@@ -8,7 +8,7 @@ const cron = require('node-cron');
 
 // ==================== 🔒 إعدادات الحماية 🔒 ====================
 const ALLOWED_GUILDS = [
-  '1387902577496297523' // ⬅️ هذا ID سيرفرك
+  '1387902577496297523' // ⬅️ ID سيرفرك
 ];
 // ==================== 🔒 🔒 🔒 🔒 🔒 🔒 🔒 ====================
 
@@ -24,7 +24,7 @@ const client = new Client({
 // --- قاعدة بيانات دائمة (ملف JSON) ---
 const DB_PATH = path.join(__dirname, 'database.json');
 let db = {
-  users: {}, // { userId: { balance: 0, history: [] } }
+  users: {}, 
   welcomeSettings: {
     channelId: null,
     title: '',
@@ -32,50 +32,88 @@ let db = {
     color: '2b2d31',
     image: null
   },
-  panelAdminRoles: {} // { messageId: [roleIds] }
+  panelAdminRoles: {} 
 };
 
-// تحميل البيانات عند التشغيل
 if (fs.existsSync(DB_PATH)) {
   try {
     const data = fs.readFileSync(DB_PATH, 'utf8');
     if (data) db = JSON.parse(data);
-  } catch (e) {
-    console.error("Error loading DB:", e);
-  }
+  } catch (e) { console.error("Error loading DB:", e); }
 }
 
-// دالة حفظ البيانات
 function saveDB() {
-  try {
-    fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
-  } catch (e) {
-    console.error("Error saving DB:", e);
-  }
+  try { fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2)); } catch (e) { console.error("Error saving DB:", e); }
 }
 
 function getUserData(userId) {
-  if (!db.users[userId]) {
-    db.users[userId] = { balance: 0, history: [] };
-  }
+  if (!db.users[userId]) { db.users[userId] = { balance: 0, history: [] }; }
   return db.users[userId];
 }
 
 const activeTickets = new Map();
 
+// --- تصحيح تعريف الأوامر ---
 const commands = [
-  { name: 'ticketpanel', description: 'عرض لوحة التذاكر', options: [{ name: 'admin1', type: 8 }, { name: 'admin2', type: 8 }, { name: 'admin3', type: 8 }] },
-  { name: 'ticketedit', description: 'تعديل لوحة التذاكر', options: [{ name: 'title', type: 3 }, { name: 'description', type: 3 }, { name: 'color', type: 3 }] },
-  { name: 'welcomeset', description: 'تعيين روم الترحيب', options: [{ name: 'channel', type: 7, required: true }] },
-  { name: 'welcomeedit', description: 'تعديل رسالة الترحيب', options: [{ name: 'title', type: 3 }, { name: 'description', type: 3 }, { name: 'color', type: 3 }, { name: 'image', type: 3 }] },
-  { name: 'welcometest', description: 'تجربة رسالة الترحيب', options: [{ name: 'user', type: 6 }] },
+  { 
+    name: 'ticketpanel', 
+    description: 'عرض لوحة التذاكر', 
+    options: [
+      { name: 'admin1', description: 'رتبة الإدارة 1', type: 8, required: false },
+      { name: 'admin2', description: 'رتبة الإدارة 2', type: 8, required: false },
+      { name: 'admin3', description: 'رتبة الإدارة 3', type: 8, required: false }
+    ] 
+  },
+  { 
+    name: 'ticketedit', 
+    description: 'تعديل لوحة التذاكر', 
+    options: [
+      { name: 'title', description: 'العنوان الجديد', type: 3, required: false },
+      { name: 'description', description: 'الوصف الجديد', type: 3, required: false },
+      { name: 'color', description: 'اللون الجديد', type: 3, required: false }
+    ] 
+  },
+  { 
+    name: 'welcomeset', 
+    description: 'تعيين روم الترحيب', 
+    options: [{ name: 'channel', description: 'اختر الروم', type: 7, required: true }] 
+  },
+  { 
+    name: 'welcomeedit', 
+    description: 'تعديل رسالة الترحيب', 
+    options: [
+      { name: 'title', description: 'العنوان', type: 3, required: false },
+      { name: 'description', description: 'الوصف', type: 3, required: false },
+      { name: 'color', description: 'اللون', type: 3, required: false },
+      { name: 'image', description: 'رابط الصورة', type: 3, required: false }
+    ] 
+  },
+  { 
+    name: 'welcometest', 
+    description: 'تجربة رسالة الترحيب', 
+    options: [{ name: 'user', description: 'العضو للتجربة', type: 6, required: false }] 
+  },
   { name: 'welcomeinfo', description: 'عرض إعدادات الترحيب' },
   { name: 'bothelp', description: 'عرض جميع الأوامر' },
   { name: 'balance', description: 'عرض رصيدك من الدينار' },
-  { name: 'transfer', description: 'تحويل دينار لشخص آخر', options: [{ name: 'user', type: 6, required: true }, { name: 'amount', type: 4, required: true }] },
+  { 
+    name: 'transfer', 
+    description: 'تحويل دينار لشخص آخر', 
+    options: [
+      { name: 'user', description: 'المستلم', type: 6, required: true },
+      { name: 'amount', description: 'المبلغ', type: 4, required: true }
+    ] 
+  },
   { name: 'top', description: 'عرض قائمة أغنى المستخدمين' },
   { name: 'history', description: 'عرض سجل تحويلاتك' },
-  { name: 'add-dinar', description: 'إضافة دينار لمستخدم (للمسؤولين)', options: [{ name: 'user', type: 6, required: true }, { name: 'amount', type: 4, required: true }] }
+  { 
+    name: 'add-dinar', 
+    description: 'إضافة دينار لمستخدم (للمسؤولين)', 
+    options: [
+      { name: 'user', description: 'المستخدم', type: 6, required: true },
+      { name: 'amount', description: 'المبلغ', type: 4, required: true }
+    ] 
+  }
 ];
 
 client.once('ready', async () => {
@@ -83,9 +121,9 @@ client.once('ready', async () => {
   try {
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
     await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-  } catch (error) { console.error(error); }
+    console.log('✅ تم تحديث الأوامر بنجاح');
+  } catch (error) { console.error('❌ خطأ في تسجيل الأوامر:', error); }
 
-  // نظام الزكاة الأسبوعي (2.5%)
   cron.schedule('0 0 * * 5', () => {
     for (const userId in db.users) {
       const user = db.users[userId];
@@ -102,60 +140,43 @@ client.once('ready', async () => {
   });
 });
 
-// ==================== 🛡️ أوامر الشات (الاختصارات) 🛡️ ====================
+// --- أوامر الشات (الاختصارات) ---
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild || !ALLOWED_GUILDS.includes(message.guild.id)) return;
-
   const args = message.content.split(' ');
   const command = args[0];
 
-  // --- أمر طرد ---
   if (command === 'طرد') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.KickMembers)) return;
     const member = message.mentions.members.first();
     const reason = args.slice(2).join(' ') || 'بدون سبب';
     if (!member) return message.reply('-# **يرجى منشن العضو للطرد.**');
-    try {
-      await member.kick(reason);
-      message.reply(`-# **تم طرد ${member.user.username} بنجاح.**`);
-    } catch (e) { message.reply('-# **فشل الطرد، تأكد من صلاحياتي.**'); }
+    try { await member.kick(reason); message.reply(`-# **تم طرد ${member.user.username} بنجاح.**`); } catch (e) { message.reply('-# **فشل الطرد.**'); }
   }
 
-  // --- أمر تايم (Timeout) ---
   if (command === 'تايم') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
     const member = message.mentions.members.first();
-    const durationStr = args[2]; // مثال: 10m, 1h, 1d
+    const durationStr = args[2]; 
     const reason = args.slice(3).join(' ') || 'بدون سبب';
-    
     if (!member || !durationStr) return message.reply('-# **الاستخدام: تايم @عضو الوقت(10m/1h) السبب**');
-    
     let duration = 0;
     if (durationStr.endsWith('m')) duration = parseInt(durationStr) * 60 * 1000;
     else if (durationStr.endsWith('h')) duration = parseInt(durationStr) * 60 * 60 * 1000;
     else if (durationStr.endsWith('d')) duration = parseInt(durationStr) * 24 * 60 * 60 * 1000;
-    else return message.reply('-# **صيغة الوقت غير صحيحة (m/h/d).**');
-
-    try {
-      await member.timeout(duration, reason);
-      message.reply(`-# **تم إعطاء تايم آوت لـ ${member.user.username} لمدة ${durationStr}.**`);
-    } catch (e) { message.reply('-# **فشل التايم آوت، تأكد من صلاحياتي.**'); }
+    else return message.reply('-# **صيغة الوقت غير صحيحة.**');
+    try { await member.timeout(duration, reason); message.reply(`-# **تم إعطاء تايم آوت لـ ${member.user.username} لمدة ${durationStr}.**`); } catch (e) { message.reply('-# **فشل التايم آوت.**'); }
   }
 
-  // --- أمر حذف (Clear) ---
   if (command === 'حذف') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return;
     const amount = parseInt(args[1]);
     if (isNaN(amount) || amount <= 0 || amount > 100) return message.reply('-# **يرجى تحديد عدد الرسائل (1-100).**');
-    try {
-      await message.channel.bulkDelete(amount + 1);
-      const msg = await message.channel.send(`-# **تم حذف ${amount} رسالة.**`);
-      setTimeout(() => msg.delete().catch(() => {}), 3000);
-    } catch (e) { message.reply('-# **فشل الحذف، الرسائل قديمة جداً.**'); }
+    try { await message.channel.bulkDelete(amount + 1); const msg = await message.channel.send(`-# **تم حذف ${amount} رسالة.**`); setTimeout(() => msg.delete().catch(() => {}), 3000); } catch (e) { message.reply('-# **فشل الحذف.**'); }
   }
 });
 
-// ==================== 🎫 نظام التذاكر والترحيب 🎫 ====================
+// --- نظام التذاكر والترحيب والتحويلات ---
 client.on('guildMemberAdd', async (member) => {
   if (!db.welcomeSettings.channelId || !ALLOWED_GUILDS.includes(member.guild.id)) return;
   try {
@@ -173,7 +194,6 @@ client.on('guildMemberAdd', async (member) => {
 
 client.on('interactionCreate', async interaction => {
   if (interaction.guild && !ALLOWED_GUILDS.includes(interaction.guild.id)) return;
-
   if (interaction.isButton() && interaction.customId === 'open_ticket') {
     if (activeTickets.has(interaction.user.id)) return interaction.reply({ content: '-# **لديك تذكرة مفتوحة.**', ephemeral: true });
     const adminRoles = db.panelAdminRoles[interaction.message.id] || [];
@@ -196,16 +216,13 @@ client.on('interactionCreate', async interaction => {
     });
     return interaction.reply({ content: `-# **تم إنشاء تذكرتك: ${ticketChannel}**`, ephemeral: true });
   }
-
   if (interaction.isButton() && interaction.customId === 'close_ticket') {
     for (const [userId, channelId] of activeTickets.entries()) { if (channelId === interaction.channel.id) { activeTickets.delete(userId); break; } }
     await interaction.reply({ content: '-# **سيتم إغلاق التذكرة خلال 5 ثواني.**' });
     setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
   }
-
   if (!interaction.isChatInputCommand()) return;
   const { commandName, options, user, guild } = interaction;
-
   if (commandName === 'ticketpanel') {
     const adminRoles = [options.getRole('admin1'), options.getRole('admin2'), options.getRole('admin3')].filter(r => r).map(r => r.id);
     const embed = new EmbedBuilder().setTitle('🎫 نظام التذاكر').setDescription('-# **اضغط على الزر لفتح تذكرة دعم.**\n-# **سيتم إنشاء قناة خاصة بك.**').setColor(0x2b2d31);
@@ -213,14 +230,12 @@ client.on('interactionCreate', async interaction => {
     const reply = await interaction.reply({ embeds: [embed], components: [row], fetchReply: true });
     if (adminRoles.length > 0) { db.panelAdminRoles[reply.id] = adminRoles; saveDB(); }
   }
-
   else if (commandName === 'welcomeset') {
     const channel = options.getChannel('channel');
     db.welcomeSettings.channelId = channel.id;
     saveDB();
     await interaction.reply({ content: `-# **تم تعيين روم الترحيب: ${channel}**` });
   }
-
   else if (commandName === 'welcomeedit') {
     const title = options.getString('title');
     const desc = options.getString('description');
@@ -233,12 +248,10 @@ client.on('interactionCreate', async interaction => {
     saveDB();
     await interaction.reply({ content: '-# **تم تحديث إعدادات الترحيب!**', ephemeral: true });
   }
-
   else if (commandName === 'balance') {
     const userData = getUserData(user.id);
     await interaction.reply({ embeds: [new EmbedBuilder().setTitle('رصيد الدينار').setDescription(`-# **رصيدك الحالي هو: ${userData.balance} دينار**`).setColor(0x2b2d31)] });
   }
-
   else if (commandName === 'transfer') {
     const target = options.getUser('user');
     const amount = options.getInteger('amount');
@@ -254,13 +267,11 @@ client.on('interactionCreate', async interaction => {
     saveDB();
     await interaction.reply({ embeds: [new EmbedBuilder().setTitle('عملية تحويل ناجحة').setDescription(`-# **تم تحويل ${finalAmount} دينار إلى ${target}**\n-# **الضريبة: ${tax} دينار**`).setColor(0x2b2d31)] });
   }
-
   else if (commandName === 'top') {
     const sorted = Object.entries(db.users).sort(([, a], [, b]) => b.balance - a.balance).slice(0, 10);
     const desc = sorted.length > 0 ? sorted.map(([id, data], i) => `${i + 1}. <@${id}>: **${data.balance}** دينار`).join('\n') : '-# **لا يوجد بيانات.**';
     await interaction.reply({ embeds: [new EmbedBuilder().setTitle('قائمة الأغنياء').setDescription(`-# **${desc}**`).setColor(0x2b2d31)] });
   }
-
   else if (commandName === 'add-dinar') {
     if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) return interaction.reply({ content: '-# **للمسؤولين فقط.**', ephemeral: true });
     const target = options.getUser('user');
