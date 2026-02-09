@@ -1,14 +1,25 @@
 {
   "name": "discord-bot",
   "version": "1.0.0",
-  "description": "Dinar System Bot",
+  "description": "Discord bot with ticket system, economy, and welcome features",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
   "dependencies": {
-    "discord.js": "^14.13.0",
+    "discord.js": "^14.14.1",
     "express": "^4.18.2",
+    "mongoose": "^8.0.3",
     "node-cron": "^3.0.3"
-  }
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=16.9.0"
+  },
+  "keywords": ["discord", "bot", "economy", "tickets"],
+  "author": "",
+  "license": "MIT"
 }
