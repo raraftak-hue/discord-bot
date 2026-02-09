@@ -634,9 +634,8 @@ const embed = new EmbedBuilder()
       const result = economy.transferBalance(interaction.user.id, targetUser.id, amount);
       
       const embed = new EmbedBuilder()
-        .setColor(0x2b2d31)
-        .setDescription(`-# **تم التحويل ${amount} دينار لـ ${targetUser} رصيدك الحالي ${result.from} <:money_with_wings:1388212679981666334> **\n\n-# الزكاة ${result.tax} ${result.taxRate}%`);
-      
+    .setColor(0x2b2d31)
+    .setDescription(`-# **تم التحويل ${amount} دينار  لـ ${targetUser} رصيدك الحالي ${result.from} <:money_with_wings:1388212679981666334> **\n\n-# الضريبة ${result.tax}`);
       await interaction.reply({ embeds: [embed] });
     } catch (error) {
       await interaction.reply({ content: `❌ ${error.message}`, ephemeral: true });
