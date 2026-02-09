@@ -619,34 +619,12 @@ client.on('interactionCreate', async interaction => {
     const history = economy.getHistory(interaction.user.id, 1);
     const userData = economyData.users[interaction.user.id];
     
-    const embed = new EmbedBuilder()
-      .setTitle('رصيد الدينار')
-      .setColor(0x2b2d31)
-      .addFields(
-        { name: 'الرصيد الحالي', value: `**${balance}** دينار`, inline: true },
-        { name: '💎 صندوق الزكاة', value: `**${economyData.zakatFund.balance || 0}** دينار`, inline: true },
-        { name: '🏛️ صندوق الضرائب', value: `**${economyData.taxFund.balance || 0}** دينار`, inline: true }
-      );
-    
-    if (userData && Date.now() - userData.joinedAt < 7 * 24 * 60 * 60 * 1000) {
-      embed.addFields({ 
-        name: '🎁 هدية ترحيب', 
-        value: 'هذا رصيد ترحيبي. الفلوس الحقيقية تكسبها من النشاط!', 
-        inline: false 
-      });
-    }
-    
-    if (history.length > 0) {
-      embed.addFields({ 
-        name: 'آخر عملية', 
-        value: `${history[0].type}: **${history[0].amount}** دينار`, 
-        inline: true 
-      });
-    }
-    
-    await interaction.reply({ embeds: [embed], ephemeral: true });
-  }
+    const lastTransfer = economy.getHistory(interaction.user.id, 1)[0];
+const lastTransferText = lastTransfer ? `${lastTransfer.type}: ${lastTransfer.amount} دينار` : 'لا توجد';
 
+const embed = new EmbedBuilder()
+    .setColor(0x2b2d31)
+    .setDescription(`-# **رصيدك الحالي ${balance} اخر عملية تحويل لك ${lastTransferText} <:money_with_wings:1388212679981666334> **`);
   // 💰 eco-transfer
   else if (commandName === 'eco-transfer') {
     const targetUser = interaction.options.getUser('user');
