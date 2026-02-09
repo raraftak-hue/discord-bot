@@ -190,7 +190,11 @@ client.on('interactionCreate', async (i) => {
     // --- ECONOMY ---
     if (commandName === 'economy') {
       const data = getUserData(user.id);
-      if (sub === 'balance') i.reply({ embeds: [new EmbedBuilder().setDescription(`-# **رصيدك الحالي ${data.balance} دينار<:money_with_wings:1388212679981666334> **`).setColor(0x2b2d31)] });
+            if (sub === 'balance') {
+        const lastAmount = (data.history.find(h => h.type === 'TRANSFER_RECEIVE') || { amount: 0 }).amount;
+        return i.reply({ embeds: [new EmbedBuilder().setDescription(`-# ** رصيدك الحالي ${data.balance} آخر عملية تحويل تلقيتها كانت بـ ${lastAmount} <:money_with_wings:1388212679981666334> **`).setColor(0x2b2d31)] });
+      }
+
       if (sub === 'transfer') {
         const target = options.getUser('user');
         const amount = options.getInteger('amount');
