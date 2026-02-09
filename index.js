@@ -3,7 +3,79 @@ const { REST, Routes } = require('discord.js');
 const express = require('express');
 const app = express();
 
+// ==================== 📁 نظام التخزين 📁 ====================
+const fs = require('fs');
+const path = require('path');
+
+// ملفات البيانات
+const ECONOMY_DATA_FILE = path.join(__dirname, 'economy_data.json');
+const BOT_SETTINGS_FILE = path.join(__dirname, 'bot_settings.json');
+
+// تحميل البيانات الاقتصادية
+function loadEconomyData() {
+    if (fs.existsSync(ECONOMY_DATA_FILE)) {
+        try {
+            const data = JSON.parse(fs.readFileSync(ECONOMY_DATA_FILE, 'utf8'));
+            if (data.sabobas && !data.collectives) {
+                data.collectives = data.sabobas;
+                delete data.sabobas;
+            }
+            if (!data.zakatFund) data.zakatFund = { balance: 0 };
+            if (!data.taxFund) data.taxFund = { balance: 0 };
+            return data;
+        } catch (error) {
+            console.error('❌ خطأ في تحميل البيانات الاقتصادية:', error);
+            return { users: {}, zakatFund: { balance: 0 }, taxFund: { balance: 0 } };
+        }
+    }
+    return { users: {}, zakatFund: { balance: 0 }, taxFund: { balance: 0 } };
+}
+
+// تحميل إعدادات البوت
+function loadBotSettings() {
+    if (fs.existsSync(BOT_SETTINGS_FILE)) {
+        try {
+            return JSON.parse(fs.readFileSync(BOT_SETTINGS_FILE, 'utf8'));
+        } catch (error) {
+            console.error('❌ خطأ في تحميل إعدادات البوت:', error);
+            return { welcome: {}, tickets: {} };
+        }
+    }
+    return { welcome: {}, tickets: {} };
+}
+
+// حفظ البيانات الاقتصادية
+function saveEconomyData(data) {
+    try {
+        fs.writeFileSync(ECONOMY_DATA_FILE, JSON.stringify(data, null, 2));
+    } catch (error) {
+        console.error('❌ خطأ في حفظ البيانات الاقتصادية:', error);
+    }
+}
+
+// حفظ إعدادات البوت
+function saveBotSettings(settings) {
+    try {
+        fs.writeFileSync(BOT_SETTINGS_FILE, JSON.stringify(settings, null, 2));
+    } catch (error) {
+        console.error('❌ خطأ في حفظ إعدادات البوت:', error);
+    }
+}
+
+// تحميل البيانات
+let economyData = loadEconomyData();
+let botSettings = loadBotSettings();
+
+// حفظ تلقائي كل 30 ثانية
+setInterval(() => {
+    saveEconomyData(economyData);
+    saveBotSettings(botSettings);
+}, 30000);
+// ==================== 📁 📁 📁 📁 📁 📁 📁 ====================
+
+// ==================== 🔒 إعدادات الحماية 🔒 ====================
 const ALLOWED_GUILDS = ['1387902577496297523'];
+// ==================== 🔒 🔒 🔒 🔒 🔒 🔒 🔒 ====================
 
 const client = new Client({
     intents: [
@@ -14,7 +86,8 @@ const client = new Client({
     ]
 });
 
-const welcomeSettings = {
+// إعدادات الترحيب (من ملف)
+const welcomeSettings = botSettings.welcome || {
     channelId: null,
     title: '',
     description: '',
@@ -22,43 +95,13 @@ const welcomeSettings = {
     image: null
 };
 
-const panelAdminRoles = new Map();
+// إعدادات التذاكر (من ملف)
+const panelAdminRoles = botSettings.tickets?.panelAdmins || {};
+
+// التذاكر النشطة (في الذاكرة فقط)
 const activeTickets = new Map();
 
-const fs = require('fs');
-const path = require('path');
-const DATA_FILE = path.join(__dirname, 'economy_data.json');
-
-function loadData() {
-    if (fs.existsSync(DATA_FILE)) {
-        try {
-            const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-            if (data.sabobas && !data.collectives) {
-                data.collectives = data.sabobas;
-                delete data.sabobas;
-            }
-            if (!data.zakatFund) data.zakatFund = { balance: 0 };
-            if (!data.taxFund) data.taxFund = { balance: 0 };
-            return data;
-        } catch (error) {
-            console.error('خطأ في تحميل البيانات:', error);
-            return { users: {}, zakatFund: { balance: 0 }, taxFund: { balance: 0 } };
-        }
-    }
-    return { users: {}, zakatFund: { balance: 0 }, taxFund: { balance: 0 } };
-}
-
-function saveData(data) {
-    try {
-        fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-    } catch (error) {
-        console.error('خطأ في حفظ البيانات:', error);
-    }
-}
-
-let economyData = loadData();
-setInterval(() => saveData(economyData), 30000);
-
+// ==================== 💰 نظام الاقتصاد 💰 ====================
 class EconomySystem {
     getBalance(userId) {
         if (!economyData.users[userId]) {
@@ -122,7 +165,7 @@ class EconomySystem {
         
         economyData.zakatFund.balance += totalZakat;
         console.log(`✅ تم جمع ${totalZakat} دينار زكاة من ${affectedUsers} مستخدم`);
-        saveData(economyData);
+        saveEconomyData(economyData);
     }
     
     collectWealthTax() {
@@ -151,7 +194,7 @@ class EconomySystem {
         
         economyData.taxFund.balance += totalTax;
         console.log(`✅ تم جمع ${totalTax} دينار ضريبة ثروة`);
-        saveData(economyData);
+        saveEconomyData(economyData);
     }
     
     transferBalance(senderId, receiverId, amount) {
@@ -217,9 +260,13 @@ class EconomySystem {
 }
 
 const economy = new EconomySystem();
+
+// جدولة الزكاة والضرائب
 setInterval(() => economy.collectWeeklyZakat(), 7 * 24 * 60 * 60 * 1000);
 setInterval(() => economy.collectWealthTax(), 30 * 24 * 60 * 60 * 1000);
+// ==================== 💰 💰 💰 💰 💰 💰 💰 ====================
 
+// ==================== 📋 الأوامر 📋 ====================
 const commands = [
     {
         name: 'welcome',
@@ -396,7 +443,7 @@ client.on('interactionCreate', async interaction => {
             return interaction.reply({ content: 'لديك تذكرة مفتوحة.', ephemeral: true });
         }
 
-        const adminRoles = panelAdminRoles.get(interaction.message.id) || [];
+        const adminRoles = panelAdminRoles[interaction.message.id] || [];
         
         const ticketChannel = await interaction.guild.channels.create({
             name: `تذكرة-${interaction.user.username}`,
@@ -454,6 +501,11 @@ client.on('interactionCreate', async interaction => {
         if (subcommand === 'set') {
             const channel = interaction.options.getChannel('channel');
             welcomeSettings.channelId = channel.id;
+            
+            // حفظ في الملف
+            botSettings.welcome = welcomeSettings;
+            saveBotSettings(botSettings);
+            
             await interaction.reply({ content: `✅ تم تعيين روم الترحيب: ${channel}`, ephemeral: false });
         }
         
@@ -467,6 +519,10 @@ client.on('interactionCreate', async interaction => {
             if (description !== null) welcomeSettings.description = description;
             if (color) welcomeSettings.color = color.startsWith('#') ? color.replace('#', '') : color;
             if (image !== null) welcomeSettings.image = image;
+
+            // حفظ في الملف
+            botSettings.welcome = welcomeSettings;
+            saveBotSettings(botSettings);
 
             await interaction.reply({ content: `✅ تم تحديث إعدادات الترحيب!`, ephemeral: true });
         }
@@ -518,13 +574,8 @@ client.on('interactionCreate', async interaction => {
                 interaction.guild.channels.cache.get(welcomeSettings.channelId) : null;
             
             const infoEmbed = new EmbedBuilder()
-                .setTitle('إعدادات الترحيب')
                 .setColor(0x2b2d31)
-                .addFields(
-                    { name: '📌 الروم', value: channel ? `${channel}` : '❌ غير معين', inline: true },
-                    { name: '🎨 اللون', value: `#${welcomeSettings.color}`, inline: true },
-                    { name: '🖼️ صورة', value: welcomeSettings.image ? '✅ معين' : '❌ غير معين', inline: true }
-                );
+                .setDescription(`-# **إعدادات الترحيب**\n\n-# 📌 الروم: ${channel ? channel.toString() : '❌ غير معين'}\n-# 🎨 اللون: #${welcomeSettings.color}\n-# 🖼️ صورة: ${welcomeSettings.image ? '✅ معين' : '❌ غير معين'}`);
 
             await interaction.reply({ embeds: [infoEmbed], ephemeral: true });
         }
@@ -539,9 +590,8 @@ client.on('interactionCreate', async interaction => {
             ].filter(r => r).map(r => r.id);
 
             const embed = new EmbedBuilder()
-                .setTitle('🎫 نظام التذاكر')
-                .setDescription('-# اضغط على الزر لفتح تذكرة دعم.\n-# سيتم إنشاء قناة خاصة بك.')
-                .setColor(0x2b2d31);
+                .setColor(0x2b2d31)
+                .setDescription('-# **🎫 نظام التذاكر**\n\n-# اضغط على الزر لفتح تذكرة دعم.\n-# سيتم إنشاء قناة خاصة بك.');
 
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
@@ -557,7 +607,11 @@ client.on('interactionCreate', async interaction => {
             });
 
             if (adminRoles.length > 0) {
-                panelAdminRoles.set(reply.id, adminRoles);
+                panelAdminRoles[reply.id] = adminRoles;
+                botSettings.tickets = botSettings.tickets || {};
+                botSettings.tickets.panelAdmins = panelAdminRoles;
+                saveBotSettings(botSettings);
+                
                 await interaction.followUp({ 
                     content: `✅ تم إضافة رتب الإدارة.`,
                     ephemeral: true 
@@ -574,8 +628,8 @@ client.on('interactionCreate', async interaction => {
 
             const embed = new EmbedBuilder()
                 .setTitle(title || '🎫 نظام التذاكر')
-                .setDescription(`-# ${description || 'اضغط على الزر لفتح تذكرة دعم.'}\n-# سيتم إنشاء قناة خاصة بك.`)
-                .setColor(embedColor);
+                .setColor(embedColor)
+                .setDescription(`-# ${description || 'اضغط على الزر لفتح تذكرة دعم.'}\n-# سيتم إنشاء قناة خاصة بك.`);
 
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
@@ -674,6 +728,7 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`💰 النظام الاقتصادي: ${Object.keys(economyData.users).length} مستخدم`);
     console.log(`🏦 صندوق الزكاة: ${economyData.zakatFund.balance || 0} دينار`);
     console.log(`🏛️ صندوق الضرائب: ${economyData.taxFund.balance || 0} دينار`);
+    console.log(`⚙️ الإعدادات: ${Object.keys(botSettings).length} قسم`);
     
     client.login(process.env.TOKEN)
         .then(() => console.log('✅ البوت متصل!'))
