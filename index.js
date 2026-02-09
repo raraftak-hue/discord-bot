@@ -147,8 +147,8 @@ client.on('guildCreate', async (guild) => {
       const owner = await guild.fetchOwner();
       await owner.send({
         embeds: [new EmbedBuilder()
-          .setTitle('-# **البوت خاص**')
-          .setDescription('-# **هذا البوت خاص و لن يعمل في خادمك الا اذا تواصلت مع سيرفر المطور الذي في الـ بايو لكي يسمح لك مجانا او مدفوع**\n\n-# **البوت سوف يخرج نفسه من السيرفر في غضون ١٠ ثوان**')
+          .setTitle('البوت خاص')
+          .setDescription('هذا البوت خاص و لن يعمل في خادمك الا اذا تواصلت مع سيرفر المطور الذي في الـ بايو لكي يسمح لك مجانا او مدفوع\n\nالبوت سوف يخرج نفسه من السيرفر في غضون ١٠ ثوان')
           .setColor(0x2b2d31)]
       });
       setTimeout(() => guild.leave(), 10000);
@@ -160,8 +160,8 @@ client.on('guildCreate', async (guild) => {
     const owner = await guild.fetchOwner();
     await owner.send({
       embeds: [new EmbedBuilder()
-        .setTitle('-# **شكراً لإضافة البوت**')
-        .setDescription('-# **عزيزي الـ owner بما انك اضف البوت لخادمك الجميل نود منك فضلا ان تساهم معنا و تساعدنا في رفع معدل استعمال العملة يمكنك استعمالها في المسابقات كـ نقاط يستبدلونها بأي شيء البوت مله مجاني بدون علامات حقوق و ما الى ذالك لكي يساعدك في بناء خادمك**')
+        .setTitle('شكراً لإضافة البوت')
+        .setDescription('عزيزي الـ owner بما انك اضف البوت لخادمك الجميل نود منك فضلا ان تساهم معنا و تساعدنا في رفع معدل استعمال العملة يمكنك استعمالها في المسابقات كـ نقاط يستبدلونها بأي شيء البوت مله مجاني بدون علامات حقوق و ما الى ذالك لكي يساعدك في بناء خادمك')
         .setColor(0x2b2d31)]
     });
   } catch (e) {}
@@ -186,8 +186,8 @@ client.on('guildMemberAdd', async (member) => {
     let title = db.welcomeSettings.title.replace(/{user}/g, member.user.username).replace(/{server}/g, member.guild.name).replace(/{mention}/g, `<@${member.user.id}>`);
     let desc = db.welcomeSettings.description.replace(/{user}/g, member.user.username).replace(/{server}/g, member.guild.name).replace(/{count}/g, member.guild.memberCount).replace(/{mention}/g, `<@${member.user.id}>`);
     const embed = new EmbedBuilder().setColor(parseInt(db.welcomeSettings.color.replace('#', ''), 16) || 0x2b2d31);
-    if (title.trim()) embed.setTitle(`-# **${title}**`);
-    if (desc.trim()) embed.setDescription(`-# **${desc}**`);
+    if (title.trim()) embed.setTitle(`${title}`);
+    if (desc.trim()) embed.setDescription(`${desc}`);
     if (db.welcomeSettings.image && db.welcomeSettings.image.startsWith('http')) embed.setImage(db.welcomeSettings.image);
     await channel.send({ embeds: [embed] });
   } catch (e) {}
@@ -202,8 +202,8 @@ client.on('messageCreate', async (message) => {
     if (!message.member.permissions.has(PermissionsBitField.Flags.KickMembers)) return;
     const member = message.mentions.members.first();
     const reason = args.slice(2).join(' ') || 'بدون سبب';
-    if (!member) return message.reply('-# **يرجى منشن العضو للطرد.**');
-    try { await member.kick(reason); message.reply({ embeds: [new EmbedBuilder().setTitle('-# **تم الطرد**').setDescription(`-# **تم طرد ${member.user.username} بنجاح.**`).setColor(0x2b2d31)] }); } catch (e) { message.reply('-# **فشل الطرد.**'); }
+    if (!member) return message.reply('يرجى منشن العضو للطرد.');
+    try { await member.kick(reason); message.reply({ embeds: [new EmbedBuilder().setTitle('تم الطرد').setDescription(`تم طرد ${member.user.username} بنجاح.`).setColor(0x2b2d31)] }); } catch (e) { message.reply('فشل الطرد.'); }
   }
 
   if (command === 'تايم') {
@@ -211,27 +211,30 @@ client.on('messageCreate', async (message) => {
     const member = message.mentions.members.first();
     const durationStr = args[2]; 
     const reason = args.slice(3).join(' ') || 'بدون سبب';
-    if (!member || !durationStr) return message.reply('-# **الاستخدام: تايم @عضو الوقت(10m/1h) السبب**');
+    if (!member || !durationStr) return message.reply('الاستخدام: تايم @عضو الوقت(10m/1h) السبب');
     let duration = 0;
     if (durationStr.endsWith('m')) duration = parseInt(durationStr) * 60 * 1000;
     else if (durationStr.endsWith('h')) duration = parseInt(durationStr) * 60 * 60 * 1000;
     else if (durationStr.endsWith('d')) duration = parseInt(durationStr) * 24 * 60 * 60 * 1000;
-    else return message.reply('-# **صيغة الوقت غير صحيحة.**');
-    try { await member.timeout(duration, reason); message.reply({ embeds: [new EmbedBuilder().setTitle('-# **تم التايم آوت**').setDescription(`-# **تم إعطاء تايم آوت لـ ${member.user.username} لمدة ${durationStr}.**`).setColor(0x2b2d31)] }); } catch (e) { message.reply('-# **فشل التايم آوت.**'); }
+    else return message.reply('صيغة الوقت غير صحيحة.');
+    try { await member.timeout(duration, reason); message.reply({ embeds: [new EmbedBuilder().setTitle('تم التايم آوت').setDescription(`تم إعطاء تايم آوت لـ ${member.user.username} لمدة ${durationStr}.`).setColor(0x2b2d31)] }); } catch (e) { message.reply('فشل التايم آوت.'); }
   }
 
   if (command === 'حذف') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return;
     const amount = parseInt(args[1]);
-    if (isNaN(amount) || amount <= 0 || amount > 100) return message.reply('-# **يرجى تحديد عدد الرسائل (1-100).**');
-    try { await message.channel.bulkDelete(amount + 1); const msg = await message.channel.send({ embeds: [new EmbedBuilder().setTitle('-# **تم الحذف**').setDescription(`-# **تم حذف ${amount} رسالة.**`).setColor(0x2b2d31)] }); setTimeout(() => msg.delete().catch(() => {}), 3000); } catch (e) { message.reply('-# **فشل الحذف.**'); }
+    if (isNaN(amount) || amount <= 0 || amount > 100) return message.reply('يرجى تحديد عدد الرسائل (1-100).');
+    try { await message.channel.bulkDelete(amount + 1); const msg = await message.channel.send({ embeds: [new EmbedBuilder().setTitle('تم الحذف').setDescription(`تم حذف ${amount} رسالة.`).setColor(0x2b2d31)] }); setTimeout(() => msg.delete().catch(() => {}), 3000); } catch (e) { message.reply('فشل الحذف.'); }
   }
 });
 
 client.on('interactionCreate', async interaction => {
   if (interaction.guild && !ALLOWED_GUILDS.includes(interaction.guild.id)) return;
+  
+  const { commandName, options, user } = interaction;
+
   if (interaction.isButton() && interaction.customId === 'open_ticket') {
-    if (activeTickets.has(interaction.user.id)) return interaction.reply({ content: '-# **لديك تذكرة مفتوحة.**', ephemeral: true });
+    if (activeTickets.has(interaction.user.id)) return interaction.reply({ content: 'لديك تذكرة مفتوحة.', ephemeral: true });
     const adminRoles = db.panelAdminRoles[interaction.message.id] || [];
     const ticketChannel = await interaction.guild.channels.create({
       name: `تذكرة-${interaction.user.username}`,
@@ -247,22 +250,21 @@ client.on('interactionCreate', async interaction => {
     activeTickets.set(interaction.user.id, ticketChannel.id);
     await ticketChannel.send({ 
       content: `${interaction.user}${adminRoles.length > 0 ? `\n${adminRoles.map(id => `<@&${id}>`).join(' ')}` : ''}`, 
-      embeds: [new EmbedBuilder().setTitle('-# **تذكرة دعم**').setDescription(`-# **تذكرة دعم - ${interaction.user.username}**\n-# **اكتب طلب او مشكلتك بشكل واضح شوي و ان شاء الله بنرد عليك في اقرب وقت**`).setColor(0x2b2d31)], 
+      embeds: [new EmbedBuilder().setTitle('تذكرة دعم').setDescription(`تذكرة دعم - ${interaction.user.username}\nاكتب طلب او مشكلتك بشكل واضح شوي و ان شاء الله بنرد عليك في اقرب وقت`).setColor(0x2b2d31)], 
       components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق التذكرة').setStyle(ButtonStyle.Danger))] 
     });
-    return interaction.reply({ content: `-# **تم إنشاء تذكرتك: ${ticketChannel}**`, ephemeral: true });
+    return interaction.reply({ content: `تم إنشاء تذكرتك: ${ticketChannel}`, ephemeral: true });
   }
+  
   if (interaction.isButton() && interaction.customId === 'close_ticket') {
     for (const [userId, channelId] of activeTickets.entries()) { if (channelId === interaction.channel.id) { activeTickets.delete(userId); break; } }
-    await interaction.reply({ content: '-# **سيتم إغلاق التذكرة خلال 5 ثواني.**' });
+    await interaction.reply({ content: 'سيتم إغلاق التذكرة خلال 5 ثواني.' });
     setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
   }
-  if (!interaction.isChatInputCommand()) return;
-  const { commandName, options, user, guild } = interaction;
-  
+
   if (commandName === 'ticketpanel') {
     const adminRoles = [options.getRole('admin1'), options.getRole('admin2'), options.getRole('admin3')].filter(r => r).map(r => r.id);
-    const embed = new EmbedBuilder().setTitle('-# **نظام التذاكر**').setDescription('-# **اضغط على الزر لفتح تذكرة دعم.**\n-# **سيتم إنشاء قناة خاصة بك.**').setColor(0x2b2d31);
+    const embed = new EmbedBuilder().setTitle('نظام التذاكر').setDescription('اضغط على الزر لفتح تذكرة دعم.\nسيتم إنشاء قناة خاصة بك.').setColor(0x2b2d31);
     const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('open_ticket').setLabel('فتح تذكرة').setStyle(ButtonStyle.Secondary));
     const reply = await interaction.reply({ embeds: [embed], components: [row], fetchReply: true });
     if (adminRoles.length > 0) { db.panelAdminRoles[reply.id] = adminRoles; saveDB(); }
@@ -271,7 +273,7 @@ client.on('interactionCreate', async interaction => {
     const channel = options.getChannel('channel');
     db.welcomeSettings.channelId = channel.id;
     saveDB();
-    await interaction.reply({ content: `-# **تم تعيين روم الترحيب: ${channel}**` });
+    await interaction.reply({ content: `تم تعيين روم الترحيب: ${channel}` });
   }
   else if (commandName === 'welcomeedit') {
     const title = options.getString('title');
@@ -283,17 +285,17 @@ client.on('interactionCreate', async interaction => {
     if (color) db.welcomeSettings.color = color.replace('#', '');
     if (image !== null) db.welcomeSettings.image = image;
     saveDB();
-    await interaction.reply({ content: '-# **تم تحديث إعدادات الترحيب!**', ephemeral: true });
+    await interaction.reply({ content: 'تم تحديث إعدادات الترحيب!', ephemeral: true });
   }
   else if (commandName === 'balance') {
     const userData = getUserData(user.id);
-    await interaction.reply({ embeds: [new EmbedBuilder().setTitle('-# **رصيد الدينار**').setDescription(`-# **رصيدك الحالي هو: ${userData.balance} دينار**`).setColor(0x2b2d31)] });
+    await interaction.reply({ embeds: [new EmbedBuilder().setTitle('رصيد الدينار').setDescription(`رصيدك الحالي هو: ${userData.balance} دينار`).setColor(0x2b2d31)] });
   }
   else if (commandName === 'transfer') {
     const target = options.getUser('user');
     const amount = options.getInteger('amount');
     const senderData = getUserData(user.id);
-    if (target.id === user.id || amount <= 0 || senderData.balance < amount) return interaction.reply({ content: '-# **خطأ في عملية التحويل.**', ephemeral: true });
+    if (target.id === user.id || amount <= 0 || senderData.balance < amount) return interaction.reply({ content: 'خطأ في عملية التحويل.', ephemeral: true });
     
     // نظام ضرائب ذكي (5% وأقل شيء 1 دينار)
     let tax = Math.ceil(amount * 0.05);
@@ -309,28 +311,28 @@ client.on('interactionCreate', async interaction => {
     
     await interaction.reply({ 
       embeds: [new EmbedBuilder()
-        .setTitle('-# **عملية تحويل ناجحة**')
-        .setDescription(`-# **تم التحويل ${finalAmount} دينار لـ <@${target.id}> رصيدك الحالي (${senderData.balance}) <:money_with_wings:1388212679981666334>**\n\n-# **الضريبة (${tax})**`)
+        .setTitle('عملية تحويل ناجحة')
+        .setDescription(`تم التحويل ${finalAmount} دينار لـ <@${target.id}> رصيدك الحالي (${senderData.balance}) <:money_with_wings:1388212679981666334>\n\nالضريبة (${tax})`)
         .setColor(0x2b2d31)] 
     });
   }
   else if (commandName === 'top') {
     const sorted = Object.entries(db.users).sort(([, a], [, b]) => b.balance - a.balance).slice(0, 10);
-    // محاذاة لليمين باستخدام تنسيق Markdown
+    // تنسيق قائمة الأغنياء كما طلب المستخدم: رقم و منشن و رصيد
     const desc = sorted.length > 0 
-      ? sorted.map(([id, data], i) => `\`${i + 1}.\` **${data.balance}** :<@${id}>`).join('\n') 
-      : '-# **لا يوجد بيانات.**';
-    await interaction.reply({ embeds: [new EmbedBuilder().setTitle('-# **قائمة الأغنياء**').setDescription(`-# **${desc}**`).setColor(0x2b2d31)] });
+      ? sorted.map(([id, data], i) => `-# ** ${i + 1}. <@${id}>  ${data.balance} دينار**`).join('\n') 
+      : 'لا يوجد بيانات.';
+    await interaction.reply({ embeds: [new EmbedBuilder().setTitle('قائمة الأغنياء').setDescription(`${desc}`).setColor(0x2b2d31)] });
   }
   else if (commandName === 'add-dinar') {
-    if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) return interaction.reply({ content: '-# **للمسؤولين فقط.**', ephemeral: true });
+    if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) return interaction.reply({ content: 'للمسؤولين فقط.', ephemeral: true });
     const target = options.getUser('user');
     const amount = options.getInteger('amount');
     const targetData = getUserData(target.id);
     targetData.balance += amount;
     targetData.history.unshift({ type: 'ADMIN_ADD', amount, date: new Date().toISOString() });
     saveDB();
-    await interaction.reply({ content: `-# **تم إضافة ${amount} دينار إلى ${target}**` });
+    await interaction.reply({ content: `تم إضافة ${amount} دينار إلى ${target}` });
   }
 });
 
