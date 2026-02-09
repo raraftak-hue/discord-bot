@@ -7,9 +7,12 @@ const app = express();
 const fs = require('fs');
 const path = require('path');
 
+// ⭐⭐ التغيير: استخدام /data في Railway (يبقى بعد إعادة التشغيل)
+const DATA_DIR = fs.existsSync('/data') ? '/data' : __dirname;
+
 // ملفات البيانات
-const ECONOMY_DATA_FILE = path.join(__dirname, 'economy_data.json');
-const BOT_SETTINGS_FILE = path.join(__dirname, 'bot_settings.json');
+const ECONOMY_DATA_FILE = path.join(DATA_DIR, 'economy_data.json');
+const BOT_SETTINGS_FILE = path.join(DATA_DIR, 'bot_settings.json');
 
 // تحميل البيانات الاقتصادية
 function loadEconomyData() {
@@ -44,10 +47,18 @@ function loadBotSettings() {
     return { welcome: {}, tickets: {} };
 }
 
-// حفظ البيانات الاقتصادية
+// حفظ البيانات الاقتصادية مع Backup
 function saveEconomyData(data) {
     try {
         fs.writeFileSync(ECONOMY_DATA_FILE, JSON.stringify(data, null, 2));
+        
+        // ⭐⭐ Backup تلقائي في /tmp
+        if (fs.existsSync('/tmp')) {
+            const backupFile = `/tmp/economy_backup_${Date.now()}.json`;
+            fs.writeFileSync(backupFile, JSON.stringify(data, null, 2));
+        }
+        
+        console.log('✅ تم حفظ البيانات وعمل Backup');
     } catch (error) {
         console.error('❌ خطأ في حفظ البيانات الاقتصادية:', error);
     }
@@ -390,6 +401,7 @@ const commands = [
     }
 ];
 
+// ==================== 🎉 حدث إضافة البوت للسيرفر 🎉 ====================
 client.on('guildCreate', async guild => {
     console.log(`🎉 ${guild.name} (${guild.id}) أضاف البوت!`);
     
@@ -426,6 +438,7 @@ client.once('ready', async () => {
     }
 });
 
+// ==================== 👋 الترحيب (كما كان) ====================
 client.on('guildMemberAdd', async (member) => {
     console.log(`👤 عضو جديد: ${member.user.tag} في ${member.guild.name}`);
     
@@ -767,6 +780,7 @@ app.get('/health', (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ السيرفر شغال على port: ${PORT}`);
+    console.log(`📁 مسار البيانات: ${DATA_DIR}`);
     console.log(`💰 النظام الاقتصادي: ${Object.keys(economyData.users).length} مستخدم`);
     console.log(`🏦 صندوق الزكاة: ${economyData.zakatFund.balance || 0} دينار`);
     console.log(`🏛️ صندوق الضرائب: ${economyData.taxFund.balance || 0} دينار`);
