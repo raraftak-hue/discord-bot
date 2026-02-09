@@ -73,10 +73,6 @@ const autoSaveInterval = setInterval(() => {
 }, 30000);
 // ==================== 📁 📁 📁 📁 📁 📁 📁 ====================
 
-// ==================== 🔒 إعدادات الحماية 🔒 ====================
-const ALLOWED_GUILDS = ['1387902577496297523'];
-// ==================== 🔒 🔒 🔒 🔒 🔒 🔒 🔒 ====================
-
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -218,7 +214,12 @@ class EconomySystem {
         }
         
         const taxRate = this.calculateTransferTax(amount);
-        const tax = Math.floor(amount * taxRate);
+        let tax = Math.floor(amount * taxRate);
+        
+        if (tax === 0 && amount > 0) {
+            tax = 1;
+        }
+        
         const netAmount = amount - tax;
         
         const sender = economyData.users[senderId];
@@ -285,27 +286,21 @@ let zakatInterval = null;
 let wealthTaxInterval = null;
 
 function scheduleTaxes() {
-    // إلغاء أي Intervals قديمة
     if (zakatInterval) clearInterval(zakatInterval);
     if (wealthTaxInterval) clearInterval(wealthTaxInterval);
     
-    // الزكاة كل أسبوع
     zakatInterval = setInterval(() => {
         console.log('💰 وقت جمع الزكاة الأسبوعية!');
         economy.collectWeeklyZakat();
     }, 7 * 24 * 60 * 60 * 1000);
     
-    // ضريبة الثروة كل شهر
     wealthTaxInterval = setInterval(() => {
         console.log('🏛️ وقت جمع ضريبة الثروة!');
         economy.collectWealthTax();
     }, 30 * 24 * 60 * 60 * 1000);
     
     console.log('📅 تم جدولة الزكاة والضرائب بنجاح');
-    console.log(`📅 الزكاة: كل أسبوع (${7 * 24 * 60 * 60 * 1000} مللي ثانية)`);
-    console.log(`📅 ضريبة الثروة: كل شهر (${30 * 24 * 60 * 60 * 1000} مللي ثانية)`);
 }
-// ==================== 💰 💰 💰 💰 💰 💰 💰 ====================
 
 // ==================== 📋 الأوامر 📋 ====================
 const commands = [
@@ -396,35 +391,30 @@ const commands = [
 ];
 
 client.on('guildCreate', async guild => {
-    if (!ALLOWED_GUILDS.includes(guild.id)) {
-        console.log(`🚫 ${guild.name} (${guild.id}) حاول يضيف البوت!`);
+    console.log(`🎉 ${guild.name} (${guild.id}) أضاف البوت!`);
+    
+    try {
+        const owner = await guild.fetchOwner();
+        
+        const embed = new EmbedBuilder()
+            .setColor(0x2b2d31)
+            .setDescription(`-# **البوت بوت إدارة تقريباً شامل ولاكنه لا يغنيك عن بعض البوتات الأخرى مع انه سيفي بالغرض نتمنى من ادارتكم ان تستعمل عملة البوت "الدينار" في الفعاليات و غيرها لتدعمنا و تنتشر عملتنا <:5_69:1467295817001074954> **`);
         
         try {
-            const owner = await guild.fetchOwner();
-            const embed = new EmbedBuilder()
-                .setTitle('البوت خاص')
-                .setDescription('-# **هذا البوت خاص و لن يعمل في خادمك الا اذا تواصلت مع سيرفر المطور الذي في الـ بايو لكي يسمح لك مجانا او مدفوع**\n\n-# **البوت سوف يخرج نفسه من السيرفر في غضون ١٠ ثوان**')
-                .setColor(0x2b2d31);
-            
             await owner.send({ embeds: [embed] });
-            console.log(`📩 أرسلت رسالة تحذير لمالك ${guild.name}`);
-        } catch (err) {
-            console.log('❌ ما قدرت أرسل رسالة للمالك');
+            console.log(`📩 أرسلت رسالة خاصة لمالك السيرفر`);
+        } catch (dmError) {
+            console.log('❌ ما قدرت أرسل للونر في الخاص');
         }
         
-        setTimeout(async () => {
-            await guild.leave();
-            console.log(`✅ طلعت من ${guild.name}`);
-        }, 10000);
+    } catch (error) {
+        console.error('❌ خطأ في معالجة إضافة السيرفر:', error);
     }
 });
 
 client.once('ready', async () => {
     console.log(`✅ ${client.user.tag} جاهز!`);
-    console.log(`📊 السيرفرات المصرحة: ${ALLOWED_GUILDS.length} سيرفر`);
-    console.log(`🏰 السيرفرات المتصلة:`, client.guilds.cache.map(g => `${g.name} (${g.id})`).join(', '));
     
-    // جدولة الضرائب مرة واحدة فقط
     scheduleTaxes();
     
     try {
@@ -438,10 +428,9 @@ client.once('ready', async () => {
 
 client.on('guildMemberAdd', async (member) => {
     console.log(`👤 عضو جديد: ${member.user.tag} في ${member.guild.name}`);
-    console.log(`🔍 ALLOWED_GUILDS: ${ALLOWED_GUILDS.includes(member.guild.id)}`);
     
-    if (!welcomeSettings.channelId || !ALLOWED_GUILDS.includes(member.guild.id)) {
-        console.log(`❌ الترحيب معطل: ${!welcomeSettings.channelId ? 'قناة غير معينة' : 'سيرفر غير مصرح'}`);
+    if (!welcomeSettings.channelId) {
+        console.log(`❌ الترحيب معطل: قناة غير معينة`);
         return;
     }
     
@@ -488,10 +477,7 @@ client.on('guildMemberAdd', async (member) => {
 });
 
 client.on('interactionCreate', async interaction => {
-    if (interaction.guild && !ALLOWED_GUILDS.includes(interaction.guild.id)) {
-        console.log(`🚫 محاولة استخدام من سيرفر غير مصرح: ${interaction.guild.id}`);
-        return;
-    }
+    if (!interaction.isChatInputCommand() && !interaction.isButton()) return;
     
     if (interaction.isButton() && interaction.customId === 'open_ticket') {
         if (activeTickets.has(interaction.user.id)) {
