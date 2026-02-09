@@ -2,6 +2,9 @@ const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder
 const { REST, Routes } = require('discord.js');
 const express = require('express');
 const app = express();
+const fs = require('fs');
+const path = require('path');
+const cron = require('node-cron');
 
 // ==================== 🔒 إعدادات الحماية 🔒 ====================
 const ALLOWED_GUILDS = [
@@ -18,422 +21,259 @@ const client = new Client({
   ]
 });
 
-const welcomeSettings = {
-  channelId: null,
-  title: '',
-  description: '',
-  color: '2b2d31',
-  image: null
+// --- قاعدة بيانات دائمة (ملف JSON) ---
+const DB_PATH = path.join(__dirname, 'database.json');
+let db = {
+  users: {}, // { userId: { balance: 0, history: [] } }
+  welcomeSettings: {
+    channelId: null,
+    title: '',
+    description: '',
+    color: '2b2d31',
+    image: null
+  },
+  panelAdminRoles: {} // { messageId: [roleIds] }
 };
 
-const panelAdminRoles = new Map();
+// تحميل البيانات عند التشغيل
+if (fs.existsSync(DB_PATH)) {
+  try {
+    const data = fs.readFileSync(DB_PATH, 'utf8');
+    if (data) db = JSON.parse(data);
+  } catch (e) {
+    console.error("Error loading DB:", e);
+  }
+}
+
+// دالة حفظ البيانات
+function saveDB() {
+  try {
+    fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+  } catch (e) {
+    console.error("Error saving DB:", e);
+  }
+}
+
+function getUserData(userId) {
+  if (!db.users[userId]) {
+    db.users[userId] = { balance: 0, history: [] };
+  }
+  return db.users[userId];
+}
+
 const activeTickets = new Map();
 
 const commands = [
-  {
-    name: 'ticketpanel',
-    description: 'عرض لوحة التذاكر',
-    options: [
-      { name: 'admin1', description: 'رتبة الإدارة الأولى', type: 8, required: false },
-      { name: 'admin2', description: 'رتبة الإدارة الثانية', type: 8, required: false },
-      { name: 'admin3', description: 'رتبة الإدارة الثالثة', type: 8, required: false }
-    ]
-  },
-  {
-    name: 'ticketedit',
-    description: 'تعديل لوحة التذاكر',
-    options: [
-      { name: 'title', description: 'عنوان جديد', type: 3, required: false },
-      { name: 'description', description: 'وصف جديد', type: 3, required: false },
-      { name: 'color', description: 'لون جديد', type: 3, required: false }
-    ]
-  },
-  {
-    name: 'welcomeset',
-    description: 'تعيين روم الترحيب',
-    options: [
-      { name: 'channel', description: 'روم الترحيب', type: 7, required: true }
-    ]
-  },
-  {
-    name: 'welcomeedit',
-    description: 'تعديل رسالة الترحيب',
-    options: [
-      { name: 'title', description: 'العنوان', type: 3, required: false },
-      { name: 'description', description: 'الوصف', type: 3, required: false },
-      { name: 'color', description: 'اللون (#2b2d31)', type: 3, required: false },
-      { name: 'image', description: 'رابط صورة خلفية', type: 3, required: false }
-    ]
-  },
-  {
-    name: 'welcometest',
-    description: 'تجربة رسالة الترحيب',
-    options: [
-      { name: 'user', description: 'لعضو للتجربة', type: 6, required: false }
-    ]
-  },
-  {
-    name: 'welcomeinfo',
-    description: 'عرض إعدادات الترحيب'
-  },
-  {
-    name: 'bothelp',
-    description: 'عرض جميع الأوامر'
-  }
+  { name: 'ticketpanel', description: 'عرض لوحة التذاكر', options: [{ name: 'admin1', type: 8 }, { name: 'admin2', type: 8 }, { name: 'admin3', type: 8 }] },
+  { name: 'ticketedit', description: 'تعديل لوحة التذاكر', options: [{ name: 'title', type: 3 }, { name: 'description', type: 3 }, { name: 'color', type: 3 }] },
+  { name: 'welcomeset', description: 'تعيين روم الترحيب', options: [{ name: 'channel', type: 7, required: true }] },
+  { name: 'welcomeedit', description: 'تعديل رسالة الترحيب', options: [{ name: 'title', type: 3 }, { name: 'description', type: 3 }, { name: 'color', type: 3 }, { name: 'image', type: 3 }] },
+  { name: 'welcometest', description: 'تجربة رسالة الترحيب', options: [{ name: 'user', type: 6 }] },
+  { name: 'welcomeinfo', description: 'عرض إعدادات الترحيب' },
+  { name: 'bothelp', description: 'عرض جميع الأوامر' },
+  { name: 'balance', description: 'عرض رصيدك من الدينار' },
+  { name: 'transfer', description: 'تحويل دينار لشخص آخر', options: [{ name: 'user', type: 6, required: true }, { name: 'amount', type: 4, required: true }] },
+  { name: 'top', description: 'عرض قائمة أغنى المستخدمين' },
+  { name: 'history', description: 'عرض سجل تحويلاتك' },
+  { name: 'add-dinar', description: 'إضافة دينار لمستخدم (للمسؤولين)', options: [{ name: 'user', type: 6, required: true }, { name: 'amount', type: 4, required: true }] }
 ];
-
-// ==================== 🔒 حدث الحماية مع الرسالة المعدلة 🔒 ====================
-client.on('guildCreate', async guild => {
-  if (!ALLOWED_GUILDS.includes(guild.id)) {
-    console.log(`🚫 ${guild.name} (${guild.id}) حاول يضيف البوت!`);
-    
-    // أرسل رسالة للمالك
-    try {
-      const owner = await guild.fetchOwner();
-      
-      const embed = new EmbedBuilder()
-        .setTitle('البوت خاص') // ⬅️ العنوان كما طلبت
-        .setDescription(
-          '-# **هذا البوت خاص و لن يعمل في خادمك الا اذا تواصلت مع سيرفر المطور الذي في الـ بايو لكي يسمح لك مجانا او مدفوع** <:money_with_wings:1388212679981666334>\n\n' +
-          '-# **البوت سوف يخرج نفسه من السيرفر في غضون ١٠ ثوان** <:s7_discord:1388214117365453062>'
-        )
-        .setColor(0x2b2d31) // ⬅️ اللون #2b2d31 كما طلبت
-        // ❌ ما في footer (شيلنا الذيل)
-        // ❌ ما في timestamp (شيلنا الوقت)
-        ;
-      
-      await owner.send({ embeds: [embed] });
-      console.log(`📩 أرسلت رسالة تحذير لمالك ${guild.name}`);
-      
-    } catch (err) {
-      console.log('❌ ما قدرت أرسل رسالة للمالك');
-    }
-    
-    // انتظر 10 ثواني ثم اطلع
-    setTimeout(async () => {
-      await guild.leave();
-      console.log(`✅ طلعت من ${guild.name}`);
-    }, 10000);
-  }
-});
-// ==================== 🔒 🔒 🔒 🔒 🔒 🔒 🔒 ====================
 
 client.once('ready', async () => {
   console.log(`✅ ${client.user.tag} جاهز!`);
-  
-  // طباعة السيرفرات الحالية
-  console.log('📊 السيرفرات المصرحة:');
-  client.guilds.cache.forEach(guild => {
-    if (ALLOWED_GUILDS.includes(guild.id)) {
-      console.log(`✅ ${guild.name} (${guild.memberCount} أعضاء)`);
-    }
-  });
-  
   try {
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
     await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-    console.log(`✅ تم تسجيل ${commands.length} أوامر`);
-  } catch (error) {
-    console.error('❌ خطأ في تسجيل الأوامر:', error);
+  } catch (error) { console.error(error); }
+
+  // نظام الزكاة الأسبوعي (2.5%)
+  cron.schedule('0 0 * * 5', () => {
+    for (const userId in db.users) {
+      const user = db.users[userId];
+      if (user.balance > 0) {
+        const zakat = Math.floor(user.balance * 0.025);
+        if (zakat > 0) {
+          user.balance -= zakat;
+          user.history.unshift({ type: 'ZAKAT', amount: zakat, date: new Date().toISOString() });
+          if (user.history.length > 10) user.history.pop();
+        }
+      }
+    }
+    saveDB();
+  });
+});
+
+// ==================== 🛡️ أوامر الشات (الاختصارات) 🛡️ ====================
+client.on('messageCreate', async (message) => {
+  if (message.author.bot || !message.guild || !ALLOWED_GUILDS.includes(message.guild.id)) return;
+
+  const args = message.content.split(' ');
+  const command = args[0];
+
+  // --- أمر طرد ---
+  if (command === 'طرد') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.KickMembers)) return;
+    const member = message.mentions.members.first();
+    const reason = args.slice(2).join(' ') || 'بدون سبب';
+    if (!member) return message.reply('-# **يرجى منشن العضو للطرد.**');
+    try {
+      await member.kick(reason);
+      message.reply(`-# **تم طرد ${member.user.username} بنجاح.**`);
+    } catch (e) { message.reply('-# **فشل الطرد، تأكد من صلاحياتي.**'); }
+  }
+
+  // --- أمر تايم (Timeout) ---
+  if (command === 'تايم') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
+    const member = message.mentions.members.first();
+    const durationStr = args[2]; // مثال: 10m, 1h, 1d
+    const reason = args.slice(3).join(' ') || 'بدون سبب';
+    
+    if (!member || !durationStr) return message.reply('-# **الاستخدام: تايم @عضو الوقت(10m/1h) السبب**');
+    
+    let duration = 0;
+    if (durationStr.endsWith('m')) duration = parseInt(durationStr) * 60 * 1000;
+    else if (durationStr.endsWith('h')) duration = parseInt(durationStr) * 60 * 60 * 1000;
+    else if (durationStr.endsWith('d')) duration = parseInt(durationStr) * 24 * 60 * 60 * 1000;
+    else return message.reply('-# **صيغة الوقت غير صحيحة (m/h/d).**');
+
+    try {
+      await member.timeout(duration, reason);
+      message.reply(`-# **تم إعطاء تايم آوت لـ ${member.user.username} لمدة ${durationStr}.**`);
+    } catch (e) { message.reply('-# **فشل التايم آوت، تأكد من صلاحياتي.**'); }
+  }
+
+  // --- أمر حذف (Clear) ---
+  if (command === 'حذف') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return;
+    const amount = parseInt(args[1]);
+    if (isNaN(amount) || amount <= 0 || amount > 100) return message.reply('-# **يرجى تحديد عدد الرسائل (1-100).**');
+    try {
+      await message.channel.bulkDelete(amount + 1);
+      const msg = await message.channel.send(`-# **تم حذف ${amount} رسالة.**`);
+      setTimeout(() => msg.delete().catch(() => {}), 3000);
+    } catch (e) { message.reply('-# **فشل الحذف، الرسائل قديمة جداً.**'); }
   }
 });
 
+// ==================== 🎫 نظام التذاكر والترحيب 🎫 ====================
 client.on('guildMemberAdd', async (member) => {
-  if (!welcomeSettings.channelId) return;
-  
-  // ==================== 🔒 تحقق من السيرفر 🔒 ====================
-  if (!ALLOWED_GUILDS.includes(member.guild.id)) return;
-  // ==============================================================
-  
+  if (!db.welcomeSettings.channelId || !ALLOWED_GUILDS.includes(member.guild.id)) return;
   try {
-    const channel = member.guild.channels.cache.get(welcomeSettings.channelId);
+    const channel = member.guild.channels.cache.get(db.welcomeSettings.channelId);
     if (!channel) return;
-
-    let title = welcomeSettings.title
-      .replace(/{user}/g, member.user.username)
-      .replace(/{server}/g, member.guild.name)
-      .replace(/{mention}/g, `<@${member.user.id}>`);
-    
-    let description = welcomeSettings.description
-      .replace(/{user}/g, member.user.username)
-      .replace(/{server}/g, member.guild.name)
-      .replace(/{count}/g, member.guild.memberCount)
-      .replace(/{mention}/g, `<@${member.user.id}>`);
-
-    const welcomeEmbed = new EmbedBuilder()
-      .setColor(parseInt(welcomeSettings.color.replace('#', ''), 16) || 0x2b2d31);
-
-    if (title.trim()) welcomeEmbed.setTitle(title);
-    if (description.trim()) welcomeEmbed.setDescription(description);
-    
-    if (welcomeSettings.image && welcomeSettings.image.startsWith('http')) {
-      welcomeEmbed.setImage(welcomeSettings.image);
-    }
-
-    await channel.send({ 
-      content: '',
-      embeds: [welcomeEmbed] 
-    });
-    
-  } catch (error) {
-    console.error('❌ خطأ في الترحيب:', error);
-  }
+    let title = db.welcomeSettings.title.replace(/{user}/g, member.user.username).replace(/{server}/g, member.guild.name).replace(/{mention}/g, `<@${member.user.id}>`);
+    let desc = db.welcomeSettings.description.replace(/{user}/g, member.user.username).replace(/{server}/g, member.guild.name).replace(/{count}/g, member.guild.memberCount).replace(/{mention}/g, `<@${member.user.id}>`);
+    const embed = new EmbedBuilder().setColor(parseInt(db.welcomeSettings.color.replace('#', ''), 16) || 0x2b2d31);
+    if (title.trim()) embed.setTitle(title);
+    if (desc.trim()) embed.setDescription(desc);
+    if (db.welcomeSettings.image && db.welcomeSettings.image.startsWith('http')) embed.setImage(db.welcomeSettings.image);
+    await channel.send({ embeds: [embed] });
+  } catch (e) {}
 });
 
 client.on('interactionCreate', async interaction => {
-  // ==================== 🔒 الحماية الرئيسية 🔒 ====================
-  if (interaction.guild && !ALLOWED_GUILDS.includes(interaction.guild.id)) {
-    return; // ⛔ لا ترد على أي أمر من سيرفر غير مصرح
-  }
-  // ==============================================================
+  if (interaction.guild && !ALLOWED_GUILDS.includes(interaction.guild.id)) return;
 
   if (interaction.isButton() && interaction.customId === 'open_ticket') {
-    if (activeTickets.has(interaction.user.id)) {
-      return interaction.reply({ content: 'لديك تذكرة مفتوحة.', ephemeral: true });
-    }
-
-    const adminRoles = panelAdminRoles.get(interaction.message.id) || [];
-    
+    if (activeTickets.has(interaction.user.id)) return interaction.reply({ content: '-# **لديك تذكرة مفتوحة.**', ephemeral: true });
+    const adminRoles = db.panelAdminRoles[interaction.message.id] || [];
     const ticketChannel = await interaction.guild.channels.create({
       name: `تذكرة-${interaction.user.username}`,
       type: ChannelType.GuildText,
       parent: interaction.channel.parentId,
       permissionOverwrites: [
         { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-        { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] },
+        { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
         { id: client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ManageChannels] },
-        ...adminRoles.map(roleId => ({ id: roleId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] }))
+        ...adminRoles.map(roleId => ({ id: roleId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }))
       ],
     });
-
     activeTickets.set(interaction.user.id, ticketChannel.id);
-
-    const mentions = `${interaction.user}${adminRoles.length > 0 ? `\n${adminRoles.map(id => `<@&${id}>`).join(' ')}` : ''}`;
-    
     await ticketChannel.send({ 
-      content: mentions, 
-      embeds: [new EmbedBuilder()
-        .setTitle(`تذكرة دعم - ${interaction.user.username}`)
-        .setDescription('-# اكتب طلب او مشكلتك بشكل واضح شوي و ان شاء الله بنرد عليك في اقرب وقت <:1_81:1467286889877999843>')
-        .setColor(0x2b2d31)
-        .setTimestamp()], 
-      components: [new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق التذكرة').setStyle(ButtonStyle.Danger)
-      )] 
+      content: `${interaction.user}${adminRoles.length > 0 ? `\n${adminRoles.map(id => `<@&${id}>`).join(' ')}` : ''}`, 
+      embeds: [new EmbedBuilder().setTitle(`تذكرة دعم - ${interaction.user.username}`).setDescription('-# **اكتب طلب او مشكلتك بشكل واضح شوي و ان شاء الله بنرد عليك في اقرب وقت**').setColor(0x2b2d31)], 
+      components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق التذكرة').setStyle(ButtonStyle.Danger))] 
     });
-
-    return interaction.reply({ content: `تم إنشاء تذكرتك: ${ticketChannel}`, ephemeral: true });
+    return interaction.reply({ content: `-# **تم إنشاء تذكرتك: ${ticketChannel}**`, ephemeral: true });
   }
 
   if (interaction.isButton() && interaction.customId === 'close_ticket') {
-    if (!interaction.channel.name.startsWith('تذكرة-')) {
-      return interaction.reply({ content: 'هذا الزر يعمل فقط في قنوات التذاكر.', ephemeral: true });
-    }
-
-    for (const [userId, channelId] of activeTickets.entries()) {
-      if (channelId === interaction.channel.id) {
-        activeTickets.delete(userId);
-        break;
-      }
-    }
-
-    await interaction.reply({ content: 'سيتم إغلاق التذكرة خلال 5 ثواني.' });
+    for (const [userId, channelId] of activeTickets.entries()) { if (channelId === interaction.channel.id) { activeTickets.delete(userId); break; } }
+    await interaction.reply({ content: '-# **سيتم إغلاق التذكرة خلال 5 ثواني.**' });
     setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
   }
 
   if (!interaction.isChatInputCommand()) return;
+  const { commandName, options, user, guild } = interaction;
 
-  if (interaction.commandName === 'ticketpanel') {
-    const adminRoles = [
-      interaction.options.getRole('admin1'),
-      interaction.options.getRole('admin2'),
-      interaction.options.getRole('admin3')
-    ].filter(r => r).map(r => r.id);
-
-    const embed = new EmbedBuilder()
-      .setTitle('🎫 نظام التذاكر')
-      .setDescription('اضغط على الزر لفتح تذكرة دعم.\nسيتم إنشاء قناة خاصة بك.')
-      .setColor(0x2b2d31);
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('open_ticket')
-        .setLabel('فتح تذكرة')
-        .setStyle(ButtonStyle.Secondary)
-    );
-
-    const reply = await interaction.reply({ 
-      embeds: [embed], 
-      components: [row], 
-      fetchReply: true 
-    });
-
-    if (adminRoles.length > 0) {
-      panelAdminRoles.set(reply.id, adminRoles);
-      await interaction.followUp({ 
-        content: `✅ تم إضافة رتب الإدارة.`,
-        ephemeral: true 
-      });
-    }
+  if (commandName === 'ticketpanel') {
+    const adminRoles = [options.getRole('admin1'), options.getRole('admin2'), options.getRole('admin3')].filter(r => r).map(r => r.id);
+    const embed = new EmbedBuilder().setTitle('🎫 نظام التذاكر').setDescription('-# **اضغط على الزر لفتح تذكرة دعم.**\n-# **سيتم إنشاء قناة خاصة بك.**').setColor(0x2b2d31);
+    const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('open_ticket').setLabel('فتح تذكرة').setStyle(ButtonStyle.Secondary));
+    const reply = await interaction.reply({ embeds: [embed], components: [row], fetchReply: true });
+    if (adminRoles.length > 0) { db.panelAdminRoles[reply.id] = adminRoles; saveDB(); }
   }
 
-  else if (interaction.commandName === 'ticketedit') {
-    const title = interaction.options.getString('title');
-    const description = interaction.options.getString('description');
-    const color = interaction.options.getString('color');
-
-    const embedColor = color ? parseInt(color.replace('#',''),16) : 0x2b2d31;
-
-    const embed = new EmbedBuilder()
-      .setTitle(title || '🎫 نظام التذاكر')
-      .setDescription(description || 'اضغط على الزر لفتح تذكرة دعم.\nسيتم إنشاء قناة خاصة بك.')
-      .setColor(embedColor);
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('open_ticket')
-        .setLabel('فتح تذكرة')
-        .setStyle(ButtonStyle.Secondary)
-    );
-
-    await interaction.reply({ 
-      embeds: [embed], 
-      components: [row] 
-    });
+  else if (commandName === 'welcomeset') {
+    const channel = options.getChannel('channel');
+    db.welcomeSettings.channelId = channel.id;
+    saveDB();
+    await interaction.reply({ content: `-# **تم تعيين روم الترحيب: ${channel}**` });
   }
 
-  else if (interaction.commandName === 'welcomeset') {
-    const channel = interaction.options.getChannel('channel');
-    welcomeSettings.channelId = channel.id;
-    
-    await interaction.reply({ 
-      content: `✅ تم تعيين روم الترحيب: ${channel}`,
-      ephemeral: false 
-    });
+  else if (commandName === 'welcomeedit') {
+    const title = options.getString('title');
+    const desc = options.getString('description');
+    const color = options.getString('color');
+    const image = options.getString('image');
+    if (title !== null) db.welcomeSettings.title = title;
+    if (desc !== null) db.welcomeSettings.description = desc;
+    if (color) db.welcomeSettings.color = color.replace('#', '');
+    if (image !== null) db.welcomeSettings.image = image;
+    saveDB();
+    await interaction.reply({ content: '-# **تم تحديث إعدادات الترحيب!**', ephemeral: true });
   }
 
-  else if (interaction.commandName === 'welcomeedit') {
-    const title = interaction.options.getString('title');
-    const description = interaction.options.getString('description');
-    const color = interaction.options.getString('color');
-    const image = interaction.options.getString('image');
-
-    if (title !== null) welcomeSettings.title = title;
-    if (description !== null) welcomeSettings.description = description;
-    if (color) welcomeSettings.color = color.startsWith('#') ? color.replace('#', '') : color;
-    if (image !== null) welcomeSettings.image = image;
-
-    await interaction.reply({ 
-      content: `✅ تم تحديث إعدادات الترحيب!`,
-      ephemeral: true 
-    });
+  else if (commandName === 'balance') {
+    const userData = getUserData(user.id);
+    await interaction.reply({ embeds: [new EmbedBuilder().setTitle('رصيد الدينار').setDescription(`-# **رصيدك الحالي هو: ${userData.balance} دينار**`).setColor(0x2b2d31)] });
   }
 
-  else if (interaction.commandName === 'welcometest') {
-    if (!welcomeSettings.channelId) {
-      return interaction.reply({ 
-        content: '❌ لم يتم تعيين روم الترحيب بعد.\nاستخدم `/welcomeset` أولاً.',
-        ephemeral: true 
-      });
-    }
-
-    const user = interaction.options.getUser('user') || interaction.user;
-    const channel = interaction.guild.channels.cache.get(welcomeSettings.channelId);
-    
-    if (!channel) {
-      return interaction.reply({ 
-        content: '❌ روم الترحيب غير موجود.',
-        ephemeral: true 
-      });
-    }
-
-    let title = welcomeSettings.title
-      .replace(/{user}/g, user.username)
-      .replace(/{server}/g, interaction.guild.name)
-      .replace(/{mention}/g, `<@${user.id}>`);
-    
-    let description = welcomeSettings.description
-      .replace(/{user}/g, user.username)
-      .replace(/{server}/g, interaction.guild.name)
-      .replace(/{count}/g, interaction.guild.memberCount)
-      .replace(/{mention}/g, `<@${user.id}>`);
-
-    const testEmbed = new EmbedBuilder()
-      .setColor(parseInt(welcomeSettings.color.replace('#', ''), 16) || 0x2b2d31);
-
-    if (title.trim()) testEmbed.setTitle(title);
-    if (description.trim()) testEmbed.setDescription(description);
-    if (welcomeSettings.image && welcomeSettings.image.startsWith('http')) {
-      testEmbed.setImage(welcomeSettings.image);
-    }
-
-    await channel.send({ 
-      content: '',
-      embeds: [testEmbed] 
-    });
-
-    await interaction.reply({ 
-      content: `✅ تم إرسال رسالة ترحيب تجريبية.`,
-      ephemeral: true 
-    });
+  else if (commandName === 'transfer') {
+    const target = options.getUser('user');
+    const amount = options.getInteger('amount');
+    const senderData = getUserData(user.id);
+    if (target.id === user.id || amount <= 0 || senderData.balance < amount) return interaction.reply({ content: '-# **خطأ في عملية التحويل.**', ephemeral: true });
+    const tax = Math.ceil(amount * 0.05);
+    const finalAmount = amount - tax;
+    const receiverData = getUserData(target.id);
+    senderData.balance -= amount;
+    receiverData.balance += finalAmount;
+    senderData.history.unshift({ type: 'SENT', to: target.username, amount, tax, date: new Date().toISOString() });
+    receiverData.history.unshift({ type: 'RECEIVED', from: user.username, amount: finalAmount, date: new Date().toISOString() });
+    saveDB();
+    await interaction.reply({ embeds: [new EmbedBuilder().setTitle('عملية تحويل ناجحة').setDescription(`-# **تم تحويل ${finalAmount} دينار إلى ${target}**\n-# **الضريبة: ${tax} دينار**`).setColor(0x2b2d31)] });
   }
 
-  else if (interaction.commandName === 'welcomeinfo') {
-    const channel = welcomeSettings.channelId ? 
-      interaction.guild.channels.cache.get(welcomeSettings.channelId) : null;
-    
-    const infoEmbed = new EmbedBuilder()
-      .setTitle('إعدادات الترحيب')
-      .setColor(0x2b2d31)
-      .addFields(
-        { name: '📌 الروم', value: channel ? `${channel}` : '❌ غير معين', inline: true },
-        { name: '🎨 اللون', value: `#${welcomeSettings.color}`, inline: true },
-        { name: '🖼️ صورة', value: welcomeSettings.image ? '✅ معين' : '❌ غير معين', inline: true }
-      );
-
-    await interaction.reply({ 
-      embeds: [infoEmbed],
-      ephemeral: true 
-    });
+  else if (commandName === 'top') {
+    const sorted = Object.entries(db.users).sort(([, a], [, b]) => b.balance - a.balance).slice(0, 10);
+    const desc = sorted.length > 0 ? sorted.map(([id, data], i) => `${i + 1}. <@${id}>: **${data.balance}** دينار`).join('\n') : '-# **لا يوجد بيانات.**';
+    await interaction.reply({ embeds: [new EmbedBuilder().setTitle('قائمة الأغنياء').setDescription(`-# **${desc}**`).setColor(0x2b2d31)] });
   }
 
-  else if (interaction.commandName === 'bothelp') {
-    const helpEmbed = new EmbedBuilder()
-      .setTitle('أوامر البوت')
-      .setColor(0x2b2d31)
-      .addFields(
-        { 
-          name: 'التذاكر', 
-          value: '`/ticketpanel` - عرض لوحة التذاكر\n' +
-                 '`/ticketedit` - تعديل لوحة التذاكر'
-        },
-        { 
-          name: 'الترحيب', 
-          value: '`/welcomeset` - تعيين روم الترحيب\n' +
-                 '`/welcomeedit` - تعديل رسالة الترحيب\n' +
-                 '`/welcometest` - تجربة الترحيب\n' +
-                 '`/welcomeinfo` - عرض الإعدادات'
-        }
-      );
-
-    await interaction.reply({ 
-      embeds: [helpEmbed],
-      ephemeral: true 
-    });
+  else if (commandName === 'add-dinar') {
+    if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) return interaction.reply({ content: '-# **للمسؤولين فقط.**', ephemeral: true });
+    const target = options.getUser('user');
+    const amount = options.getInteger('amount');
+    const targetData = getUserData(target.id);
+    targetData.balance += amount;
+    targetData.history.unshift({ type: 'ADMIN_ADD', amount, date: new Date().toISOString() });
+    saveDB();
+    await interaction.reply({ content: `-# **تم إضافة ${amount} دينار إلى ${target}**` });
   }
 });
 
 app.get('/', (req, res) => res.json({ status: 'online' }));
-app.get('/health', (req, res) => res.json({ status: 'healthy' }));
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ السيرفر شغال على port: ${PORT}`);
-  console.log(`🔒 الحماية مفعلة للسيرفرات: ${ALLOWED_GUILDS.length} سيرفر`);
-  client.login(process.env.TOKEN)
-    .then(() => console.log('✅ البوت متصل!'))
-    .catch(err => {
-      console.error('❌ فشل الاتصال:', err);
-      process.exit(1);
-    });
+app.listen(process.env.PORT || 3000, '0.0.0.0', () => {
+  client.login(process.env.TOKEN).catch(() => process.exit(1));
 });
