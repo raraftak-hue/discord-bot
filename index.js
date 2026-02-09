@@ -7,7 +7,7 @@ const app = express();
 const fs = require('fs');
 const path = require('path');
 
-// ⭐⭐ التغيير: استخدام /data في Railway (يبقى بعد إعادة التشغيل)
+// ⭐⭐ استخدام /data في Railway للتخزين الدائم
 const DATA_DIR = fs.existsSync('/data') ? '/data' : __dirname;
 
 // ملفات البيانات
@@ -19,6 +19,7 @@ function loadEconomyData() {
     if (fs.existsSync(ECONOMY_DATA_FILE)) {
         try {
             const data = JSON.parse(fs.readFileSync(ECONOMY_DATA_FILE, 'utf8'));
+            // تحويل القديم للجديد إذا لزم
             if (data.sabobas && !data.collectives) {
                 data.collectives = data.sabobas;
                 delete data.sabobas;
@@ -52,7 +53,7 @@ function saveEconomyData(data) {
     try {
         fs.writeFileSync(ECONOMY_DATA_FILE, JSON.stringify(data, null, 2));
         
-        // ⭐⭐ Backup تلقائي في /tmp
+        // نسخ احتياطي في /tmp
         if (fs.existsSync('/tmp')) {
             const backupFile = `/tmp/economy_backup_${Date.now()}.json`;
             fs.writeFileSync(backupFile, JSON.stringify(data, null, 2));
@@ -73,9 +74,53 @@ function saveBotSettings(settings) {
     }
 }
 
+// ⭐⭐ وظيفة النسخ الاحتياطي المتعدد
+function backupData() {
+    try {
+        // نسخ احتياطي في /tmp
+        if (fs.existsSync('/tmp')) {
+            const backupFile = `/tmp/economy_backup_${Date.now()}.json`;
+            fs.writeFileSync(backupFile, JSON.stringify(economyData, null, 2));
+        }
+        
+        // نسخ احتياطي ثانوي
+        const secondaryBackup = path.join(__dirname, `backup_${Date.now()}.json`);
+        fs.writeFileSync(secondaryBackup, JSON.stringify(economyData, null, 2));
+        
+        // حذف النسخ القديمة (أكثر من 7 أيام)
+        if (fs.existsSync('/tmp')) {
+            fs.readdirSync('/tmp').forEach(file => {
+                if (file.startsWith('economy_backup_')) {
+                    const filePath = path.join('/tmp', file);
+                    try {
+                        const stats = fs.statSync(filePath);
+                        const age = Date.now() - stats.mtimeMs;
+                        if (age > 7 * 24 * 60 * 60 * 1000) {
+                            fs.unlinkSync(filePath);
+                        }
+                    } catch (e) {
+                        // تجاهل الأخطاء في حذف الملفات
+                    }
+                }
+            });
+        }
+    } catch (error) {
+        console.error('❌ خطأ في النسخ الاحتياطي:', error);
+    }
+}
+
 // تحميل البيانات
 let economyData = loadEconomyData();
 let botSettings = loadBotSettings();
+
+// ⭐⭐ تحديث البيانات في الذاكرة كل 10 ثواني
+setInterval(() => {
+    economyData = loadEconomyData();
+    botSettings = loadBotSettings();
+}, 10000);
+
+// ⭐⭐ النسخ الاحتياطي كل ساعة
+setInterval(backupData, 60 * 60 * 1000);
 
 // حفظ تلقائي كل 30 ثانية
 const autoSaveInterval = setInterval(() => {
@@ -313,6 +358,21 @@ function scheduleTaxes() {
     console.log('📅 تم جدولة الزكاة والضرائب بنجاح');
 }
 
+// ⭐⭐ فحص دوري للتذاكر المفتوحة
+setInterval(() => {
+    activeTickets.forEach(async (channelId, userId) => {
+        try {
+            const channel = await client.channels.fetch(channelId).catch(() => null);
+            if (!channel) {
+                activeTickets.delete(userId);
+                console.log(`🧹 تم تنظيف تذكرة غير موجودة للمستخدم: ${userId}`);
+            }
+        } catch (error) {
+            // تجاهل الأخطاء
+        }
+    });
+}, 5 * 60 * 1000); // كل 5 دقائق
+
 // ==================== 📋 الأوامر 📋 ====================
 const commands = [
     {
@@ -398,6 +458,10 @@ const commands = [
     {
         name: 'help',
         description: 'عرض جميع الأوامر'
+    },
+    {
+        name: 'backup-data',
+        description: 'تصدير نسخة احتياطية من البيانات (للمشرفين فقط)'
     }
 ];
 
@@ -749,10 +813,32 @@ client.on('interactionCreate', async interaction => {
         await interaction.reply({ embeds: [embed] });
     }
 
+    else if (commandName === 'backup-data') {
+        // التحقق من الصلاحيات
+        if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+            return interaction.reply({ content: '❌ تحتاج صلاحية Administrator', ephemeral: true });
+        }
+        
+        // إنشاء ملف مؤقت
+        const backupData = JSON.stringify(economyData, null, 2);
+        const buffer = Buffer.from(backupData, 'utf-8');
+        
+        // إرسال الملف
+        await interaction.reply({
+            files: [{
+                attachment: buffer,
+                name: `economy_backup_${Date.now()}.json`
+            }],
+            ephemeral: true
+        });
+        
+        console.log(`✅ تم إنشاء نسخة احتياطية بواسطة ${interaction.user.tag}`);
+    }
+
     else if (commandName === 'help') {
         const helpEmbed = new EmbedBuilder()
             .setColor(0x2b2d31)
-            .setDescription(`-# **أوامر البوت**\n\n-# **👋 الترحيب**\n-# \`/welcome set\` - تعيين روم الترحيب\n-# \`/welcome edit\` - تعديل رسالة الترحيب\n-# \`/welcome test\` - تجربة الترحيب\n-# \`/welcome info\` - عرض الإعدادات\n\n-# **🎫 التذاكر**\n-# \`/ticket panel\` - عرض لوحة التذاكر\n-# \`/ticket edit\` - تعديل لوحة التذاكر\n\n-# **💰 الاقتصاد**\n-# \`/eco-balance\` - عرض رصيدك\n-# \`/eco-transfer\` - تحويل دينار\n-# \`/eco-history\` - سجل المعاملات\n-# \`/eco-top\` - أعلى الأعضاء`);
+            .setDescription(`-# **أوامر البوت**\n\n-# **👋 الترحيب**\n-# \`/welcome set\` - تعيين روم الترحيب\n-# \`/welcome edit\` - تعديل رسالة الترحيب\n-# \`/welcome test\` - تجربة الترحيب\n-# \`/welcome info\` - عرض الإعدادات\n\n-# **🎫 التذاكر**\n-# \`/ticket panel\` - عرض لوحة التذاكر\n-# \`/ticket edit\` - تعديل لوحة التذاكر\n\n-# **💰 الاقتصاد**\n-# \`/eco-balance\` - عرض رصيدك\n-# \`/eco-transfer\` - تحويل دينار\n-# \`/eco-history\` - سجل المعاملات\n-# \`/eco-top\` - أعلى الأعضاء\n-# \`/backup-data\` - تصدير نسخة احتياطية (للمشرفين فقط)`);
 
         await interaction.reply({ 
             embeds: [helpEmbed],
@@ -761,6 +847,19 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
+// ==================== ⭐⭐ معالجة الأخطاء ⭐⭐ ====================
+process.on('uncaughtException', (error) => {
+    console.error('❌ خطأ غير متوقع:', error);
+    // حفظ البيانات قبل الخروج
+    saveEconomyData(economyData);
+    saveBotSettings(botSettings);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ وعد مرفوض:', reason);
+});
+
+// ==================== 🚀 سيرفر Express 🚀 ====================
 app.get('/', (req, res) => {
     res.json({ 
         status: 'online', 
@@ -775,6 +874,17 @@ app.get('/health', (req, res) => {
         status: 'healthy', 
         uptime: process.uptime() 
     });
+});
+
+app.get('/stats', (req, res) => {
+    const stats = {
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
+        users: Object.keys(economyData.users).length,
+        tickets: activeTickets.size,
+        timestamp: new Date().toISOString()
+    };
+    res.json(stats);
 });
 
 const PORT = process.env.PORT || 3000;
