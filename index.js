@@ -67,7 +67,7 @@ let economyData = loadEconomyData();
 let botSettings = loadBotSettings();
 
 // حفظ تلقائي كل 30 ثانية
-setInterval(() => {
+const autoSaveInterval = setInterval(() => {
     saveEconomyData(economyData);
     saveBotSettings(botSettings);
 }, 30000);
@@ -104,7 +104,6 @@ const activeTickets = new Map();
 // ==================== 💰 نظام الاقتصاد 💰 ====================
 class EconomySystem {
     getBalance(userId) {
-        // تحميل البيانات أولاً للتأكد من التحديث
         economyData = loadEconomyData();
         
         if (!economyData.users[userId]) {
@@ -148,8 +147,6 @@ class EconomySystem {
     
     collectWeeklyZakat() {
         console.log('⏳ جاري جمع الزكاة الأسبوعية...');
-        
-        // 🔥 التصحيح: تحميل البيانات أولاً
         economyData = loadEconomyData();
         
         let totalZakat = 0;
@@ -174,8 +171,6 @@ class EconomySystem {
         }
         
         economyData.zakatFund.balance += totalZakat;
-        
-        // 🔥 التصحيح: حفظ البيانات بعد التعديل
         saveEconomyData(economyData);
         
         console.log(`✅ تم جمع ${totalZakat} دينار زكاة من ${affectedUsers} مستخدم`);
@@ -183,8 +178,6 @@ class EconomySystem {
     
     collectWealthTax() {
         console.log('⏳ جاري جمع ضريبة الثروة...');
-        
-        // 🔥 التصحيح: تحميل البيانات أولاً
         economyData = loadEconomyData();
         
         let totalTax = 0;
@@ -212,8 +205,6 @@ class EconomySystem {
         }
         
         economyData.taxFund.balance += totalTax;
-        
-        // 🔥 التصحيح: حفظ البيانات بعد التعديل
         saveEconomyData(economyData);
         
         console.log(`✅ تم جمع ${totalTax} دينار ضريبة ثروة من ${affectedUsers} مستخدم`);
@@ -289,16 +280,31 @@ class EconomySystem {
 
 const economy = new EconomySystem();
 
-// جدولة الزكاة والضرائب
-setInterval(() => {
-    console.log('🔄 تشغيل جمع الزكاة الأسبوعية...');
-    economy.collectWeeklyZakat();
-}, 7 * 24 * 60 * 60 * 1000);
+// نظام جدولة ذكي مع منع التكرار
+let zakatInterval = null;
+let wealthTaxInterval = null;
 
-setInterval(() => {
-    console.log('🔄 تشغيل جمع ضريبة الثروة...');
-    economy.collectWealthTax();
-}, 30 * 24 * 60 * 60 * 1000);
+function scheduleTaxes() {
+    // إلغاء أي Intervals قديمة
+    if (zakatInterval) clearInterval(zakatInterval);
+    if (wealthTaxInterval) clearInterval(wealthTaxInterval);
+    
+    // الزكاة كل أسبوع
+    zakatInterval = setInterval(() => {
+        console.log('💰 وقت جمع الزكاة الأسبوعية!');
+        economy.collectWeeklyZakat();
+    }, 7 * 24 * 60 * 60 * 1000);
+    
+    // ضريبة الثروة كل شهر
+    wealthTaxInterval = setInterval(() => {
+        console.log('🏛️ وقت جمع ضريبة الثروة!');
+        economy.collectWealthTax();
+    }, 30 * 24 * 60 * 60 * 1000);
+    
+    console.log('📅 تم جدولة الزكاة والضرائب بنجاح');
+    console.log(`📅 الزكاة: كل أسبوع (${7 * 24 * 60 * 60 * 1000} مللي ثانية)`);
+    console.log(`📅 ضريبة الثروة: كل شهر (${30 * 24 * 60 * 60 * 1000} مللي ثانية)`);
+}
 // ==================== 💰 💰 💰 💰 💰 💰 💰 ====================
 
 // ==================== 📋 الأوامر 📋 ====================
@@ -418,6 +424,9 @@ client.once('ready', async () => {
     console.log(`📊 السيرفرات المصرحة: ${ALLOWED_GUILDS.length} سيرفر`);
     console.log(`🏰 السيرفرات المتصلة:`, client.guilds.cache.map(g => `${g.name} (${g.id})`).join(', '));
     
+    // جدولة الضرائب مرة واحدة فقط
+    scheduleTaxes();
+    
     try {
         const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
         await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
@@ -430,7 +439,6 @@ client.once('ready', async () => {
 client.on('guildMemberAdd', async (member) => {
     console.log(`👤 عضو جديد: ${member.user.tag} في ${member.guild.name}`);
     console.log(`🔍 ALLOWED_GUILDS: ${ALLOWED_GUILDS.includes(member.guild.id)}`);
-    console.log(`📌 welcomeSettings:`, welcomeSettings);
     
     if (!welcomeSettings.channelId || !ALLOWED_GUILDS.includes(member.guild.id)) {
         console.log(`❌ الترحيب معطل: ${!welcomeSettings.channelId ? 'قناة غير معينة' : 'سيرفر غير مصرح'}`);
@@ -549,7 +557,6 @@ client.on('interactionCreate', async interaction => {
             const channel = interaction.options.getChannel('channel');
             welcomeSettings.channelId = channel.id;
             
-            // حفظ في الملف
             botSettings.welcome = welcomeSettings;
             saveBotSettings(botSettings);
             
@@ -568,7 +575,6 @@ client.on('interactionCreate', async interaction => {
             if (color) welcomeSettings.color = color.startsWith('#') ? color.replace('#', '') : color;
             if (image !== null) welcomeSettings.image = image;
 
-            // حفظ في الملف
             botSettings.welcome = welcomeSettings;
             saveBotSettings(botSettings);
 
