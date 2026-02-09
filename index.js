@@ -1,3 +1,4 @@
+require('dotenv').config();
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionsBitField } = require('discord.js');
 const { REST, Routes } = require('discord.js');
 const express = require('express');
@@ -6,8 +7,9 @@ const mongoose = require('mongoose');
 const cron = require('node-cron');
 
 // ==================== 🔒 إعدادات الحماية 🔒 ====================
-const ALLOWED_GUILDS = [
-  '1387902577496297523' // ⬅️ ID سيرفرك
+// إذا كانت القائمة فارغة، سيعمل البوت في جميع السيرفرات
+const ALLOWED_GUILDS = process.env.ALLOWED_GUILDS ? process.env.ALLOWED_GUILDS.split(',') : [
+  '1387902577496297523' // ID سيرفرك الافتراضي
 ];
 // ==================== 🔒 🔒 🔒 🔒 🔒 🔒 🔒 ====================
 
@@ -21,19 +23,19 @@ const client = new Client({
 });
 
 // --- إعداد قاعدة بيانات MongoDB ---
-const MONGO_URI = 'mongodb+srv://raraftak_db_user:TzKcCxo9EvNDzBbj@cluster0.t4j2uux.mongodb.net/?appName=Cluster0';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://raraftak_db_user:TzKcCxo9EvNDzBbj@cluster0.t4j2uux.mongodb.net/?appName=Cluster0';
 
 mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ متصل بقاعدة بيانات MongoDB'))
   .catch(err => {
     console.error('❌ فشل الاتصال بـ MongoDB:', err);
-    process.exit(1); // إنهاء البوت إذا فشل الاتصال بالقاعدة
+    // لا ننهي البوت هنا للسماح للمستخدم بتصحيح الرابط في .env
   });
 
 // تعريف Schema البيانات
 const UserSchema = new mongoose.Schema({
   userId: { type: String, required: true, unique: true },
-  balance: { type: Number, default: 0 },
+  balance: { type: Number, default: 0, min: 0 }, // منع الرصيد السالب
   history: { type: Array, default: [] }
 });
 
@@ -152,7 +154,9 @@ client.once('ready', async () => {
   try {
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN || '');
     if (process.env.TOKEN) {
+      console.log('⏳ جاري تسجيل الأوامر...');
       await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
+      console.log('✅ تم تسجيل الأوامر بنجاح!');
     }
   } catch (error) { console.error("Error registering commands:", error); }
 
@@ -172,16 +176,16 @@ client.once('ready', async () => {
 });
 
 client.on('guildMemberAdd', async (member) => {
-  if (!ALLOWED_GUILDS.includes(member.guild.id)) return;
+  if (ALLOWED_GUILDS.length > 0 && !ALLOWED_GUILDS.includes(member.guild.id)) return;
   await getUserData(member.id);
   const settings = await getSettings();
   if (!settings || !settings.welcomeSettings.channelId) return;
   try {
     const channel = member.guild.channels.cache.get(settings.welcomeSettings.channelId);
     if (!channel) return;
-    let title = settings.welcomeSettings.title.replace(/{user}/g, member.user.username).replace(/{server}/g, member.guild.name).replace(/{mention}/g, `<@${member.user.id}>`);
-    let desc = settings.welcomeSettings.description.replace(/{user}/g, member.user.username).replace(/{server}/g, member.guild.name).replace(/{count}/g, member.guild.memberCount).replace(/{mention}/g, `<@${member.user.id}>`);
-    const embed = new EmbedBuilder().setColor(parseInt(settings.welcomeSettings.color.replace('#', ''), 16) || 0x2b2d31);
+    let title = (settings.welcomeSettings.title || '').replace(/{user}/g, member.user.username).replace(/{server}/g, member.guild.name).replace(/{mention}/g, `<@${member.user.id}>`);
+    let desc = (settings.welcomeSettings.description || '').replace(/{user}/g, member.user.username).replace(/{server}/g, member.guild.name).replace(/{count}/g, member.guild.memberCount).replace(/{mention}/g, `<@${member.user.id}>`);
+    const embed = new EmbedBuilder().setColor(parseInt((settings.welcomeSettings.color || '2b2d31').replace('#', ''), 16) || 0x2b2d31);
     if (title.trim()) embed.setTitle(`${title}`);
     if (desc.trim()) embed.setDescription(`-# **${desc}**`);
     if (settings.welcomeSettings.image && settings.welcomeSettings.image.startsWith('http')) embed.setImage(settings.welcomeSettings.image);
@@ -191,7 +195,7 @@ client.on('guildMemberAdd', async (member) => {
 
 client.on('interactionCreate', async interaction => {
   try {
-    if (interaction.guild && !ALLOWED_GUILDS.includes(interaction.guild.id)) return;
+    if (interaction.guild && ALLOWED_GUILDS.length > 0 && !ALLOWED_GUILDS.includes(interaction.guild.id)) return;
     const settings = await getSettings();
     if (!settings) return;
 
@@ -257,6 +261,32 @@ client.on('interactionCreate', async interaction => {
         if (image !== null) settings.welcomeSettings.image = image;
         await settings.save();
         await interaction.reply({ content: '-# **تم تحديث إعدادات الترحيب!**', ephemeral: true });
+      } else if (sub === 'test') {
+        const member = interaction.member;
+        const channelId = settings.welcomeSettings.channelId;
+        if (!channelId) return interaction.reply({ content: '-# **لم يتم تعيين روم الترحيب بعد.**', ephemeral: true });
+        const channel = interaction.guild.channels.cache.get(channelId);
+        if (!channel) return interaction.reply({ content: '-# **روم الترحيب غير موجود.**', ephemeral: true });
+        
+        let title = (settings.welcomeSettings.title || '').replace(/{user}/g, member.user.username).replace(/{server}/g, member.guild.name).replace(/{mention}/g, `<@${member.user.id}>`);
+        let desc = (settings.welcomeSettings.description || '').replace(/{user}/g, member.user.username).replace(/{server}/g, member.guild.name).replace(/{count}/g, member.guild.memberCount).replace(/{mention}/g, `<@${member.user.id}>`);
+        const embed = new EmbedBuilder().setColor(parseInt((settings.welcomeSettings.color || '2b2d31').replace('#', ''), 16) || 0x2b2d31);
+        if (title.trim()) embed.setTitle(`${title}`);
+        if (desc.trim()) embed.setDescription(`-# **${desc}**`);
+        if (settings.welcomeSettings.image && settings.welcomeSettings.image.startsWith('http')) embed.setImage(settings.welcomeSettings.image);
+        await channel.send({ embeds: [embed] });
+        await interaction.reply({ content: '-# **تم إرسال رسالة تجريبية!**', ephemeral: true });
+      } else if (sub === 'info') {
+        const embed = new EmbedBuilder()
+          .setTitle('إعدادات الترحيب')
+          .addFields(
+            { name: 'روم الترحيب', value: settings.welcomeSettings.channelId ? `<#${settings.welcomeSettings.channelId}>` : 'غير محدد', inline: true },
+            { name: 'اللون', value: `#${settings.welcomeSettings.color}`, inline: true },
+            { name: 'العنوان', value: settings.welcomeSettings.title || 'لا يوجد', inline: false },
+            { name: 'الوصف', value: settings.welcomeSettings.description || 'لا يوجد', inline: false }
+          )
+          .setColor(0x2b2d31);
+        await interaction.reply({ embeds: [embed], ephemeral: true });
       }
     }
 
@@ -269,11 +299,17 @@ client.on('interactionCreate', async interaction => {
       } else if (sub === 'transfer') {
         const target = options.getUser('user');
         const amount = options.getInteger('amount');
-        if (target.id === user.id || amount <= 0 || userData.balance < amount) return interaction.reply({ content: '-# **خطأ في عملية التحويل.**', ephemeral: true });
+        
+        if (amount <= 0) return interaction.reply({ content: '-# **المبلغ يجب أن يكون أكبر من صفر.**', ephemeral: true });
+        if (userData.balance < amount) return interaction.reply({ content: '-# **ليس لديك رصيد كافٍ.**', ephemeral: true });
+        if (target.id === user.id) return interaction.reply({ content: '-# **لا يمكنك التحويل لنفسك.**', ephemeral: true });
+        if (target.bot) return interaction.reply({ content: '-# **لا يمكنك التحويل للبوتات.**', ephemeral: true });
+
         let tax = Math.ceil(amount * 0.05); if (tax < 1) tax = 1;
         const finalAmount = amount - tax;
         const targetData = await getUserData(target.id);
         if (!targetData) return interaction.reply({ content: "Error accessing target user.", ephemeral: true });
+        
         userData.balance -= amount;
         targetData.balance += finalAmount;
         userData.history.unshift({ type: 'SENT', to: target.username, amount, tax, date: new Date().toISOString() });
@@ -284,6 +320,16 @@ client.on('interactionCreate', async interaction => {
         const sorted = await User.find().sort({ balance: -1 }).limit(10);
         const desc = sorted.length > 0 ? sorted.map((u, i) => `-# ** ${i + 1}. <@${u.userId}>  ${u.balance} دينار**`).join('\n') : '-# **لا يوجد بيانات.**';
         await interaction.reply({ embeds: [new EmbedBuilder().setTitle('قائمة الأغنياء').setDescription(`${desc}`).setColor(0x2b2d31)] });
+      } else if (sub === 'history') {
+        const history = userData.history.slice(0, 10);
+        const desc = history.length > 0 ? history.map(h => {
+          if (h.type === 'SENT') return `📤 أرسلت ${h.amount} إلى ${h.to} (ضريبة: ${h.tax})`;
+          if (h.type === 'RECEIVED') return `📥 استلمت ${h.amount} من ${h.from}`;
+          if (h.type === 'ZAKAT') return `🕌 زكاة: ${h.amount}`;
+          if (h.type === 'ADMIN_ADD') return `💰 إضافة إدارية: ${h.amount}`;
+          return `❓ عملية غير معروفة`;
+        }).join('\n') : 'لا يوجد سجل عمليات.';
+        await interaction.reply({ embeds: [new EmbedBuilder().setTitle('سجل العمليات').setDescription(desc).setColor(0x2b2d31)] });
       } else if (sub === 'add') {
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) return interaction.reply({ content: '-# **للمسؤولين فقط.**', ephemeral: true });
         const target = options.getUser('user');
@@ -295,6 +341,22 @@ client.on('interactionCreate', async interaction => {
         await targetData.save();
         await interaction.reply({ content: `-# **تم إضافة ${amount} دينار إلى ${target}**` });
       }
+    }
+    else if (commandName === 'bothelp') {
+      const embed = new EmbedBuilder()
+        .setTitle('قائمة الأوامر')
+        .setDescription('إليك قائمة بجميع الأوامر المتاحة في البوت:')
+        .addFields(
+          { name: '🎫 /ticket panel', value: 'إنشاء لوحة التذاكر' },
+          { name: '👋 /welcome set', value: 'تعيين روم الترحيب' },
+          { name: '📝 /welcome edit', value: 'تعديل رسالة الترحيب' },
+          { name: '💰 /economy balance', value: 'عرض رصيدك' },
+          { name: '💸 /economy transfer', value: 'تحويل رصيد' },
+          { name: '🏆 /economy top', value: 'قائمة الأغنياء' },
+          { name: '📜 /economy history', value: 'سجل العمليات' }
+        )
+        .setColor(0x2b2d31);
+      await interaction.reply({ embeds: [embed] });
     }
   } catch (err) {
     console.error("Interaction error:", err);
@@ -312,7 +374,6 @@ app.listen(process.env.PORT || 3000, '0.0.0.0', () => {
   if (process.env.TOKEN) {
     client.login(process.env.TOKEN).catch(e => {
       console.error("Login failed:", e);
-      process.exit(1);
     });
   } else {
     console.error("TOKEN environment variable is missing!");
