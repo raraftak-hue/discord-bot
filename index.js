@@ -6,10 +6,12 @@ const fs = require('fs');
 const path = require('path');
 const cron = require('node-cron');
 
-// ==================== 🔒 إعدادات الحماية 🔒 ====================
+// ==================== 🔒 إعدادات الحماية والمالك 🔒 ====================
 const ALLOWED_GUILDS = [
   '1387902577496297523' // ⬅️ ID سيرفرك
 ];
+
+const OWNER_ID = "1131951548772122625"; // ⬅️⬅️ ضع الآيدي الخاص بك هنا (مهم جداً لنظام البنك)
 // ==================== 🔒 🔒 🔒 🔒 🔒 🔒 🔒 ====================
 
 const client = new Client({
@@ -132,7 +134,7 @@ const commands = [
       { name: 'history', description: 'عرض سجل تحويلاتك', type: 1 },
       { 
         name: 'add', 
-        description: 'إضافة دينار لمستخدم (للمسؤولين)', 
+        description: 'إضافة دينار لمستخدم (للمالك فقط)', 
         type: 1,
         options: [
           { name: 'user', description: 'المستخدم', type: 6, required: true },
@@ -150,10 +152,13 @@ client.once('ready', async () => {
     await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
   } catch (error) { console.error(error); }
 
+  // --- نظام الزكاة (كل يوم جمعة) ---
   cron.schedule('0 0 * * 5', () => {
+    console.log('🔄 جاري تنفيذ نظام الزكاة...');
     for (const userId in db.users) {
       const user = db.users[userId];
       if (user.balance > 0) {
+        // خصم 2.5%
         const zakat = Math.floor(user.balance * 0.025);
         if (zakat > 0) {
           user.balance -= zakat;
@@ -163,6 +168,7 @@ client.once('ready', async () => {
       }
     }
     saveDB();
+    console.log('✅ تم تنفيذ الزكاة.');
   });
 });
 
@@ -193,14 +199,14 @@ client.on('guildCreate', async (guild) => {
   } catch (e) {}
 });
 
-// هدية الترحيب
+// هدية الترحيب (معدلة لتكون 50 دينار)
 client.on('guildMemberAdd', async (member) => {
   if (!ALLOWED_GUILDS.includes(member.guild.id)) return;
   
   if (!db.users[member.id]) {
     const userData = getUserData(member.id);
-    userData.balance = 10; 
-    userData.history.unshift({ type: 'WELCOME_GIFT', amount: 10, date: new Date().toISOString() });
+    userData.balance = 50; // ⬅️ تعديل المبلغ لـ 50
+    userData.history.unshift({ type: 'WELCOME_GIFT', amount: 50, date: new Date().toISOString() });
     saveDB();
   }
 
@@ -301,7 +307,6 @@ client.on('interactionCreate', async interaction => {
       const title = options.getString('title');
       const desc = options.getString('description');
       const color = options.getString('color');
-      // Logic for editing existing panel would go here, for now just a placeholder success
       await interaction.reply({ content: '-# **تم تحديث إعدادات لوحة التذاكر!**', ephemeral: true });
     }
   }
@@ -343,19 +348,64 @@ client.on('interactionCreate', async interaction => {
     if (sub === 'balance') {
       const userData = getUserData(user.id);
       await interaction.reply({ embeds: [new EmbedBuilder().setTitle('رصيد الدينار').setDescription(`-# **رصيدك الحالي هو: ${userData.balance} دينار**`).setColor(0x2b2d31)] });
+    
+    // ---------------------- تعديل منطق التحويل والضرائب ----------------------
     } else if (sub === 'transfer') {
       const target = options.getUser('user');
       const amount = options.getInteger('amount');
       const senderData = getUserData(user.id);
-      if (target.id === user.id || amount <= 0 || senderData.balance < amount) return interaction.reply({ content: '-# **خطأ في عملية التحويل.**', ephemeral: true });
-      let tax = Math.ceil(amount * 0.05); if (tax < 1) tax = 1;
+
+      // تحقق من التحويل لنفس الشخص أو مبالغ غير منطقية (أقل من الحد الأدنى للضريبة)
+      if (target.id === user.id) return interaction.reply({ content: '-# **لا يمكنك التحويل لنفسك.**', ephemeral: true });
+      if (amount <= 1) return interaction.reply({ content: '-# **عذراً، المبلغ قليل جداً ولا يغطي الحد الأدنى للضريبة (1 دينار).**', ephemeral: true });
+      if (senderData.balance < amount) return interaction.reply({ content: '-# **رصيدك غير كافي لإتمام التحويل.**', ephemeral: true });
+
+      // حساب الضريبة التصاعدية
+      let taxRate = 0;
+      let taxPercentageString = "0%";
+
+      if (amount < 1000) {
+        taxRate = 0.05; // 5%
+        taxPercentageString = "5%";
+      } else if (amount >= 1000 && amount <= 4999) {
+        taxRate = 0.10; // 10%
+        taxPercentageString = "10%";
+      } else {
+        taxRate = 0.20; // 20%
+        taxPercentageString = "20%";
+      }
+
+      let tax = Math.floor(amount * taxRate);
+      
+      // تطبيق الحد الأدنى للضريبة (1 دينار)
+      tax = Math.max(tax, 1);
+
       const finalAmount = amount - tax;
+
+      // تنفيذ العملية
       const receiverData = getUserData(target.id);
-      senderData.balance -= amount; receiverData.balance += finalAmount;
+      senderData.balance -= amount; 
+      receiverData.balance += finalAmount;
+      
       senderData.history.unshift({ type: 'SENT', to: target.username, amount, tax, date: new Date().toISOString() });
       receiverData.history.unshift({ type: 'RECEIVED', from: user.username, amount: finalAmount, date: new Date().toISOString() });
       saveDB();
-      await interaction.reply({ embeds: [new EmbedBuilder().setTitle('عملية تحويل ناجحة').setDescription(`-# **تم التحويل ${finalAmount} دينار لـ <@${target.id}> رصيدك الحالي (${senderData.balance}) <:money_with_wings:1388212679981666334>**\n\n-# **الضريبة (${tax})**`).setColor(0x2b2d31)] });
+
+      // رسالة منسقة بوضوح
+      const embed = new EmbedBuilder()
+        .setTitle('✅ عملية تحويل ناجحة')
+        .setColor(0x2b2d31)
+        .addFields(
+            { name: 'المبلغ المرسل', value: `${amount} دينار`, inline: true },
+            { name: 'الضريبة المستقطعة', value: `${tax} دينار (${taxPercentageString})`, inline: true },
+            { name: 'المبلغ الصافي للمستلم', value: `${finalAmount} دينار`, inline: true },
+            { name: 'المرسل', value: `<@${user.id}>`, inline: true },
+            { name: 'المستلم', value: `<@${target.id}>`, inline: true }
+        )
+        .setFooter({ text: `رصيدك الحالي: ${senderData.balance} دينار` });
+
+      await interaction.reply({ embeds: [embed] });
+
     } else if (sub === 'top') {
       const sorted = Object.entries(db.users).sort(([, a], [, b]) => b.balance - a.balance).slice(0, 10);
       const desc = sorted.length > 0 ? sorted.map(([id, data], i) => `-# ** ${i + 1}. <@${id}>  ${data.balance} دينار**`).join('\n') : '-# **لا يوجد بيانات.**';
@@ -364,15 +414,21 @@ client.on('interactionCreate', async interaction => {
       const userData = getUserData(user.id);
       const history = userData.history.slice(0, 10).map(h => `-# **[${h.type}] ${h.amount} دينار - ${new Date(h.date).toLocaleDateString()}**`).join('\n') || '-# **لا يوجد سجل.**';
       await interaction.reply({ embeds: [new EmbedBuilder().setTitle('سجل التحويلات').setDescription(history).setColor(0x2b2d31)] });
+    
+    // ---------------------- تعديل أمر الإضافة (المركزية) ----------------------
     } else if (sub === 'add') {
-      if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) return interaction.reply({ content: '-# **للمسؤولين فقط.**', ephemeral: true });
+      // التحقق من ID المالك فقط بدلاً من صلاحيات الأدمن
+      if (interaction.user.id !== OWNER_ID) {
+        return interaction.reply({ content: '-# **❌ هذا الأمر مخصص لمالك البوت فقط (البنك المركزي).**', ephemeral: true });
+      }
+
       const target = options.getUser('user');
       const amount = options.getInteger('amount');
       const targetData = getUserData(target.id);
       targetData.balance += amount;
       targetData.history.unshift({ type: 'ADMIN_ADD', amount, date: new Date().toISOString() });
       saveDB();
-      await interaction.reply({ content: `-# **تم إضافة ${amount} دينار إلى ${target}**` });
+      await interaction.reply({ content: `-# **✅ تم إضافة ${amount} دينار إلى ${target} بواسطة البنك المركزي.**` });
     }
   }
 
