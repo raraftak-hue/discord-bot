@@ -200,7 +200,11 @@ client.on('interactionCreate', async (i) => {
         const amount = options.getInteger('amount');
         if (data.balance < amount) return i.reply('رصيدك لا يكفي.');
         const tData = getUserData(target.id);
-        data.balance -= amount; tData.balance += amount; saveDB();
+                data.balance -= amount; 
+        tData.balance += amount;
+        tData.history.unshift({ type: 'TRANSFER_RECEIVE', amount: amount, date: new Date().toISOString() });
+        saveDB();
+
         i.reply({ embeds: [new EmbedBuilder().setDescription(`-# **تم تحويل ${amount} دينار لـ ${target} رصيدك الحالي هو ${data.balance} دينار <a:moneywith_:1470458218953179237>**`).setColor(0x2b2d31)] });
       }
       if (sub === 'top') {
