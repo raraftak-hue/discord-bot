@@ -25,12 +25,20 @@ const client = new Client({
 // --- إعداد قاعدة بيانات MongoDB ---
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://raraftak_db_user:TzKcCxo9EvNDzBbj@cluster0.t4j2uux.mongodb.net/?appName=Cluster0';
 
-mongoose.connect(MONGO_URI)
-  .then(() => console.log('✅ متصل بقاعدة بيانات MongoDB'))
-  .catch(err => {
-    console.error('❌ فشل الاتصال بـ MongoDB:', err);
-    // لا ننهي البوت هنا للسماح للمستخدم بتصحيح الرابط في .env
-  });
+const connectDB = async () => {
+  try {
+    await mongoose.connect(MONGO_URI, {
+      serverSelectionTimeoutMS: 5000, // انتظر 5 ثواني فقط قبل الفشل
+    });
+    console.log('✅ متصل بقاعدة بيانات MongoDB');
+  } catch (err) {
+    console.error('❌ فشل الاتصال بـ MongoDB (تأكد من إعدادات IP Access في Atlas):', err.message);
+    // محاولة إعادة الاتصال بعد 30 ثانية
+    setTimeout(connectDB, 30000);
+  }
+};
+
+connectDB();
 
 // تعريف Schema البيانات
 const UserSchema = new mongoose.Schema({
@@ -151,6 +159,9 @@ const commands = [
 
 client.once('ready', async () => {
   console.log(`✅ ${client.user.tag} جاهز!`);
+  // تحديث حالة البوت
+  client.user.setActivity('خدمتكم 🛠️', { type: 3 }); // Watching
+
   try {
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN || '');
     if (process.env.TOKEN) {
