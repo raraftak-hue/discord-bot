@@ -69,7 +69,11 @@ const commands = [
       { name: 'info', description: 'عرض إعدادات الترحيب', type: 1 }
     ] 
   },
-  { name: 'bothelp', description: 'عرض جميع الأوامر' },
+  { name: 'bothelp', description: '-# **/ticket panel - انشاء لوحة تذاكر**
+-# **/welcome set - تعيين روم الترحيب**
+-# **/economy balance - عرض الرصيد**
+-# **/economy transfer- تحويل الأموال**
+-# **/economy top - قائمة الاغنياء**' },
   { 
     name: 'economy', 
     description: 'النظام المالي', 
