@@ -117,14 +117,14 @@ client.on('messageCreate', async (message) => {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
     const member = message.mentions.members.first();
     const timeArg = args.find(a => /^\d+[mhd]$/i.test(a));
-    if (!member || !timeArg) return message.reply('❌ **استخدم: تايم @عضو 1h**');
+    if (!member || !timeArg) return message.reply('-# **الصيغة غلط يا ذكي <:emoji_334:1388211595053760663> **');
     const unit = timeArg.slice(-1).toLowerCase();
     const value = parseInt(timeArg);
     let duration = (unit === 'm' ? value * 60 : unit === 'h' ? value * 3600 : value * 86400) * 1000;
     try {
       await member.timeout(duration);
       message.reply({ embeds: [new EmbedBuilder().setDescription(`-# **تم اسكات العضو ${member} ليش ما يستحي هو يارب ما يعيدها عشان ما يبلع مره ثانيه <a:DancingShark:1469030444774199439>**`).setColor(0x2b2d31)] });
-    } catch (e) { message.reply('❌ فشل.'); }
+    } catch (e) { message.reply('-# ** ما تقدر تسويها هو يدعس عليك <:emoji_43:1397804543789498428>  **'); }
   }
 
   if (command === 'طرد') {
@@ -134,7 +134,7 @@ client.on('messageCreate', async (message) => {
     try {
       await member.kick();
       message.reply({ embeds: [new EmbedBuilder().setDescription(`-# ** تم طرد العضو ${member} احسن انطرد كان غاثني من اول المسكين باي <a:Hiiiii:1470461001085354148>**`).setColor(0x2b2d31)] });
-    } catch (e) { message.reply('❌ فشل.'); }
+    } catch (e) { message.reply('-# ** ما تقدر تسويها هو يدعس عليك <:emoji_43:1397804543789498428>  **'); }
   }
 
   if (command === 'حذف') {
@@ -167,7 +167,7 @@ client.on('interactionCreate', async (i) => {
     // --- BOTH HELP ---
     if (commandName === 'bothelp') {
         const helpEmbed = new EmbedBuilder()
-            .setTitle('🤖 قائمة أوامر البوت')
+            .setTitle('قائمة أوامر البوت')
             .setColor(0x2b2d31)
             .setDescription(
                 `-# **/economy top - قائمة الاغنياء**\n` +
@@ -183,7 +183,7 @@ client.on('interactionCreate', async (i) => {
     // --- ECONOMY ---
     if (commandName === 'economy') {
       const data = getUserData(user.id);
-      if (sub === 'balance') i.reply({ embeds: [new EmbedBuilder().setDescription(`-# **رصيدك الحالي: ${data.balance} دينار**`).setColor(0x2b2d31)] });
+      if (sub === 'balance') i.reply({ embeds: [new EmbedBuilder().setDescription(`-# **رصيدك الحالي ${data.balance} دينار<:money_with_wings:1388212679981666334> **`).setColor(0x2b2d31)] });
       if (sub === 'transfer') {
         const target = options.getUser('user');
         const amount = options.getInteger('amount');
