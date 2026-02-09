@@ -40,9 +40,16 @@ function saveDB() {
 }
 
 function getUserData(userId) {
-  if (!db.users[userId]) { db.users[userId] = { balance: 0, history: [] }; }
+  if (!db.users[userId]) { 
+    db.users[userId] = { 
+      balance: 10, 
+      history: [{ type: 'STARTING_GIFT', amount: 10, date: new Date().toISOString() }] 
+    };
+    saveDB(); 
+  }
   return db.users[userId];
 }
+
 
 const activeTickets = new Map();
 
