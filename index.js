@@ -130,7 +130,7 @@ client.on('messageCreate', async (message) => {
     // 5. محاولة تنفيذ التايم (التعامل مع الرتب الأعلى)
     try {
       await member.timeout(durationInMs);
-      message.reply(`-# **تم اسكات ${member} يارب ما يعيدها <a:DancingShark:1469030444774199439>**`);
+      message.reply(`-# **تم اسكات العضو ${member} ليش ما يستحي هو يارب ما يعيدها عشان ما يبلع مره ثانيه <a:DancingShark:1469030444774199439>**`);
     } catch (error) {
       // إذا كانت رتبته أعلى أو البوت ما يقدر عليه
       message.reply('-# **ما تقدر تسويها هو يدعس عليك <:emoji_43:1397804543789498428>**');
