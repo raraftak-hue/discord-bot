@@ -101,7 +101,7 @@ async function sendWelcome(member, guildSettings) {
   const finalDesc = processText(description);
 
   if (finalTitle) embed.setTitle(finalTitle);
-  if (finalDesc) embed.setDescription(`-# **${finalDesc}**`);
+  if (finalDesc) embed.setDescription(finalDesc); // بدون `-# ** **`
   if (image) embed.setImage(image);
 
   // لا ترسل الإيمبيد إذا كان فارغاً تماماً (بدون عنوان أو وصف أو صورة)
