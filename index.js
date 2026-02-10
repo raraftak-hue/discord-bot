@@ -58,26 +58,55 @@ async function getSettings(guildId) {
 
 // --- تعريف أوامر السلاش ---
 const slashCommands = [
-  { name: 'ticket', description: 'إدارة نظام التذاكر', options: [{ name: 'panel', description: 'عرض لوحة التذاكر', type: 1 }] },
-  { name: 'welcome', description: 'إدارة نظام الترحيب', options: [
-      { name: 'set', description: 'تعيين روم الترحيب', type: 1, options: [{ name: 'channel', description: 'اختر الروم', type: 7, required: true }] },
-      { name: 'edit', description: 'تعديل رسالة الترحيب', type: 1, options: [{ name: 'title', description: 'العنوان', type: 3 }, { name: 'description', description: 'الوصف', type: 3 }, { name: 'color', description: 'اللون', type: 3 }, { name: 'image', description: 'رابط الصورة', type: 3 }] },
-      { name: 'info', description: 'عرض إعدادات الترحيب', type: 1 }
-  ]},
-  { name: 'bothelp', description: 'عرض جميع الأوامر' },
-  { name: 'economy', description: 'النظام المالي', options: [
+  { 
+    name: 'bothelp', 
+    description: 'عرض جميع الأوامر' 
+  },
+  { 
+    name: 'economy', 
+    description: 'النظام المالي', 
+    options: [
       { name: 'balance', description: 'عرض الرصيد', type: 1 },
       { name: 'transfer', description: 'تحويل الأموال', type: 1, options: [{ name: 'user', description: 'المستلم', type: 6, required: true }, { name: 'amount', description: 'المبلغ', type: 4, required: true }] },
       { name: 'top', description: 'قائمة الأغنياء', type: 1 }
-  ]}
+    ] 
+  }
+];
+
+// أوامر خاصة بـ Administrator فقط (يتم تسجيلها بشكل منفصل لكل سيرفر)
+const adminSlashCommands = [
+  { 
+    name: 'ticket', 
+    description: 'إدارة نظام التذاكر', 
+    options: [{ name: 'panel', description: 'عرض لوحة التذاكر', type: 1 }],
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString()
+  }, 
+  { 
+    name: 'welcome', 
+    description: 'إدارة نظام الترحيب', 
+    options: [
+      { name: 'set', description: 'تعيين روم الترحيب', type: 1, options: [{ name: 'channel', description: 'اختر الروم', type: 7, required: true }] },
+      { name: 'edit', description: 'تعديل رسالة الترحيب', type: 1, options: [{ name: 'title', description: 'العنوان', type: 3 }, { name: 'description', description: 'الوصف', type: 3 }, { name: 'color', description: 'اللون', type: 3 }, { name: 'image', description: 'رابط الصورة', type: 3 }] },
+      { name: 'info', description: 'عرض إعدادات الترحيب', type: 1 }
+    ],
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString()
+  }
 ];
 
 client.once('ready', async () => {
   console.log(`✅ ${client.user.tag} أونلاين!`);
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+  
   try { 
+    // تسجيل الأوامر العامة (لجميع الأعضاء)
     await rest.put(Routes.applicationCommands(client.user.id), { body: slashCommands }); 
-    console.log('✅ تم تسجيل أوامر السلاش بنجاح!');
+    console.log('✅ تم تسجيل أوامر السلاش العامة بنجاح!');
+    
+    // تسجيل الأوامر الإدارية لكل سيرفر مسموح
+    for (const guildId of ALLOWED_GUILDS) {
+      await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), { body: adminSlashCommands });
+      console.log(`✅ تم تسجيل أوامر الأدمن للسيرفر ${guildId}`);
+    }
   } catch (e) { console.error(e); }
   
   cron.schedule('0 0 * * 5', async () => {
@@ -248,7 +277,17 @@ client.on('messageCreate', async (message) => {
 client.on('interactionCreate', async (i) => {
   if (i.isChatInputCommand()) {
     if (!i.guild || !ALLOWED_GUILDS.includes(i.guild.id)) return;
-    const { commandName, options, user } = i;
+    const { commandName, options, user, member } = i;
+
+    // تحقق من صلاحية Administrator للأوامر الإدارية (احتياطي إضافي)
+    if (['ticket', 'welcome'].includes(commandName)) {
+      if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+        return i.reply({ 
+          content: `-# **يحتاج هذا الأمر لصلاحية Administrator <:emoji_43:1397804543789498428>**`, 
+          ephemeral: true 
+        });
+      }
+    }
 
     if (commandName === 'bothelp') {
       const helpEmbed = new EmbedBuilder()
