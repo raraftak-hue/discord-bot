@@ -112,32 +112,19 @@ client.on('messageCreate', async (message) => {
 
   // أوامر الإدارة
   if (command === 'تايم') {
-    // 1. التحقق من الصلاحية (إذا ما عنده صلاحية لا يرد بشيء)
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
-
     const member = message.mentions.members.first();
     const timeArg = args.find(a => /^\d+[mhd]$/i.test(a));
-    
-    // 2. التحقق من الصيغة (بدون منشن للمرسل)
     if (!member || !timeArg) return message.channel.send(`-# **الصيغة غلط يا ذكي <:emoji_334:1388211595053760663>**`);
-    
-    // 3. التحقق إذا كان يعطي تايم لنفسه
-    if (member.id === message.author.id) {
-      return message.channel.send(`-# **تبي تعطي تايم لنفسك ؟ واضح عقلك فيه خلل ما بسويها لك <:rimuruWut:1388211603140247565> **`);
-    }
-
+    if (member.id === message.author.id) return message.channel.send(`-# **تبي تعطي تايم لنفسك ؟ واضح عقلك فيه خلل ما بسويها لك <:rimuruWut:1388211603140247565> **`);
     const timeValue = parseInt(timeArg);
     const timeUnit = timeArg.slice(-1).toLowerCase();
     let durationInMs = timeValue * (timeUnit === 'm' ? 60 : timeUnit === 'h' ? 3600 : 86400) * 1000;
-    
-    // 4. التحقق من المدة (أقصى شيء 28 يوم)
     if (durationInMs > 2419200000) return message.channel.send(`-# **الصيغة غلط يا ذكي <:emoji_334:1388211595053760663>**`);
-
     try {
       await member.timeout(durationInMs);
       message.channel.send(`-# **تم اسكات ${member} يارب ما يعيدها <a:DancingShark:1469030444774199439>**`);
     } catch (error) {
-      // 5. إذا كانت رتبته أعلى أو البوت ما يقدر عليه
       message.channel.send(`-# **ما تقدر تسويها هو يدعس عليك <:emoji_43:1397804543789498428>**`);
     }
   }
@@ -173,27 +160,23 @@ client.on('messageCreate', async (message) => {
     if (command === 'تحويل') {
       const target = message.mentions.users.first();
       const amount = parseInt(args.find(a => /^\d+$/.test(a)));
-      
       if (!target || isNaN(amount) || amount <= 0) return message.channel.send(`-# **استخدم: تحويل @الشخص القيمة**`);
       if (userData.balance < amount) return message.channel.send(`رصيدك لا يكفي.`);
       if (target.id === message.author.id) return message.channel.send(`ما تقدر تحول لنفسك.`);
-
       const confirmRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('confirm_transfer').setLabel('تأكيد').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId('cancel_transfer').setLabel('إلغاء').setStyle(ButtonStyle.Danger)
       );
-
       const confirmMsg = await message.channel.send({
         content: `-# **متأكد تبي تحول ${amount} دينار لـ ${target} ؟**`,
         components: [confirmRow]
       });
-
       pendingTransfers.set(confirmMsg.id, { senderId: message.author.id, targetId: target.id, amount });
     }
 
     if (command === 'اغنياء') {
       const topUsers = await User.find().sort({ balance: -1 }).limit(5);
-      const topMsg = topUsers.map((u, idx) => `\u200F-# **${idx+1}. <@${u.userId}> - ${u.balance} دينار**`).join('\n');
+      const topMsg = topUsers.map((u, idx) => `-# **\u200F${idx+1}. \u202B<@${u.userId}>\u202C - ${u.balance} دينار**`).join('\n');
       const embed = new EmbedBuilder()
         .setTitle('قائمة الأغنياء')
         .setDescription(topMsg)
@@ -203,7 +186,7 @@ client.on('messageCreate', async (message) => {
 
     if (command === 'السجل') {
       const history = userData.history.slice(-5).reverse();
-      const historyMsg = history.map(h => `\u200F-# **${h.type === 'TRANSFER_RECEIVE' ? 'استلام' : 'هدية'}: ${h.amount} دنانير**`).join('\n') || '-# **لا يوجد سجل.**';
+      const historyMsg = history.map(h => `-# **\u200F${h.type === 'TRANSFER_RECEIVE' ? 'استلام' : 'هدية'}: ${h.amount} دنانير**`).join('\n') || '-# **لا يوجد سجل.**';
       const embed = new EmbedBuilder()
         .setTitle('سجل التحويلات')
         .setDescription(historyMsg)
@@ -241,7 +224,6 @@ client.on('interactionCreate', async (i) => {
         const amount = options.getInteger('amount');
         if (userData.balance < amount) return i.reply({ content: 'رصيدك لا يكفي.', ephemeral: true });
         if (target.id === user.id) return i.reply({ content: 'ما تقدر تحول لنفسك.', ephemeral: true });
-
         const confirmRow = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId('confirm_transfer').setLabel('تأكيد').setStyle(ButtonStyle.Success),
           new ButtonBuilder().setCustomId('cancel_transfer').setLabel('إلغاء').setStyle(ButtonStyle.Danger)
@@ -251,7 +233,7 @@ client.on('interactionCreate', async (i) => {
       }
       if (sub === 'top') {
         const topUsers = await User.find().sort({ balance: -1 }).limit(5);
-        const topMsg = topUsers.map((u, idx) => `\u200F-# **${idx+1}. <@${u.userId}> - ${u.balance} دينار**`).join('\n');
+        const topMsg = topUsers.map((u, idx) => `-# **\u200F${idx+1}. \u202B<@${u.userId}>\u202C - ${u.balance} دينار**`).join('\n');
         const embed = new EmbedBuilder()
           .setTitle('قائمة الأغنياء')
           .setDescription(topMsg)
@@ -281,15 +263,12 @@ client.on('interactionCreate', async (i) => {
     if (i.customId === 'confirm_transfer' || i.customId === 'cancel_transfer') {
       const data = pendingTransfers.get(i.message.id);
       if (!data || i.user.id !== data.senderId) return i.reply({ content: 'هذا الطلب ليس لك أو انتهى.', ephemeral: true });
-
       if (i.customId === 'cancel_transfer') {
         pendingTransfers.delete(i.message.id);
         return i.update({ content: '❌ تم إلغاء عملية التحويل.', components: [] });
       }
-
       const sender = await getUserData(data.senderId);
       if (sender.balance < data.amount) return i.update({ content: '❌ رصيدك لا يكفي.', components: [] });
-
       const target = await getUserData(data.targetId);
       sender.balance -= data.amount;
       target.balance += data.amount;
@@ -298,7 +277,6 @@ client.on('interactionCreate', async (i) => {
       pendingTransfers.delete(i.message.id);
       return i.update({ content: `-# **تم تحويل ${data.amount} لـ <@${data.targetId}> رصيدك الآن ${sender.balance} <a:moneywith_:1470458218953179237>**`, components: [] });
     }
-
     if (i.customId === 'open_ticket') {
       const ch = await i.guild.channels.create({ name: `ticket-${i.user.username}`, type: ChannelType.GuildText, permissionOverwrites: [{ id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] }, { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }] });
       ch.send({ content: `${i.user}`, components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق').setStyle(ButtonStyle.Danger))] });
