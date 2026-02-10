@@ -161,7 +161,7 @@ client.on('messageCreate', async (message) => {
     const member = message.mentions.members.first();
     const timeArg = args.find(a => /^\d+[mhd]$/i.test(a));
     if (!member || !timeArg) return message.channel.send(`-# **الصيغة غلط يا ذكي <:emoji_334:1388211595053760663>**`);
-    if (member.id === message.author.id) return message.channel.send(`-# **تبي تعطي تايم لنفسك ؟ واضح عقلك فيه خلل ما بسويها لك <:rimuruWut:1388211603140247565> **`);
+    if (member.id === message.author.id) return message.channel.send(`-# ** ما تقدر تسوي تايم لنفسك يا اهبل <:emoji_464:1388211597197050029> **`);
     const timeValue = parseInt(timeArg);
     const timeUnit = timeArg.slice(-1).toLowerCase();
     let durationInMs = timeValue * (timeUnit === 'm' ? 60 : timeUnit === 'h' ? 3600 : 86400) * 1000;
