@@ -112,40 +112,46 @@ client.on('messageCreate', async (message) => {
 
   // أوامر الإدارة
   if (command === 'تايم') {
+    // 1. التحقق من الصلاحية (إذا ما عنده صلاحية لا يرد بشيء)
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
+
     const member = message.mentions.members.first();
     const timeArg = args.find(a => /^\d+[mhd]$/i.test(a));
     
-    if (!member || !timeArg) return message.channel.send(`${message.author}, -# **الصيغة غلط يا ذكي <:emoji_334:1388211595053760663>**`);
+    // 2. التحقق من الصيغة (بدون منشن للمرسل)
+    if (!member || !timeArg) return message.channel.send(`-# **الصيغة غلط يا ذكي <:emoji_334:1388211595053760663>**`);
     
+    // 3. التحقق إذا كان يعطي تايم لنفسه
     if (member.id === message.author.id) {
-      return message.channel.send(`${message.author}, -# **تبي تعطي تايم لنفسك ؟ واضح عقلك فيه خلل ما بسويها لك <:rimuruWut:1388211603140247565> **`);
+      return message.channel.send(`-# **تبي تعطي تايم لنفسك ؟ واضح عقلك فيه خلل ما بسويها لك <:rimuruWut:1388211603140247565> **`);
     }
 
     const timeValue = parseInt(timeArg);
     const timeUnit = timeArg.slice(-1).toLowerCase();
     let durationInMs = timeValue * (timeUnit === 'm' ? 60 : timeUnit === 'h' ? 3600 : 86400) * 1000;
     
-    if (durationInMs > 2419200000) return message.channel.send(`${message.author}, -# **الصيغة غلط يا ذكي <:emoji_334:1388211595053760663>**`);
+    // 4. التحقق من المدة (أقصى شيء 28 يوم)
+    if (durationInMs > 2419200000) return message.channel.send(`-# **الصيغة غلط يا ذكي <:emoji_334:1388211595053760663>**`);
 
     try {
       await member.timeout(durationInMs);
       message.channel.send(`-# **تم اسكات ${member} يارب ما يعيدها <a:DancingShark:1469030444774199439>**`);
     } catch (error) {
-      message.channel.send(`${message.author}, -# **ما تقدر تسويها هو يدعس عليك <:emoji_43:1397804543789498428>**`);
+      // 5. إذا كانت رتبته أعلى أو البوت ما يقدر عليه
+      message.channel.send(`-# **ما تقدر تسويها هو يدعس عليك <:emoji_43:1397804543789498428>**`);
     }
   }
 
   if (command === 'طرد') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.KickMembers)) return;
     const member = message.mentions.members.first();
-    if (!member) return message.channel.send(`${message.author}, -# **منشن الشخص الي تبي تطرده يا ذكي <:emoji_334:1388211595053760663>**`);
-    if (member.id === message.author.id) return message.channel.send(`${message.author}, -# **تبي تطرد نفسك؟ استهدي بالله <:rimuruWut:1388211603140247565>**`);
+    if (!member) return message.channel.send(`-# **منشن الشخص الي تبي تطرده يا ذكي <:emoji_334:1388211595053760663>**`);
+    if (member.id === message.author.id) return message.channel.send(`-# **تبي تطرد نفسك؟ استهدي بالله <:rimuruWut:1388211603140247565>**`);
     try {
       await member.kick();
       message.channel.send(`-# **تم طرد ${member.user.tag} بنجاح، الفكة منه!**`);
     } catch (error) {
-      message.channel.send(`${message.author}, -# **ما تقدر تسويها هو يدعس عليك <:emoji_43:1397804543789498428>**`);
+      message.channel.send(`-# **ما تقدر تسويها هو يدعس عليك <:emoji_43:1397804543789498428>**`);
     }
   }
 
@@ -168,9 +174,9 @@ client.on('messageCreate', async (message) => {
       const target = message.mentions.users.first();
       const amount = parseInt(args.find(a => /^\d+$/.test(a)));
       
-      if (!target || isNaN(amount) || amount <= 0) return message.channel.send(`${message.author}, -# **استخدم: تحويل @الشخص القيمة**`);
-      if (userData.balance < amount) return message.channel.send(`${message.author}, رصيدك لا يكفي.`);
-      if (target.id === message.author.id) return message.channel.send(`${message.author}, ما تقدر تحول لنفسك.`);
+      if (!target || isNaN(amount) || amount <= 0) return message.channel.send(`-# **استخدم: تحويل @الشخص القيمة**`);
+      if (userData.balance < amount) return message.channel.send(`رصيدك لا يكفي.`);
+      if (target.id === message.author.id) return message.channel.send(`ما تقدر تحول لنفسك.`);
 
       const confirmRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('confirm_transfer').setLabel('تأكيد').setStyle(ButtonStyle.Success),
@@ -187,14 +193,22 @@ client.on('messageCreate', async (message) => {
 
     if (command === 'اغنياء') {
       const topUsers = await User.find().sort({ balance: -1 }).limit(5);
-      const topMsg = topUsers.map((u, idx) => `\u200F-# ${idx+1}. <@${u.userId}> - ${u.balance} دينار`).join('\n');
-      message.channel.send(`**قائمة الأغنياء**\n${topMsg}`);
+      const topMsg = topUsers.map((u, idx) => `\u200F-# **${idx+1}. <@${u.userId}> - ${u.balance} دينار**`).join('\n');
+      const embed = new EmbedBuilder()
+        .setTitle('قائمة الأغنياء')
+        .setDescription(topMsg)
+        .setColor(0x2b2d31);
+      message.channel.send({ embeds: [embed] });
     }
 
     if (command === 'السجل') {
       const history = userData.history.slice(-5).reverse();
-      const historyMsg = history.map(h => `\u200F- **${h.type === 'TRANSFER_RECEIVE' ? 'استلام' : 'هدية'}**: ${h.amount} دنانير`).join('\n') || 'لا يوجد سجل.';
-      message.channel.send({ embeds: [new EmbedBuilder().setTitle('سجل التحويلات').setDescription(historyMsg).setColor(0x2b2d31)] });
+      const historyMsg = history.map(h => `\u200F-# **${h.type === 'TRANSFER_RECEIVE' ? 'استلام' : 'هدية'}: ${h.amount} دنانير**`).join('\n') || '-# **لا يوجد سجل.**';
+      const embed = new EmbedBuilder()
+        .setTitle('سجل التحويلات')
+        .setDescription(historyMsg)
+        .setColor(0x2b2d31);
+      message.channel.send({ embeds: [embed] });
     }
   }
 });
@@ -237,8 +251,12 @@ client.on('interactionCreate', async (i) => {
       }
       if (sub === 'top') {
         const topUsers = await User.find().sort({ balance: -1 }).limit(5);
-        const topMsg = topUsers.map((u, idx) => `\u200F-# ${idx+1}. <@${u.userId}> - ${u.balance} دينار`).join('\n');
-        return i.reply({ content: `**قائمة الأغنياء**\n${topMsg}` });
+        const topMsg = topUsers.map((u, idx) => `\u200F-# **${idx+1}. <@${u.userId}> - ${u.balance} دينار**`).join('\n');
+        const embed = new EmbedBuilder()
+          .setTitle('قائمة الأغنياء')
+          .setDescription(topMsg)
+          .setColor(0x2b2d31);
+        return i.reply({ embeds: [embed] });
       }
     }
 
