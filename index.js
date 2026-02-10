@@ -102,20 +102,57 @@ client.on('guildMemberAdd', async (member) => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild || !ALLOWED_GUILDS.includes(message.guild.id)) return;
   const args = message.content.split(/\s+/);
+
+  // أمر تايم
   if (args[0] === 'تايم') {
+    // 1. التحقق من الصلاحية (إذا ما عنده صلاحية لا يرد بشيء)
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
+
     const member = message.mentions.members.first();
     const timeArg = args.find(a => /^\d+[mhd]$/i.test(a));
+
+    // 2. التحقق من الصيغة
     if (!member || !timeArg) return message.reply('-# **الصيغة غلط يا ذكي <:emoji_334:1388211595053760663>**');
-    let duration = parseInt(timeArg) * (timeArg.endsWith('m') ? 60 : timeArg.endsWith('h') ? 3600 : 86400) * 1000;
+
+    // 3. التحقق من المدة (أقصى شيء 28 يوم حسب قوانين ديسكورد، الـ 50 يوم تعتبر غلط)
+    const timeValue = parseInt(timeArg);
+    const timeUnit = timeArg.slice(-1).toLowerCase();
+    let durationInMs = timeValue * (timeUnit === 'm' ? 60 : timeUnit === 'h' ? 3600 : 86400) * 1000;
     
+    // ديسكورد لا يسمح بأكثر من 28 يوم (2419200000 ms)
+    if (durationInMs > 2419200000) return message.reply('-# **الصيغة غلط يا ذكي <:emoji_334:1388211595053760663>**');
+
+    // 4. التحقق إذا كان يعطي تايم لنفسه
+    if (member.id === message.author.id) {
+      return message.reply('-# **تبي تعطي تايم لنفسك ؟ واضح عقلك فيه خلل ما بسويها لك <:rimuruWut:1388211603140247565> **');
+    }
+
+    // 5. محاولة تنفيذ التايم (التعامل مع الرتب الأعلى)
     try {
-      await member.timeout(duration);
-      message.reply({ embeds: [new EmbedBuilder().setDescription(`-# **تم اسكات العضو ${member} ليش ما يستحي هو يارب ما يعيدها عشان ما يبلع مره ثانيه <a:DancingShark:1469030444774199439>**`).setColor(0x2b2d31)] });
+      await member.timeout(durationInMs);
+      message.reply(`-# **تم اسكات ${member} يارب ما يعيدها <a:DancingShark:1469030444774199439>**`);
+    } catch (error) {
+      // إذا كانت رتبته أعلى أو البوت ما يقدر عليه
+      message.reply('-# **ما تقدر تسويها هو يدعس عليك <:emoji_43:1397804543789498428>**');
+    }
+  }
+
+  // أمر طرد
+  if (args[0] === 'طرد') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.KickMembers)) return;
+    const member = message.mentions.members.first();
+    if (!member) return message.reply('-# **منشن الشخص الي تبي تطرده يا ذكي <:emoji_334:1388211595053760663>**');
+    
+    if (member.id === message.author.id) return message.reply('-# **تبي تطرد نفسك؟ استهدي بالله <:rimuruWut:1388211603140247565>**');
+
+    try {
+      await member.kick();
+      message.reply(`-# **تم طرد ${member.user.tag} بنجاح، الفكة منه!**`);
     } catch (error) {
       message.reply('-# **ما تقدر تسويها هو يدعس عليك <:emoji_43:1397804543789498428>**');
     }
   }
+
   if (args[0] === 'حذف') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return;
     const num = parseInt(args[1]);
