@@ -86,10 +86,8 @@ client.once('ready', async () => {
   });
 });
 
-client.on('guildMemberAdd', async (member) => {
-  if (!ALLOWED_GUILDS.includes(member.guild.id)) return;
-  const settings = await getSettings(member.guild.id);
-  const { channelId, title, description, color, image } = settings.welcomeSettings;
+async function sendWelcome(member, guildSettings) {
+  const { channelId, title, description, color, image } = guildSettings.welcomeSettings;
   if (!channelId) return;
   const channel = member.guild.channels.cache.get(channelId);
   if (!channel) return;
@@ -99,9 +97,16 @@ client.on('guildMemberAdd', async (member) => {
     .setColor(parseInt(color, 16) || 0x2b2d31);
   if (image) embed.setImage(image);
   channel.send({ embeds: [embed] });
+}
+
+client.on('guildMemberAdd', async (member) => {
+  if (!ALLOWED_GUILDS.includes(member.guild.id)) return;
+  const settings = await getSettings(member.guild.id);
+  await sendWelcome(member, settings);
 });
 
 const pendingTransfers = new Map();
+const transferCooldowns = new Map();
 
 // --- معالجة الأوامر النصية ---
 client.on('messageCreate', async (message) => {
@@ -129,14 +134,27 @@ client.on('messageCreate', async (message) => {
     }
   }
 
+  if (command === 'تكلم') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
+    const member = message.mentions.members.first();
+    if (!member) return message.channel.send(`-# **منشن الشخص الي تبي تفك عنه التايم يا ذكي <:emoji_334:1388211595053760663>**`);
+    try {
+      await member.timeout(null);
+      message.channel.send(`-# **تمت مسامحتك ايها العبد ${member} <:2thumbup:1467287897429512396>**`);
+    } catch (error) {
+      message.channel.send(`-# **ما اقدر افك عنه التايم، تأكد من صلاحيات البوت <:emoji_43:1397804543789498428>**`);
+    }
+  }
+
   if (command === 'طرد') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.KickMembers)) return;
     const member = message.mentions.members.first();
     if (!member) return message.channel.send(`-# **منشن الشخص الي تبي تطرده يا ذكي <:emoji_334:1388211595053760663>**`);
     if (member.id === message.author.id) return message.channel.send(`-# **تبي تطرد نفسك؟ استهدي بالله <:rimuruWut:1388211603140247565>**`);
     try {
+      const memberTag = member.user.tag;
       await member.kick();
-      message.channel.send(`-# **تم طرد ${member.user.tag} بنجاح، الفكة منه!**`);
+      message.channel.send(`-# **انطرد ${memberTag} يا مسكين وش سوا يا ترى <:s7_discord:1388214117365453062>**`);
     } catch (error) {
       message.channel.send(`-# **ما تقدر تسويها هو يدعس عليك <:emoji_43:1397804543789498428>**`);
     }
@@ -146,6 +164,13 @@ client.on('messageCreate', async (message) => {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return;
     const num = parseInt(args[1]);
     if (num > 0 && num <= 100) await message.channel.bulkDelete(num + 1);
+  }
+
+  if (command === 'تجربة') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
+    const settings = await getSettings(message.guild.id);
+    await sendWelcome(message.member, settings);
+    message.channel.send('✅ تم إرسال رسالة تجربة الترحيب.');
   }
 
   // أوامر الاقتصاد النصية (في الروم المحدد)
@@ -158,11 +183,19 @@ client.on('messageCreate', async (message) => {
     }
 
     if (command === 'تحويل') {
+      // التحقق من فترة الانتظار
+      const lastTransfer = transferCooldowns.get(message.author.id);
+      if (lastTransfer && Date.now() - lastTransfer < 10000) {
+        const remaining = Math.ceil((10000 - (Date.now() - lastTransfer)) / 1000);
+        return message.channel.send(`-# **انتظر ${remaining} ثواني قبل التحويل مرة أخرى.**`);
+      }
+
       const target = message.mentions.users.first();
       const amount = parseInt(args.find(a => /^\d+$/.test(a)));
       if (!target || isNaN(amount) || amount <= 0) return message.channel.send(`-# **استخدم: تحويل @الشخص القيمة**`);
       if (userData.balance < amount) return message.channel.send(`رصيدك لا يكفي.`);
       if (target.id === message.author.id) return message.channel.send(`ما تقدر تحول لنفسك.`);
+      
       const confirmRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('confirm_transfer').setLabel('تأكيد').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId('cancel_transfer').setLabel('إلغاء').setStyle(ButtonStyle.Danger)
@@ -211,7 +244,7 @@ client.on('interactionCreate', async (i) => {
       const helpEmbed = new EmbedBuilder()
         .setTitle('قائمة أوامر البوت')
         .setColor(0x2b2d31)
-        .setDescription(`-# **تحويل @الشخص القيمة - تحويل أموال**\n-# **دنانير - عرض الرصيد**\n-# **اغنياء - قائمة الأغنياء**\n-# **السجل - سجل التحويلات**\n-# **/ticket panel - انشاء لوحة تذاكر**\n-# **/welcome set - تعيين روم الترحيب**\n-# **text cmd - أوامر الشات، حذف و تايم و طرد**`);
+        .setDescription(`-# **تحويل @الشخص القيمة - تحويل أموال**\n-# **دنانير - عرض الرصيد**\n-# **اغنياء - قائمة الأغنياء**\n-# **السجل - سجل التحويلات**\n-# **/ticket panel - انشاء لوحة تذاكر**\n-# **/welcome set - تعيين روم الترحيب**\n-# **text cmd - أوامر الشات، حذف و تايم و طرد و تكلم و تجربة**`);
       return i.reply({ embeds: [helpEmbed] });
     }
 
@@ -225,6 +258,12 @@ client.on('interactionCreate', async (i) => {
         return i.reply({ embeds: [new EmbedBuilder().setDescription(`-# **رصيدك الحالي ${userData.balance} دنانير و آخر عملية تحويل تلقيتها بـ ${lastIn.amount} <:money_with_wings:1388212679981666334>**`).setColor(0x2b2d31)] });
       }
       if (sub === 'transfer') {
+        const lastTransfer = transferCooldowns.get(user.id);
+        if (lastTransfer && Date.now() - lastTransfer < 10000) {
+          const remaining = Math.ceil((10000 - (Date.now() - lastTransfer)) / 1000);
+          return i.reply({ content: `انتظر ${remaining} ثواني قبل التحويل مرة أخرى.`, ephemeral: true });
+        }
+
         const target = options.getUser('user');
         const amount = options.getInteger('amount');
         if (userData.balance < amount) return i.reply({ content: 'رصيدك لا يكفي.', ephemeral: true });
@@ -275,14 +314,14 @@ client.on('interactionCreate', async (i) => {
       const sender = await getUserData(data.senderId);
       if (sender.balance < data.amount) return i.update({ content: '❌ رصيدك لا يكفي.', components: [] });
       const target = await getUserData(data.targetId);
+      
       sender.balance -= data.amount;
       target.balance += data.amount;
-      
-      // تسجيل في السجل للطرفين
       sender.history.push({ type: 'TRANSFER_SEND', amount: data.amount });
       target.history.push({ type: 'TRANSFER_RECEIVE', amount: data.amount });
       
       await sender.save(); await target.save();
+      transferCooldowns.set(data.senderId, Date.now()); // تعيين فترة الانتظار
       pendingTransfers.delete(i.message.id);
       return i.update({ content: `-# **تم تحويل ${data.amount} لـ <@${data.targetId}> رصيدك الآن ${sender.balance} <a:moneywith_:1470458218953179237>**`, components: [] });
     }
