@@ -35,7 +35,6 @@ const SettingsSchema = new mongoose.Schema({
   welcomeSettings: { channelId: String, title: String, description: String, color: { type: String, default: '2b2d31' }, image: String }
 });
 
-// موديل جديد للسيرفرات المخولة
 const GlobalSettingsSchema = new mongoose.Schema({
   allowedGuilds: { type: [String], default: ['1387902577496297523'] }
 });
@@ -92,14 +91,29 @@ const slashCommands = [
     options: [
       {
         name: 'rps',
-        description: 'لعبة حجر ورقة مقص',
+        description: 'لعبة حجر ورقة مقص مع صديق',
         type: 1,
-        options: [{ name: 'choice', description: 'اختر سلاحك', type: 3, required: true, choices: [{ name: 'حجر', value: 'rock' }, { name: 'ورقة', value: 'paper' }, { name: 'مقص', value: 'scissors' }] }]
+        options: [{ name: 'user', description: 'الشخص اللي تبي تتحداه', type: 6, required: true }]
       },
       {
         name: 'mafia',
         description: 'بدء لعبة مافيا (تحتاج 4 لاعبين على الأقل)',
         type: 1
+      }
+    ]
+  },
+  {
+    name: 'owner',
+    description: 'أوامر المالك فقط',
+    options: [
+      {
+        name: 'guilds',
+        description: 'إدارة السيرفرات المخولة',
+        type: 1,
+        options: [
+          { name: 'action', description: 'اضافة أو حذف', type: 3, required: true, choices: [{ name: 'اضافة', value: 'add' }, { name: 'حذف', value: 'remove' }] },
+          { name: 'id', description: 'ايدي السيرفر', type: 3, required: true }
+        ]
       }
     ]
   }
@@ -118,7 +132,20 @@ const adminSlashCommands = [
     options: [
       { name: 'set', description: 'تعيين روم الترحيب', type: 1, options: [{ name: 'channel', description: 'اختر الروم', type: 7, required: true }] },
       { name: 'edit', description: 'تعديل رسالة الترحيب', type: 1, options: [{ name: 'title', description: 'العنوان', type: 3 }, { name: 'description', description: 'الوصف', type: 3 }, { name: 'color', description: 'اللون', type: 3 }, { name: 'image', description: 'رابط الصورة', type: 3 }] },
-      { name: 'info', description: 'عرض إعدادات الترحيب', type: 1 }
+      { name: 'info', description: 'عرض إعدادات الترحيب', type: 1 },
+      { name: 'test', description: 'تجربة رسالة الترحيب', type: 1 }
+    ],
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString()
+  },
+  {
+    name: 'giveaway',
+    description: 'نظام القيف أوي',
+    options: [
+      { name: 'start', description: 'بدء قيف أوي جديد', type: 1, options: [
+        { name: 'prize', description: 'الجائزة', type: 3, required: true },
+        { name: 'duration', description: 'المدة (مثال: 10m, 1h, 1d)', type: 3, required: true },
+        { name: 'winners', description: 'عدد الفائزين', type: 4, required: true }
+      ]}
     ],
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString()
   }
@@ -176,42 +203,17 @@ client.on('guildMemberAdd', async (member) => {
 const pendingTransfers = new Map();
 const transferCooldowns = new Map();
 const activeMafiaGames = new Map();
+const activeRPSGames = new Map();
 
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
-  
   const globalSettings = await getGlobalSettings();
-  const isAllowed = globalSettings.allowedGuilds.includes(message.guild.id);
+  if (!globalSettings.allowedGuilds.includes(message.guild.id)) return;
 
   const args = message.content.trim().split(/\s+/);
   const command = args[0];
 
-  // أمر التحكم في السيرفرات (للمالك فقط)
-  if (command === 'سيرفرات') {
-    if (message.author.id !== OWNER_ID) return;
-    const action = args[1]; // اضافة أو حذف
-    const guildId = args[2];
-
-    if (action === 'اضافة') {
-      if (!guildId) return message.channel.send(`-# **حط ايدي السيرفر يا ذكي <:emoji_334:1388211595053760663>**`);
-      if (globalSettings.allowedGuilds.includes(guildId)) return message.channel.send(`-# **السيرفر موجود أصلاً يا عبقري <:emoji_43:1397804543789498428>**`);
-      globalSettings.allowedGuilds.push(guildId);
-      await globalSettings.save();
-      message.channel.send(`-# **تمت إضافة السيرفر بنجاح، الحين يقدرون يستمتعون بفضيلاتي <a:DancingShark:1469030444774199439>**`);
-    } else if (action === 'حذف') {
-      if (!guildId) return message.channel.send(`-# **حط ايدي السيرفر يا ذكي <:emoji_334:1388211595053760663>**`);
-      globalSettings.allowedGuilds = globalSettings.allowedGuilds.filter(id => id !== guildId);
-      await globalSettings.save();
-      message.channel.send(`-# **تم طرد السيرفر، خليهم يعرفون قيمتي الحين <:emoji_464:1388211597197050029>**`);
-    } else {
-      message.channel.send(`-# **استخدم: سيرفرات اضافة/حذف [ID] <:rimuruWut:1388211603140247565>**`);
-    }
-    return;
-  }
-
-  if (!isAllowed) return;
-
-  // أوامر الإدارة
+  // أوامر الإدارة النصية (المتبقية)
   if (command === 'تايم') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
     const member = message.mentions.members.first();
@@ -262,56 +264,37 @@ client.on('messageCreate', async (message) => {
     if (num > 0 && num <= 100) await message.channel.bulkDelete(num + 1);
   }
 
-  if (command === 'تجربة') {
-    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
-    const settings = await getSettings(message.guild.id);
-    await sendWelcome(message.member, settings);
-    message.channel.send('✅ تم إرسال رسالة تجربة الترحيب.');
-  }
-
   // أوامر الاقتصاد النصية (في الروم المحدد)
   if (message.channel.id === ECONOMY_CHANNEL_ID) {
     const userData = await getUserData(message.author.id);
-
     if (command === 'دنانير') {
       const lastIn = userData.history.filter(h => h.type === 'TRANSFER_RECEIVE').pop() || { amount: 0 };
       message.channel.send({ embeds: [new EmbedBuilder().setDescription(`-# **رصيدك الحالي ${userData.balance} من دنانير و آخر عملية تحويل تلقيتها بـ ${lastIn.amount} <:money_with_wings:1388212679981666334>**`).setColor(0x2b2d31)] });
     }
-
     if (command === 'تحويل') {
       const lastTransfer = transferCooldowns.get(message.author.id);
       if (lastTransfer && Date.now() - lastTransfer < 10000) {
         const remaining = Math.ceil((10000 - (Date.now() - lastTransfer)) / 1000);
         return message.channel.send(`-# **انتظر ${remaining} ثواني قبل التحويل مرة أخرى.**`);
       }
-
       const target = message.mentions.users.first();
       const amount = parseInt(args.find(a => /^\d+$/.test(a)));
       if (!target || isNaN(amount) || amount <= 0) return message.channel.send(`-# **استخدم: تحويل @الشخص القيمة**`);
       if (userData.balance < amount) return message.channel.send(`رصيدك لا يكفي.`);
       if (target.id === message.author.id) return message.channel.send(`ما تقدر تحول لنفسك.`);
-      
       const confirmRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('confirm_transfer').setLabel('تأكيد').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId('cancel_transfer').setLabel('إلغاء').setStyle(ButtonStyle.Danger)
       );
-      const confirmMsg = await message.channel.send({
-        content: `-# **متأكد تبي تحول ${amount} دينار لـ ${target} ؟**`,
-        components: [confirmRow]
-      });
+      const confirmMsg = await message.channel.send({ content: `-# **متأكد تبي تحول ${amount} دينار لـ ${target} ؟**`, components: [confirmRow] });
       pendingTransfers.set(confirmMsg.id, { senderId: message.author.id, targetId: target.id, amount });
     }
-
     if (command === 'اغنياء') {
       const topUsers = await User.find().sort({ balance: -1 }).limit(5);
       const topMsg = topUsers.map((u, idx) => `-# **\u200F${idx+1}. \u202B<@${u.userId}>\u202C - ${u.balance} دينار**`).join('\n');
-      const embed = new EmbedBuilder()
-        .setTitle('قائمة الأغنياء')
-        .setDescription(topMsg)
-        .setColor(0x2b2d31);
+      const embed = new EmbedBuilder().setTitle('قائمة الأغنياء').setDescription(topMsg).setColor(0x2b2d31);
       message.channel.send({ embeds: [embed] });
     }
-
     if (command === 'السجل') {
       const history = userData.history.slice(-5).reverse();
       const historyMsg = history.map(h => {
@@ -320,10 +303,7 @@ client.on('messageCreate', async (message) => {
         if (h.type === 'TRANSFER_SEND') typeText = 'تحويل';
         return `-# **\u200F${typeText} ${h.amount} دنانير**`;
       }).join('\n') || '-# **لا يوجد سجل.**';
-      const embed = new EmbedBuilder()
-        .setTitle('سجل التحويلات')
-        .setDescription(historyMsg)
-        .setColor(0x2b2d31);
+      const embed = new EmbedBuilder().setTitle('سجل التحويلات').setDescription(historyMsg).setColor(0x2b2d31);
       message.channel.send({ embeds: [embed] });
     }
   }
@@ -336,9 +316,22 @@ client.on('interactionCreate', async (i) => {
   if (i.isChatInputCommand()) {
     const { commandName, options, user, member } = i;
 
-    if (['ticket', 'welcome'].includes(commandName)) {
-      if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-        return i.reply({ content: `-# **يحتاج هذا الأمر لصلاحية Administrator <:emoji_43:1397804543789498428>**`, ephemeral: true });
+    if (commandName === 'owner') {
+      if (user.id !== OWNER_ID) return i.reply({ content: 'هذا الأمر للمالك فقط يا ذكي <:emoji_43:1397804543789498428>', ephemeral: true });
+      const sub = options.getSubcommand();
+      if (sub === 'guilds') {
+        const action = options.getString('action');
+        const guildId = options.getString('id');
+        if (action === 'add') {
+          if (globalSettings.allowedGuilds.includes(guildId)) return i.reply({ content: 'السيرفر موجود أصلاً!', ephemeral: true });
+          globalSettings.allowedGuilds.push(guildId);
+          await globalSettings.save();
+          return i.reply({ content: `✅ تمت إضافة السيرفر ${guildId} بنجاح!` });
+        } else {
+          globalSettings.allowedGuilds = globalSettings.allowedGuilds.filter(id => id !== guildId);
+          await globalSettings.save();
+          return i.reply({ content: `✅ تم حذف السيرفر ${guildId} من القائمة!` });
+        }
       }
     }
 
@@ -346,7 +339,7 @@ client.on('interactionCreate', async (i) => {
       const helpEmbed = new EmbedBuilder()
         .setTitle('قائمة أوامر البوت')
         .setColor(0x2b2d31)
-        .setDescription(`-# **تحويل @الشخص القيمة - تحويل أموال**\n-# **دنانير - عرض الرصيد**\n-# **اغنياء - قائمة الأغنياء**\n-# **السجل - سجل التحويلات**\n-# **/ticket panel - انشاء لوحة تذاكر**\n-# **/welcome set - تعيين روم الترحيب**\n-# **/games rps - حجر ورقة مقص**\n-# **/games mafia - لعبة مافيا**\n-# **سيرفرات اضافة/حذف [ID] - للمالك فقط**\n-# **text cmd - أوامر الشات، حذف و تايم و طرد و تكلم و تجربة**`);
+        .setDescription(`-# **/economy balance - عرض الرصيد**\n-# **/economy transfer - تحويل أموال**\n-# **/economy top - قائمة الأغنياء**\n-# **/games rps - تحدي حجر ورقة مقص**\n-# **/games mafia - لعبة مافيا**\n-# **/welcome test - تجربة الترحيب**\n-# **/giveaway start - بدء قيف أوي**\n-# **أوامر نصية: دنانير، تحويل، اغنياء، السجل، تايم، طرد، حذف**`);
       return i.reply({ embeds: [helpEmbed] });
     }
 
@@ -354,7 +347,6 @@ client.on('interactionCreate', async (i) => {
       if (i.channel.id !== ECONOMY_CHANNEL_ID) return i.reply({ content: `هذه الأوامر مسموحة فقط في <#${ECONOMY_CHANNEL_ID}>`, ephemeral: true });
       const sub = options.getSubcommand();
       const userData = await getUserData(user.id);
-
       if (sub === 'balance') {
         const lastIn = userData.history.filter(h => h.type === 'TRANSFER_RECEIVE').pop() || { amount: 0 };
         return i.reply({ embeds: [new EmbedBuilder().setDescription(`-# **رصيدك الحالي ${userData.balance} دنانير و آخر عملية تحويل تلقيتها بـ ${lastIn.amount} <:money_with_wings:1388212679981666334>**`).setColor(0x2b2d31)] });
@@ -387,29 +379,20 @@ client.on('interactionCreate', async (i) => {
     if (commandName === 'games') {
       const sub = options.getSubcommand();
       if (sub === 'rps') {
-        const choices = ['rock', 'paper', 'scissors'];
-        const botChoice = choices[Math.floor(Math.random() * choices.length)];
-        const userChoice = options.getString('choice');
-        const names = { rock: 'حجر 🪨', paper: 'ورقة 📄', scissors: 'مقص ✂️' };
+        const target = options.getUser('user');
+        if (target.id === user.id) return i.reply({ content: 'تبي تلعب مع نفسك؟ روح تعالج <:rimuruWut:1388211603140247565>', ephemeral: true });
+        if (target.bot) return i.reply({ content: 'البوتات ما تلعب، عندها شغل أهم منك <:emoji_464:1388211597197050029>', ephemeral: true });
         
-        let result = '';
-        if (userChoice === botChoice) result = 'تعادل! 🤝';
-        else if ((userChoice === 'rock' && botChoice === 'scissors') || (userChoice === 'paper' && botChoice === 'rock') || (userChoice === 'scissors' && botChoice === 'paper')) result = 'فزت علي! 🏆';
-        else result = 'خسرت! هاردلك <:emoji_464:1388211597197050029>';
-
-        const embed = new EmbedBuilder()
-          .setTitle('حجر ورقة مقص')
-          .setDescription(`-# **اختيارك:** ${names[userChoice]}\n-# **اختياري:** ${names[botChoice]}\n\n**${result}**`)
-          .setColor(0x2b2d31);
-        return i.reply({ embeds: [embed] });
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('rps_accept').setLabel('قبول التحدي').setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId('rps_decline').setLabel('رفض').setStyle(ButtonStyle.Danger)
+        );
+        const msg = await i.reply({ content: `${target}، ${user} يتحداك في حجر ورقة مقص! قدها؟`, components: [row], fetchReply: true });
+        activeRPSGames.set(msg.id, { challenger: user.id, opponent: target.id, challengerChoice: null, opponentChoice: null, accepted: false });
       }
-
       if (sub === 'mafia') {
         const joinRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_mafia').setLabel('انضمام').setStyle(ButtonStyle.Primary));
-        const embed = new EmbedBuilder()
-          .setTitle('لعبة مافيا 🕵️‍♂️')
-          .setDescription(`-# **اضغط على الزر للانضمام! نحتاج 4 لاعبين على الأقل.**\n-# **اللاعبين الحاليين: 0**`)
-          .setColor(0x2b2d31);
+        const embed = new EmbedBuilder().setTitle('لعبة مافيا 🕵️‍♂️').setDescription(`-# **اضغط على الزر للانضمام! نحتاج 4 لاعبين على الأقل.**\n-# **اللاعبين الحاليين: 0**`).setColor(0x2b2d31);
         const msg = await i.reply({ embeds: [embed], components: [joinRow], fetchReply: true });
         activeMafiaGames.set(msg.id, { hostId: user.id, players: [], started: false });
       }
@@ -418,7 +401,7 @@ client.on('interactionCreate', async (i) => {
     if (commandName === 'welcome') {
       const sub = options.getSubcommand();
       const settings = await getSettings(i.guild.id);
-      if (sub === 'set') { settings.welcomeSettings.channelId = options.getChannel('channel').id; await settings.save(); i.reply('✅ تم.'); }
+      if (sub === 'set') { settings.welcomeSettings.channelId = options.getChannel('channel').id; await settings.save(); i.reply('✅ تم تعيين الروم.'); }
       if (sub === 'edit') {
         if(options.getString('title')) settings.welcomeSettings.title = options.getString('title');
         if(options.getString('description')) settings.welcomeSettings.description = options.getString('description');
@@ -429,10 +412,66 @@ client.on('interactionCreate', async (i) => {
       if (sub === 'info') {
         i.reply({ embeds: [new EmbedBuilder().setTitle('إعدادات الترحيب').setColor(0x2b2d31).setDescription(`-# **الروم:** <#${settings.welcomeSettings.channelId || 'غير محدد'}>\n-# **اللون:** #${settings.welcomeSettings.color}\n-# **العنوان:** ${settings.welcomeSettings.title || 'غير محدد'}\n-# **الوصف:** ${settings.welcomeSettings.description || 'غير محدد'}`)] });
       }
+      if (sub === 'test') {
+        await sendWelcome(member, settings);
+        i.reply({ content: '✅ تم إرسال تجربة الترحيب.', ephemeral: true });
+      }
+    }
+
+    if (commandName === 'giveaway') {
+      const sub = options.getSubcommand();
+      if (sub === 'start') {
+        const prize = options.getString('prize');
+        const durationStr = options.getString('duration');
+        const winnersCount = options.getInteger('winners');
+        
+        const timeMatch = durationStr.match(/^(\d+)([mhd])$/);
+        if (!timeMatch) return i.reply({ content: 'صيغة الوقت غلط! (مثال: 10m, 1h, 1d)', ephemeral: true });
+        const timeValue = parseInt(timeMatch[1]);
+        const timeUnit = timeMatch[2];
+        const durationMs = timeValue * (timeUnit === 'm' ? 60 : timeUnit === 'h' ? 3600 : 86400) * 1000;
+        const endTime = Math.floor((Date.now() + durationMs) / 1000);
+
+        const embed = new EmbedBuilder()
+          .setTitle('🎉 قيف أوي جديد! 🎉')
+          .setDescription(`-# **الجائزة:** **${prize}**\n-# **عدد الفائزين:** ${winnersCount}\n-# **ينتهي في:** <t:${endTime}:R>\n-# **بواسطة:** ${user}`)
+          .setColor(0x2b2d31)
+          .setFooter({ text: 'اضغط على الزر للمشاركة!' });
+
+        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_giveaway').setLabel('المشاركة 🎁').setStyle(ButtonStyle.Primary));
+        const msg = await i.reply({ embeds: [embed], components: [row], fetchReply: true });
+
+        const participants = new Set();
+        const collector = msg.createMessageComponentCollector({ time: durationMs });
+
+        collector.on('collect', async (btn) => {
+          if (btn.customId === 'join_giveaway') {
+            if (participants.has(btn.user.id)) return btn.reply({ content: 'أنت مشارك أصلاً يا طماع <:emoji_464:1388211597197050029>', ephemeral: true });
+            participants.add(btn.user.id);
+            btn.reply({ content: '✅ تم تسجيل مشاركتك، فالك الفوز!', ephemeral: true });
+          }
+        });
+
+        collector.on('end', async () => {
+          const list = Array.from(participants);
+          if (list.length === 0) return msg.edit({ content: '❌ انتهى القيف أوي بدون مشاركين.', embeds: [], components: [] });
+          
+          const winners = [];
+          for (let j = 0; j < Math.min(winnersCount, list.length); j++) {
+            const winnerIdx = Math.floor(Math.random() * list.length);
+            winners.push(`<@${list.splice(winnerIdx, 1)[0]}>`);
+          }
+
+          const endEmbed = EmbedBuilder.from(embed).setTitle('🎊 انتهى القيف أوي! 🎊').setDescription(`-# **الجائزة:** **${prize}**\n-# **الفائزين:** ${winners.join(', ')}`).setFooter({ text: 'مبروك للفائزين!' });
+          await msg.edit({ embeds: [endEmbed], components: [] });
+          msg.channel.send(`مبروك ${winners.join(', ')}! فزتوا بـ **${prize}**! 🥳`);
+        });
+      }
     }
   }
 
   if (i.isButton()) {
+    // معالجة أزرار التحويل
     if (i.customId === 'confirm_transfer' || i.customId === 'cancel_transfer') {
       const data = pendingTransfers.get(i.message.id);
       if (!data || i.user.id !== data.senderId) return i.reply({ content: 'هذا الطلب ليس لك أو انتهى.', ephemeral: true });
@@ -452,18 +491,16 @@ client.on('interactionCreate', async (i) => {
       return i.update({ content: `-# **تم تحويل ${data.amount} لـ <@${data.targetId}> رصيدك الآن ${sender.balance} <a:moneywith_:1470458218953179237>**`, components: [] });
     }
 
+    // معالجة أزرار المافيا
     if (i.customId === 'join_mafia') {
       const game = activeMafiaGames.get(i.message.id);
       if (!game || game.started) return i.reply({ content: 'اللعبة بدأت أو انتهت.', ephemeral: true });
       if (game.players.includes(i.user.id)) return i.reply({ content: 'أنت منضم أصلاً!', ephemeral: true });
-      
       game.players.push(i.user.id);
       const embed = EmbedBuilder.from(i.message.embeds[0]);
       embed.setDescription(`-# **اضغط على الزر للانضمام! نحتاج 4 لاعبين على الأقل.**\n-# **اللاعبين الحاليين: ${game.players.length}**\n${game.players.map(p => `<@${p}>`).join(', ')}`);
-      
       const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_mafia').setLabel('انضمام').setStyle(ButtonStyle.Primary));
       if (game.players.length >= 4) row.addComponents(new ButtonBuilder().setCustomId('start_mafia').setLabel('بدء اللعبة').setStyle(ButtonStyle.Success));
-      
       await i.update({ embeds: [embed], components: [row] });
     }
 
@@ -471,21 +508,66 @@ client.on('interactionCreate', async (i) => {
       const game = activeMafiaGames.get(i.message.id);
       if (!game || game.hostId !== i.user.id) return i.reply({ content: 'فقط صاحب الأمر يقدر يبدأ اللعبة!', ephemeral: true });
       if (game.players.length < 4) return i.reply({ content: 'نحتاج 4 لاعبين على الأقل!', ephemeral: true });
-      
       game.started = true;
       const players = [...game.players].sort(() => Math.random() - 0.5);
       const roles = { [players[0]]: 'مافيا 🔪', [players[1]]: 'طبيب 💉', [players[2]]: 'مخبر 🔍' };
       players.slice(3).forEach(p => roles[p] = 'مواطن 👨‍🌾');
+      
+      await i.update({ content: '✅ بدأت اللعبة! تم إرسال الأدوار بشكل مخفي للجميع. استمتعوا! 🕵️‍♂️', embeds: [], components: [] });
+      
+      // إرسال الأدوار كرسائل مخفية (Ephemeral)
+      const roleMsg = await i.channel.send({ content: 'اضغط على الزر لمعرفة دورك (أنت فقط من يراه!)', components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('reveal_role').setLabel('كشف دوري').setStyle(ButtonStyle.Secondary))] });
+      activeMafiaGames.set(roleMsg.id, { roles });
+    }
 
-      for (const pId of players) {
-        try {
-          const user = await client.users.fetch(pId);
-          await user.send(`-# **دورك في لعبة المافيا هو: ${roles[pId]}**`);
-        } catch (e) { console.error(`فشل إرسال الدور لـ ${pId}`); }
+    if (i.customId === 'reveal_role') {
+      const game = activeMafiaGames.get(i.message.id);
+      if (!game || !game.roles[i.user.id]) return i.reply({ content: 'أنت لست جزءاً من هذه اللعبة!', ephemeral: true });
+      return i.reply({ content: `دورك هو: **${game.roles[i.user.id]}**`, ephemeral: true });
+    }
+
+    // معالجة أزرار RPS
+    if (i.customId === 'rps_accept' || i.customId === 'rps_decline') {
+      const game = activeRPSGames.get(i.message.id);
+      if (!game || i.user.id !== game.opponent) return i.reply({ content: 'هذا التحدي ليس لك!', ephemeral: true });
+      if (i.customId === 'rps_decline') {
+        activeRPSGames.delete(i.message.id);
+        return i.update({ content: '❌ تم رفض التحدي.', components: [] });
+      }
+      game.accepted = true;
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('rps_rock').setLabel('حجر 🪨').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('rps_paper').setLabel('ورقة 📄').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('rps_scissors').setLabel('مقص ✂️').setStyle(ButtonStyle.Primary)
+      );
+      await i.update({ content: 'بدأ التحدي! اختاروا أسلحتكم (الرسائل مخفية)', components: [row] });
+    }
+
+    if (['rps_rock', 'rps_paper', 'rps_scissors'].includes(i.customId)) {
+      const game = activeRPSGames.get(i.message.id);
+      if (!game || (i.user.id !== game.challenger && i.user.id !== game.opponent)) return i.reply({ content: 'لست جزءاً من التحدي!', ephemeral: true });
+      
+      const choice = i.customId.split('_')[1];
+      if (i.user.id === game.challenger) {
+        if (game.challengerChoice) return i.reply({ content: 'اخترت خلاص!', ephemeral: true });
+        game.challengerChoice = choice;
+      } else {
+        if (game.opponentChoice) return i.reply({ content: 'اخترت خلاص!', ephemeral: true });
+        game.opponentChoice = choice;
       }
 
-      await i.update({ content: '✅ بدأت اللعبة! تم إرسال الأدوار في الخاص لجميع اللاعبين. استمتعوا بالتحقيق! 🕵️‍♂️', embeds: [], components: [] });
-      activeMafiaGames.delete(i.message.id);
+      await i.reply({ content: `اخترت ${choice === 'rock' ? 'حجر' : choice === 'paper' ? 'ورقة' : 'مقص'}!`, ephemeral: true });
+
+      if (game.challengerChoice && game.opponentChoice) {
+        const names = { rock: 'حجر 🪨', paper: 'ورقة 📄', scissors: 'مقص ✂️' };
+        let result = '';
+        if (game.challengerChoice === game.opponentChoice) result = 'تعادل! 🤝';
+        else if ((game.challengerChoice === 'rock' && game.opponentChoice === 'scissors') || (game.challengerChoice === 'paper' && game.opponentChoice === 'rock') || (game.challengerChoice === 'scissors' && game.opponentChoice === 'paper')) result = `<@${game.challenger}> فاز على <@${game.opponent}>! 🏆`;
+        else result = `<@${game.opponent}> فاز على <@${game.challenger}>! 🏆`;
+
+        await i.message.edit({ content: `**انتهى التحدي!**\n-# <@${game.challenger}>: ${names[game.challengerChoice]}\n-# <@${game.opponent}>: ${names[game.opponentChoice]}\n\n${result}`, components: [] });
+        activeRPSGames.delete(i.message.id);
+      }
     }
 
     if (i.customId === 'open_ticket') {
