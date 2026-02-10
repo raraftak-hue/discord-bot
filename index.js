@@ -91,11 +91,22 @@ async function sendWelcome(member, guildSettings) {
   if (!channelId) return;
   const channel = member.guild.channels.cache.get(channelId);
   if (!channel) return;
-  const embed = new EmbedBuilder()
-    .setTitle(title || 'أهلاً بك')
-    .setDescription(`-# **${description || `نورتنا يا ${member}`}**`)
-    .setColor(parseInt(color, 16) || 0x2b2d31);
+
+  const embed = new EmbedBuilder().setColor(parseInt(color, 16) || 0x2b2d31);
+  
+  // معالجة المتغيرات في العنوان والوصف
+  const processText = (text) => text ? text.replace(/{member}/g, `${member}`) : null;
+
+  const finalTitle = processText(title);
+  const finalDesc = processText(description);
+
+  if (finalTitle) embed.setTitle(finalTitle);
+  if (finalDesc) embed.setDescription(`-# **${finalDesc}**`);
   if (image) embed.setImage(image);
+
+  // لا ترسل الإيمبيد إذا كان فارغاً تماماً (بدون عنوان أو وصف أو صورة)
+  if (!finalTitle && !finalDesc && !image) return;
+
   channel.send({ embeds: [embed] });
 }
 
@@ -183,7 +194,6 @@ client.on('messageCreate', async (message) => {
     }
 
     if (command === 'تحويل') {
-      // التحقق من فترة الانتظار
       const lastTransfer = transferCooldowns.get(message.author.id);
       if (lastTransfer && Date.now() - lastTransfer < 10000) {
         const remaining = Math.ceil((10000 - (Date.now() - lastTransfer)) / 1000);
@@ -298,7 +308,7 @@ client.on('interactionCreate', async (i) => {
         await settings.save(); i.reply('✅ تم التعديل.');
       }
       if (sub === 'info') {
-        i.reply({ embeds: [new EmbedBuilder().setTitle('إعدادات الترحيب').setColor(0x2b2d31).setDescription(`-# **الروم:** <#${settings.welcomeSettings.channelId || 'غير محدد'}>\n-# **اللون:** #${settings.welcomeSettings.color}\n-# **العنوان:** ${settings.welcomeSettings.title || 'افتراضي'}`)] });
+        i.reply({ embeds: [new EmbedBuilder().setTitle('إعدادات الترحيب').setColor(0x2b2d31).setDescription(`-# **الروم:** <#${settings.welcomeSettings.channelId || 'غير محدد'}>\n-# **اللون:** #${settings.welcomeSettings.color}\n-# **العنوان:** ${settings.welcomeSettings.title || 'غير محدد'}\n-# **الوصف:** ${settings.welcomeSettings.description || 'غير محدد'}`)] });
       }
     }
   }
@@ -321,7 +331,7 @@ client.on('interactionCreate', async (i) => {
       target.history.push({ type: 'TRANSFER_RECEIVE', amount: data.amount });
       
       await sender.save(); await target.save();
-      transferCooldowns.set(data.senderId, Date.now()); // تعيين فترة الانتظار
+      transferCooldowns.set(data.senderId, Date.now()); 
       pendingTransfers.delete(i.message.id);
       return i.update({ content: `-# **تم تحويل ${data.amount} لـ <@${data.targetId}> رصيدك الآن ${sender.balance} <a:moneywith_:1470458218953179237>**`, components: [] });
     }
