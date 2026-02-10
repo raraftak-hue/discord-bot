@@ -99,6 +99,11 @@ const slashCommands = [
         name: 'mafia',
         description: 'بدء لعبة مافيا (تحتاج 4 لاعبين على الأقل)',
         type: 1
+      },
+      {
+        name: 'mafia_test',
+        description: 'تجربة لعبة المافيا (بدون لاعبين)',
+        type: 1
       }
     ]
   },
@@ -144,7 +149,9 @@ const adminSlashCommands = [
       { name: 'start', description: 'بدء قيف أوي جديد', type: 1, options: [
         { name: 'prize', description: 'الجائزة', type: 3, required: true },
         { name: 'duration', description: 'المدة (مثال: 10m, 1h, 1d)', type: 3, required: true },
-        { name: 'winners', description: 'عدد الفائزين', type: 4, required: true }
+        { name: 'winners', description: 'عدد الفائزين', type: 4, required: true },
+        { name: 'condition', description: 'الشروط', type: 3, required: false },
+        { name: 'image', description: 'رابط الصورة', type: 3, required: false }
       ]}
     ],
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString()
@@ -213,7 +220,7 @@ client.on('messageCreate', async (message) => {
   const args = message.content.trim().split(/\s+/);
   const command = args[0];
 
-  // أوامر الإدارة النصية (المتبقية)
+  // أوامر الإدارة النصية
   if (command === 'تايم') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
     const member = message.mentions.members.first();
@@ -264,7 +271,7 @@ client.on('messageCreate', async (message) => {
     if (num > 0 && num <= 100) await message.channel.bulkDelete(num + 1);
   }
 
-  // أوامر الاقتصاد النصية (في الروم المحدد)
+  // أوامر الاقتصاد النصية
   if (message.channel.id === ECONOMY_CHANNEL_ID) {
     const userData = await getUserData(message.author.id);
     if (command === 'دنانير') {
@@ -387,14 +394,19 @@ client.on('interactionCreate', async (i) => {
           new ButtonBuilder().setCustomId('rps_accept').setLabel('قبول التحدي').setStyle(ButtonStyle.Success),
           new ButtonBuilder().setCustomId('rps_decline').setLabel('رفض').setStyle(ButtonStyle.Danger)
         );
-        const msg = await i.reply({ content: `${target}، ${user} يتحداك في حجر ورقة مقص! قدها؟`, components: [row], fetchReply: true });
+        const msg = await i.reply({ content: `-# ** يـ${target} يتحداك ${user} في لعبة حجرة ورقة مقص**`, components: [row], fetchReply: true });
         activeRPSGames.set(msg.id, { challenger: user.id, opponent: target.id, challengerChoice: null, opponentChoice: null, accepted: false });
       }
       if (sub === 'mafia') {
-        const joinRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_mafia').setLabel('انضمام').setStyle(ButtonStyle.Primary));
+        const joinRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_mafia').setLabel('انضمام').setStyle(ButtonStyle.Secondary));
         const embed = new EmbedBuilder().setTitle('لعبة مافيا 🕵️‍♂️').setDescription(`-# **اضغط على الزر للانضمام! نحتاج 4 لاعبين على الأقل.**\n-# **اللاعبين الحاليين: 0**`).setColor(0x2b2d31);
         const msg = await i.reply({ embeds: [embed], components: [joinRow], fetchReply: true });
         activeMafiaGames.set(msg.id, { hostId: user.id, players: [], started: false });
+      }
+      if (sub === 'mafia_test') {
+        const roles = { [user.id]: 'مافيا 🔪' };
+        const roleMsg = await i.reply({ content: '✅ بدأت تجربة المافيا! اضغط على الزر لمعرفة دورك (أنت فقط من يراه!)', components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('reveal_role').setLabel('كشف دوري').setStyle(ButtonStyle.Secondary))], fetchReply: true });
+        activeMafiaGames.set(roleMsg.id, { roles });
       }
     }
 
@@ -424,6 +436,8 @@ client.on('interactionCreate', async (i) => {
         const prize = options.getString('prize');
         const durationStr = options.getString('duration');
         const winnersCount = options.getInteger('winners');
+        const condition = options.getString('condition') || 'لا توجد شروط';
+        const image = options.getString('image');
         
         const timeMatch = durationStr.match(/^(\d+)([mhd])$/);
         if (!timeMatch) return i.reply({ content: 'صيغة الوقت غلط! (مثال: 10m, 1h, 1d)', ephemeral: true });
@@ -433,12 +447,11 @@ client.on('interactionCreate', async (i) => {
         const endTime = Math.floor((Date.now() + durationMs) / 1000);
 
         const embed = new EmbedBuilder()
-          .setTitle('🎉 قيف أوي جديد! 🎉')
-          .setDescription(`-# **الجائزة:** **${prize}**\n-# **عدد الفائزين:** ${winnersCount}\n-# **ينتهي في:** <t:${endTime}:R>\n-# **بواسطة:** ${user}`)
-          .setColor(0x2b2d31)
-          .setFooter({ text: 'اضغط على الزر للمشاركة!' });
+          .setDescription(`-# **سحب عشوائي على ${prize} ينتهي في <t:${endTime}:R> <:emoji_45:1397804598110195863> **\n-# **الي سوا السحب العشوائي ${user} <:y_coroa:1404576666105417871> **\n-# **الشروط ${condition} <:new_emoji:1388436089584226387> **`)
+          .setColor(0x2b2d31);
+        if (image) embed.setImage(image);
 
-        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_giveaway').setLabel('المشاركة 🎁').setStyle(ButtonStyle.Primary));
+        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_giveaway').setLabel('ادخل').setStyle(ButtonStyle.Secondary));
         const msg = await i.reply({ embeds: [embed], components: [row], fetchReply: true });
 
         const participants = new Set();
@@ -446,23 +459,28 @@ client.on('interactionCreate', async (i) => {
 
         collector.on('collect', async (btn) => {
           if (btn.customId === 'join_giveaway') {
-            if (participants.has(btn.user.id)) return btn.reply({ content: 'أنت مشارك أصلاً يا طماع <:emoji_464:1388211597197050029>', ephemeral: true });
+            if (participants.has(btn.user.id)) {
+              const exitRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('exit_giveaway').setLabel('خروج').setStyle(ButtonStyle.Secondary));
+              return btn.reply({ content: '-# **انت داخل السحب اصلا تبي تطلع ؟ <:__:1467633552408576192> **', components: [exitRow], ephemeral: true });
+            }
             participants.add(btn.user.id);
             btn.reply({ content: '✅ تم تسجيل مشاركتك، فالك الفوز!', ephemeral: true });
+          }
+          if (btn.customId === 'exit_giveaway') {
+            participants.delete(btn.user.id);
+            btn.update({ content: '❌ تم خروجك من السحب.', components: [], ephemeral: true });
           }
         });
 
         collector.on('end', async () => {
           const list = Array.from(participants);
           if (list.length === 0) return msg.edit({ content: '❌ انتهى القيف أوي بدون مشاركين.', embeds: [], components: [] });
-          
           const winners = [];
           for (let j = 0; j < Math.min(winnersCount, list.length); j++) {
             const winnerIdx = Math.floor(Math.random() * list.length);
             winners.push(`<@${list.splice(winnerIdx, 1)[0]}>`);
           }
-
-          const endEmbed = EmbedBuilder.from(embed).setTitle('🎊 انتهى القيف أوي! 🎊').setDescription(`-# **الجائزة:** **${prize}**\n-# **الفائزين:** ${winners.join(', ')}`).setFooter({ text: 'مبروك للفائزين!' });
+          const endEmbed = EmbedBuilder.from(embed).setDescription(`-# **انتهى السحب على ${prize}**\n-# **الفائزين:** ${winners.join(', ')}`);
           await msg.edit({ embeds: [endEmbed], components: [] });
           msg.channel.send(`مبروك ${winners.join(', ')}! فزتوا بـ **${prize}**! 🥳`);
         });
@@ -498,8 +516,9 @@ client.on('interactionCreate', async (i) => {
       if (game.players.includes(i.user.id)) return i.reply({ content: 'أنت منضم أصلاً!', ephemeral: true });
       game.players.push(i.user.id);
       const embed = EmbedBuilder.from(i.message.embeds[0]);
-      embed.setDescription(`-# **اضغط على الزر للانضمام! نحتاج 4 لاعبين على الأقل.**\n-# **اللاعبين الحاليين: ${game.players.length}**\n${game.players.map(p => `<@${p}>`).join(', ')}`);
-      const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_mafia').setLabel('انضمام').setStyle(ButtonStyle.Primary));
+      const playersList = game.players.map(p => `\u200F<@${p}>\u202C`).join(', ');
+      embed.setDescription(`-# **اضغط على الزر للانضمام! نحتاج 4 لاعبين على الأقل.**\n-# **اللاعبين الحاليين: ${game.players.length}**\n${playersList}`);
+      const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_mafia').setLabel('انضمام').setStyle(ButtonStyle.Secondary));
       if (game.players.length >= 4) row.addComponents(new ButtonBuilder().setCustomId('start_mafia').setLabel('بدء اللعبة').setStyle(ButtonStyle.Success));
       await i.update({ embeds: [embed], components: [row] });
     }
@@ -512,10 +531,7 @@ client.on('interactionCreate', async (i) => {
       const players = [...game.players].sort(() => Math.random() - 0.5);
       const roles = { [players[0]]: 'مافيا 🔪', [players[1]]: 'طبيب 💉', [players[2]]: 'مخبر 🔍' };
       players.slice(3).forEach(p => roles[p] = 'مواطن 👨‍🌾');
-      
       await i.update({ content: '✅ بدأت اللعبة! تم إرسال الأدوار بشكل مخفي للجميع. استمتعوا! 🕵️‍♂️', embeds: [], components: [] });
-      
-      // إرسال الأدوار كرسائل مخفية (Ephemeral)
       const roleMsg = await i.channel.send({ content: 'اضغط على الزر لمعرفة دورك (أنت فقط من يراه!)', components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('reveal_role').setLabel('كشف دوري').setStyle(ButtonStyle.Secondary))] });
       activeMafiaGames.set(roleMsg.id, { roles });
     }
@@ -529,7 +545,10 @@ client.on('interactionCreate', async (i) => {
     // معالجة أزرار RPS
     if (i.customId === 'rps_accept' || i.customId === 'rps_decline') {
       const game = activeRPSGames.get(i.message.id);
-      if (!game || i.user.id !== game.opponent) return i.reply({ content: 'هذا التحدي ليس لك!', ephemeral: true });
+      if (!game) return i.reply({ content: 'انتهى التحدي!', ephemeral: true });
+      if (i.user.id === game.challenger) return i.reply({ content: '-# **تراك انت الي باعت التحدي مب هو **', ephemeral: true });
+      if (i.user.id !== game.opponent) return i.reply({ content: '-# **التحدي ليس لك برو اقرأ المنشن فوق **', ephemeral: true });
+      
       if (i.customId === 'rps_decline') {
         activeRPSGames.delete(i.message.id);
         return i.update({ content: '❌ تم رفض التحدي.', components: [] });
@@ -546,7 +565,6 @@ client.on('interactionCreate', async (i) => {
     if (['rps_rock', 'rps_paper', 'rps_scissors'].includes(i.customId)) {
       const game = activeRPSGames.get(i.message.id);
       if (!game || (i.user.id !== game.challenger && i.user.id !== game.opponent)) return i.reply({ content: 'لست جزءاً من التحدي!', ephemeral: true });
-      
       const choice = i.customId.split('_')[1];
       if (i.user.id === game.challenger) {
         if (game.challengerChoice) return i.reply({ content: 'اخترت خلاص!', ephemeral: true });
@@ -555,17 +573,14 @@ client.on('interactionCreate', async (i) => {
         if (game.opponentChoice) return i.reply({ content: 'اخترت خلاص!', ephemeral: true });
         game.opponentChoice = choice;
       }
-
       await i.reply({ content: `اخترت ${choice === 'rock' ? 'حجر' : choice === 'paper' ? 'ورقة' : 'مقص'}!`, ephemeral: true });
-
       if (game.challengerChoice && game.opponentChoice) {
         const names = { rock: 'حجر 🪨', paper: 'ورقة 📄', scissors: 'مقص ✂️' };
         let result = '';
         if (game.challengerChoice === game.opponentChoice) result = 'تعادل! 🤝';
-        else if ((game.challengerChoice === 'rock' && game.opponentChoice === 'scissors') || (game.challengerChoice === 'paper' && game.opponentChoice === 'rock') || (game.challengerChoice === 'scissors' && game.opponentChoice === 'paper')) result = `<@${game.challenger}> فاز على <@${game.opponent}>! 🏆`;
-        else result = `<@${game.opponent}> فاز على <@${game.challenger}>! 🏆`;
-
-        await i.message.edit({ content: `**انتهى التحدي!**\n-# <@${game.challenger}>: ${names[game.challengerChoice]}\n-# <@${game.opponent}>: ${names[game.opponentChoice]}\n\n${result}`, components: [] });
+        else if ((game.challengerChoice === 'rock' && game.opponentChoice === 'scissors') || (game.challengerChoice === 'paper' && game.opponentChoice === 'rock') || (game.challengerChoice === 'scissors' && game.opponentChoice === 'paper')) result = `\u200F<@${game.challenger}>\u202C فاز على \u200F<@${game.opponent}>\u202C! 🏆`;
+        else result = `\u200F<@${game.opponent}>\u202C فاز على \u200F<@${game.challenger}>\u202C! 🏆`;
+        await i.message.edit({ content: `**انتهى التحدي!**\n-# \u200F<@${game.challenger}>\u202C: ${names[game.challengerChoice]}\n-# \u200F<@${game.opponent}>\u202C: ${names[game.opponentChoice]}\n\n${result}`, components: [] });
         activeRPSGames.delete(i.message.id);
       }
     }
