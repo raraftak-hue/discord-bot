@@ -186,7 +186,12 @@ client.on('messageCreate', async (message) => {
 
     if (command === 'السجل') {
       const history = userData.history.slice(-5).reverse();
-      const historyMsg = history.map(h => `-# **\u200F${h.type === 'TRANSFER_RECEIVE' ? 'استلام' : 'هدية'}: ${h.amount} دنانير**`).join('\n') || '-# **لا يوجد سجل.**';
+      const historyMsg = history.map(h => {
+        let typeText = 'هدية';
+        if (h.type === 'TRANSFER_RECEIVE') typeText = 'استلام';
+        if (h.type === 'TRANSFER_SEND') typeText = 'تحويل';
+        return `-# **\u200F${typeText} ${h.amount} دنانير**`;
+      }).join('\n') || '-# **لا يوجد سجل.**';
       const embed = new EmbedBuilder()
         .setTitle('سجل التحويلات')
         .setDescription(historyMsg)
@@ -272,7 +277,11 @@ client.on('interactionCreate', async (i) => {
       const target = await getUserData(data.targetId);
       sender.balance -= data.amount;
       target.balance += data.amount;
+      
+      // تسجيل في السجل للطرفين
+      sender.history.push({ type: 'TRANSFER_SEND', amount: data.amount });
       target.history.push({ type: 'TRANSFER_RECEIVE', amount: data.amount });
+      
       await sender.save(); await target.save();
       pendingTransfers.delete(i.message.id);
       return i.update({ content: `-# **تم تحويل ${data.amount} لـ <@${data.targetId}> رصيدك الآن ${sender.balance} <a:moneywith_:1470458218953179237>**`, components: [] });
