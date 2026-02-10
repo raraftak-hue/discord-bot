@@ -1,7 +1,7 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionsBitField } = require('discord.js');
 const { REST, Routes } = require('discord.js');
 const express = require('express');
-const mongoose = require('mongoose'); // مكتبة المونجو
+const mongoose = require('mongoose');
 const cron = require('node-cron');
 const app = express();
 
@@ -9,19 +9,22 @@ const app = express();
 const ALLOWED_GUILDS = ['1387902577496297523']; 
 const OWNER_ID = "1131951548772122625"; 
 const MONGO_URI = "mongodb+srv://raraftak_db_user:TzKcCxo9EvNDzBbj@cluster0.t4j2uux.mongodb.net/MyBot?retryWrites=true&w=majority";
-const ECONOMY_CHANNEL_ID = "1458435717200875671"; // روم الأوامر
+const ECONOMY_CHANNEL_ID = "1458435717200875671"; 
 // ============================================================
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMembers, GatewayIntentBits.MessageContent]
+  intents: [
+    GatewayIntentBits.Guilds, 
+    GatewayIntentBits.GuildMessages, 
+    GatewayIntentBits.GuildMembers, 
+    GatewayIntentBits.MessageContent
+  ]
 });
 
-// --- اتصال MongoDB ---
 mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ متصل بـ MongoDB بنجاح!'))
   .catch(err => console.error('❌ فشل الاتصال بـ MongoDB:', err));
 
-// --- تعريف قاعدة البيانات (Models) ---
 const UserSchema = new mongoose.Schema({
   userId: String,
   balance: { type: Number, default: 10 },
@@ -35,7 +38,6 @@ const SettingsSchema = new mongoose.Schema({
 const User = mongoose.model('User', UserSchema);
 const Settings = mongoose.model('Settings', SettingsSchema);
 
-// دالة جلب بيانات العضو
 async function getUserData(userId) {
   let user = await User.findOne({ userId });
   if (!user) {
@@ -45,7 +47,6 @@ async function getUserData(userId) {
   return user;
 }
 
-// دالة جلب إعدادات السيرفر
 async function getSettings(guildId) {
   let settings = await Settings.findOne({ guildId });
   if (!settings) {
@@ -55,35 +56,22 @@ async function getSettings(guildId) {
   return settings;
 }
 
-// --- تسجيل أوامر السلاش ---
-const commands = [
-  { name: 'ticket', description: 'إدارة نظام التذاكر', options: [{ name: 'panel', description: 'عرض لوحة التذاكر', type: 1 }] },
-  { name: 'welcome', description: 'إدارة نظام الترحيب', options: [
-      { name: 'set', description: 'تعيين روم الترحيب', type: 1, options: [{ name: 'channel', description: 'اختر الروم', type: 7, required: true }] },
-      { name: 'edit', description: 'تعديل رسالة الترحيب', type: 1, options: [{ name: 'title', description: 'العنوان', type: 3 }, { name: 'description', description: 'الوصف', type: 3 }, { name: 'color', description: 'اللون', type: 3 }, { name: 'image', description: 'رابط الصورة', type: 3 }] },
-      { name: 'info', description: 'عرض إعدادات الترحيب', type: 1 }
-  ]},
-  { name: 'bothelp', description: 'عرض جميع الأوامر' },
-  { name: 'economy', description: 'النظام المالي', options: [
-      { name: 'balance', description: 'عرض الرصيد', type: 1 },
-      { name: 'transfer', description: 'تحويل الأموال', type: 1, options: [{ name: 'user', description: 'المستلم', type: 6, required: true }, { name: 'amount', description: 'المبلغ', type: 4, required: true }] },
-      { name: 'top', description: 'قائمة الأغنياء', type: 1 }
-  ]}
-];
-
 client.once('ready', async () => {
   console.log(`✅ ${client.user.tag} أونلاين!`);
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-  try { await rest.put(Routes.applicationCommands(client.user.id), { body: commands }); } catch (e) { console.error(e); }
+  try { 
+    // تسجيل أوامر السلاش (اختياري بما أنك تفضل النصية الآن)
+    await rest.put(Routes.applicationCommands(client.user.id), { body: [
+      { name: 'bothelp', description: 'عرض جميع الأوامر' }
+    ]}); 
+  } catch (e) { console.error(e); }
   
-  // ضريبة الجمعة
   cron.schedule('0 0 * * 5', async () => {
     await User.updateMany({ balance: { $gt: 0 } }, [{ $set: { balance: { $subtract: ["$balance", { $floor: { $multiply: ["$balance", 0.025] } }] } } }]);
     console.log("✅ تم خصم ضريبة الجمعة من الجميع.");
   });
 });
 
-// --- الترحيب ---
 client.on('guildMemberAdd', async (member) => {
   if (!ALLOWED_GUILDS.includes(member.guild.id)) return;
   const settings = await getSettings(member.guild.id);
@@ -99,13 +87,18 @@ client.on('guildMemberAdd', async (member) => {
   channel.send({ embeds: [embed] });
 });
 
-// --- أوامر الشات ---
+// مخزن مؤقت لعمليات التحويل المعلقة
+const pendingTransfers = new Map();
+
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild || !ALLOWED_GUILDS.includes(message.guild.id)) return;
-  const args = message.content.split(/\s+/);
 
-  // --- أوامر الإدارة (تايم، طرد، حذف) ---
-  if (args[0] === 'تايم') {
+  const content = message.content.trim();
+  const args = content.split(/\s+/);
+  const command = args[0];
+
+  // --- أوامر الإدارة ---
+  if (command === 'تايم') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
     const member = message.mentions.members.first();
     const timeArg = args.find(a => /^\d+[mhd]$/i.test(a));
@@ -123,7 +116,7 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  if (args[0] === 'طرد') {
+  if (command === 'طرد') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.KickMembers)) return;
     const member = message.mentions.members.first();
     if (!member) return message.channel.send(`${message.author}, -# **منشن الشخص الي تبي تطرده يا ذكي <:emoji_334:1388211595053760663>**`);
@@ -136,123 +129,102 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  if (args[0] === 'حذف') {
+  if (command === 'حذف') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return;
     const num = parseInt(args[1]);
     if (num > 0 && num <= 100) await message.channel.bulkDelete(num + 1);
   }
 
-  // --- أوامر الاقتصاد (محصورة في روم محدد) ---
-  const economyCommands = ['تحويل', 'دنانير', 'اغنياء', 'السجل'];
-  if (economyCommands.includes(args[0])) {
-    if (message.channel.id !== ECONOMY_CHANNEL_ID) return; // تجاهل لو مو في الروم المحدد
-
+  // --- أوامر الاقتصاد (في الروم المحدد) ---
+  if (message.channel.id === ECONOMY_CHANNEL_ID) {
     const userData = await getUserData(message.author.id);
 
-    if (args[0] === 'دنانير') {
+    if (command === 'دنانير') {
       const lastIn = userData.history.filter(h => h.type === 'TRANSFER_RECEIVE').pop() || { amount: 0 };
       message.channel.send({ embeds: [new EmbedBuilder().setDescription(`-# **رصيدك الحالي ${userData.balance} دنانير و آخر عملية تحويل تلقيتها بـ ${lastIn.amount} <:money_with_wings:1388212679981666334>**`).setColor(0x2b2d31)] });
     }
 
-    if (args[0] === 'تحويل') {
+    if (command === 'تحويل') {
       const target = message.mentions.users.first();
-      const amount = parseInt(args[2]);
+      // البحث عن المبلغ في الأرجومنتس (قد يكون args[2] أو args[1] لو المنشن في الأخير)
+      const amount = parseInt(args.find(a => !isNaN(a) && a.length < 10)); 
+      
       if (!target || isNaN(amount) || amount <= 0) return message.channel.send(`${message.author}, -# **استخدم: تحويل @الشخص القيمة**`);
       if (userData.balance < amount) return message.channel.send(`${message.author}, رصيدك لا يكفي.`);
       if (target.id === message.author.id) return message.channel.send(`${message.author}, ما تقدر تحول لنفسك.`);
+
+      const confirmRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('confirm_transfer').setLabel('تأكيد').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('cancel_transfer').setLabel('إلغاء').setStyle(ButtonStyle.Danger)
+      );
+
+      const confirmMsg = await message.channel.send({
+        content: `-# **متأكد تبي تحول ${amount} دينار لـ ${target} ؟**`,
+        components: [confirmRow]
+      });
+
+      pendingTransfers.set(confirmMsg.id, { senderId: message.author.id, targetId: target.id, amount });
       
-      const targetData = await getUserData(target.id);
-      userData.balance -= amount;
-      targetData.balance += amount;
-      targetData.history.push({ type: 'TRANSFER_RECEIVE', amount });
-      await userData.save(); await targetData.save();
-      message.channel.send({ embeds: [new EmbedBuilder().setDescription(`-# **تم تحويل ${amount} لـ ${target} رصيدك الآن ${userData.balance} <a:moneywith_:1470458218953179237>**`).setColor(0x2b2d31)] });
+      // حذف رسالة التأكيد بعد دقيقة لو ما صار تفاعل
+      setTimeout(() => { if(pendingTransfers.has(confirmMsg.id)) { pendingTransfers.delete(confirmMsg.id); confirmMsg.delete().catch(() => {}); } }, 60000);
     }
 
-    if (args[0] === 'اغنياء') {
+    if (command === 'اغنياء') {
       const topUsers = await User.find().sort({ balance: -1 }).limit(5);
-      const topMsg = topUsers.map((u, idx) => `**${idx+1}.** <@${u.userId}> - ${u.balance}`).join('\n');
-      message.channel.send({ embeds: [new EmbedBuilder().setTitle('قائمة الأغنياء').setDescription(`\u200F${topMsg}`).setColor(0x2b2d31)] });
+      // استخدام \u200F لضمان اتجاه النص العربي مع الأسماء الإنجليزية
+      const topMsg = topUsers.map((u, idx) => `\u200F-# ${idx+1}. <@${u.userId}> - ${u.balance} دينار`).join('\n');
+      message.channel.send({ content: `**قائمة الأغنياء**\n${topMsg}` });
     }
 
-    if (args[0] === 'السجل') {
+    if (command === 'السجل') {
       const history = userData.history.slice(-5).reverse();
-      const historyMsg = history.map(h => `- **${h.type === 'TRANSFER_RECEIVE' ? 'استلام' : 'هدية'}**: ${h.amount} دنانير (${new Date(h.date).toLocaleDateString()})`).join('\n') || 'لا يوجد سجل.';
+      const historyMsg = history.map(h => `\u200F- **${h.type === 'TRANSFER_RECEIVE' ? 'استلام' : 'هدية'}**: ${h.amount} دنانير`).join('\n') || 'لا يوجد سجل.';
       message.channel.send({ embeds: [new EmbedBuilder().setTitle('سجل التحويلات').setDescription(historyMsg).setColor(0x2b2d31)] });
     }
   }
 });
 
-// --- التفاعلات (أوامر السلاش) ---
 client.on('interactionCreate', async (i) => {
-  if (!i.guild || !ALLOWED_GUILDS.includes(i.guild.id)) return;
+  if (!i.isButton()) return;
 
-  if (i.isChatInputCommand()) {
-    const { commandName, options, user } = i;
-    const sub = options.getSubcommand(false);
+  if (i.customId === 'confirm_transfer' || i.customId === 'cancel_transfer') {
+    const transferData = pendingTransfers.get(i.message.id);
+    if (!transferData) return i.reply({ content: 'انتهت صلاحية هذا الطلب.', ephemeral: true });
+    if (i.user.id !== transferData.senderId) return i.reply({ content: 'هذا الطلب ليس لك.', ephemeral: true });
 
-    // حصر أوامر السلاش الخاصة بالاقتصاد أيضاً في الروم المحدد
-    if (commandName === 'economy' && i.channel.id !== ECONOMY_CHANNEL_ID) {
-      return i.reply({ content: `هذا الأمر مسموح به فقط في <#${ECONOMY_CHANNEL_ID}>`, ephemeral: true });
+    if (i.customId === 'cancel_transfer') {
+      pendingTransfers.delete(i.message.id);
+      return i.update({ content: '❌ تم إلغاء عملية التحويل.', components: [] });
     }
 
-    if (commandName === 'bothelp') {
-      const helpEmbed = new EmbedBuilder()
-        .setTitle('قائمة أوامر البوت')
-        .setColor(0x2b2d31)
-        .setDescription(`-# **تحويل @الشخص القيمة - تحويل أموال**\n-# **دنانير - عرض الرصيد**\n-# **اغنياء - قائمة الأغنياء**\n-# **السجل - سجل التحويلات**\n-# **/ticket panel - انشاء لوحة تذاكر**\n-# **/welcome set - تعيين روم الترحيب**\n-# **text cmd - أوامر الشات، حذف و تايم و طرد**`);
-      return i.reply({ embeds: [helpEmbed] });
+    const senderData = await getUserData(transferData.senderId);
+    if (senderData.balance < transferData.amount) {
+      pendingTransfers.delete(i.message.id);
+      return i.update({ content: '❌ رصيدك لم يعد يكفي لإتمام العملية.', components: [] });
     }
 
-    if (commandName === 'economy') {
-      const userData = await getUserData(user.id);
-      if (sub === 'balance') {
-        const lastIn = userData.history.filter(h => h.type === 'TRANSFER_RECEIVE').pop() || { amount: 0 };
-        return i.reply({ embeds: [new EmbedBuilder().setDescription(`-# **رصيدك الحالي ${userData.balance} دنانير و آخر عملية تحويل تلقيتها بـ ${lastIn.amount} <:money_with_wings:1388212679981666334>**`).setColor(0x2b2d31)] });
-      }
-      if (sub === 'transfer') {
-        const target = options.getUser('user');
-        const amount = options.getInteger('amount');
-        if (userData.balance < amount) return i.reply('رصيدك لا يكفي.');
-        const targetData = await getUserData(target.id);
-        userData.balance -= amount;
-        targetData.balance += amount;
-        targetData.history.push({ type: 'TRANSFER_RECEIVE', amount });
-        await userData.save(); await targetData.save();
-        i.reply({ embeds: [new EmbedBuilder().setDescription(`-# **تم تحويل ${amount} لـ ${target} رصيدك الآن ${userData.balance} <a:moneywith_:1470458218953179237>**`).setColor(0x2b2d31)] });
-      }
-      if (sub === 'top') {
-        const topUsers = await User.find().sort({ balance: -1 }).limit(5);
-        const topMsg = topUsers.map((u, idx) => `**${idx+1}.** <@${u.userId}> - ${u.balance}`).join('\n');
-        i.reply({ embeds: [new EmbedBuilder().setTitle('قائمة الأغنياء').setDescription(`\u200F${topMsg}`).setColor(0x2b2d31)] });
-      }
-    }
+    const targetData = await getUserData(transferData.targetId);
+    senderData.balance -= transferData.amount;
+    targetData.balance += transferData.amount;
+    targetData.history.push({ type: 'TRANSFER_RECEIVE', amount: transferData.amount });
+    
+    await senderData.save();
+    await targetData.save();
+    pendingTransfers.delete(i.message.id);
 
-    if (commandName === 'welcome') {
-      const settings = await getSettings(i.guild.id);
-      if (sub === 'set') { settings.welcomeSettings.channelId = options.getChannel('channel').id; await settings.save(); i.reply('✅ تم.'); }
-      if (sub === 'edit') {
-        if(options.getString('title')) settings.welcomeSettings.title = options.getString('title');
-        if(options.getString('description')) settings.welcomeSettings.description = options.getString('description');
-        if(options.getString('color')) settings.welcomeSettings.color = options.getString('color').replace('#','');
-        if(options.getString('image')) settings.welcomeSettings.image = options.getString('image');
-        await settings.save(); i.reply('✅ تم التعديل.');
-      }
-      if (sub === 'info') {
-        i.reply({ embeds: [new EmbedBuilder().setTitle('إعدادات الترحيب').setColor(0x2b2d31).setDescription(`-# **الروم:** <#${settings.welcomeSettings.channelId || 'غير محدد'}>\n-# **اللون:** #${settings.welcomeSettings.color}\n-# **العنوان:** ${settings.welcomeSettings.title || 'افتراضي'}`)] });
-      }
-    }
+    await i.update({ 
+      content: `-# **تم تحويل ${transferData.amount} لـ <@${transferData.targetId}> رصيدك الآن ${senderData.balance} <a:moneywith_:1470458218953179237>**`, 
+      components: [] 
+    });
   }
 
-  // نظام التذاكر المطور
-  if (i.isButton()) {
-    if (i.customId === 'open_ticket') {
-      const ch = await i.guild.channels.create({ name: `ticket-${i.user.username}`, type: ChannelType.GuildText, permissionOverwrites: [{ id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] }, { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }] });
-      ch.send({ content: `${i.user}`, components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق').setStyle(ButtonStyle.Danger))] });
-      i.reply({ content: `تم فتح التذكرة ${ch}`, ephemeral: true });
-    }
-    if (i.customId === 'close_ticket') { await i.reply('سيتم الإغلاق...'); setTimeout(() => i.channel.delete(), 3000); }
+  // نظام التذاكر
+  if (i.customId === 'open_ticket') {
+    const ch = await i.guild.channels.create({ name: `ticket-${i.user.username}`, type: ChannelType.GuildText, permissionOverwrites: [{ id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] }, { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }] });
+    ch.send({ content: `${i.user}`, components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق').setStyle(ButtonStyle.Danger))] });
+    i.reply({ content: `تم فتح التذكرة ${ch}`, ephemeral: true });
   }
+  if (i.customId === 'close_ticket') { await i.reply('سيتم الإغلاق...'); setTimeout(() => i.channel.delete(), 3000); }
 });
 
 app.get('/', (req, res) => res.send('Bot is Live!'));
