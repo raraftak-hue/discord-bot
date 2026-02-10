@@ -9,6 +9,7 @@ const app = express();
 const ALLOWED_GUILDS = ['1387902577496297523']; 
 const OWNER_ID = "1131951548772122625"; 
 const MONGO_URI = "mongodb+srv://raraftak_db_user:TzKcCxo9EvNDzBbj@cluster0.t4j2uux.mongodb.net/MyBot?retryWrites=true&w=majority";
+const ECONOMY_CHANNEL_ID = "1458435717200875671"; // روم الأوامر
 // ============================================================
 
 const client = new Client({
@@ -103,53 +104,35 @@ client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild || !ALLOWED_GUILDS.includes(message.guild.id)) return;
   const args = message.content.split(/\s+/);
 
-  // أمر تايم
+  // --- أوامر الإدارة (تايم، طرد، حذف) ---
   if (args[0] === 'تايم') {
-    // 1. التحقق من الصلاحية (إذا ما عنده صلاحية لا يرد بشيء)
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
-
     const member = message.mentions.members.first();
     const timeArg = args.find(a => /^\d+[mhd]$/i.test(a));
-
-    // 2. التحقق من الصيغة
-    if (!member || !timeArg) return message.reply('-# **الصيغة غلط يا ذكي <:emoji_334:1388211595053760663>**');
-
-    // 3. التحقق من المدة (أقصى شيء 28 يوم حسب قوانين ديسكورد، الـ 50 يوم تعتبر غلط)
+    if (!member || !timeArg) return message.channel.send(`${message.author}, -# **الصيغة غلط يا ذكي <:emoji_334:1388211595053760663>**`);
     const timeValue = parseInt(timeArg);
     const timeUnit = timeArg.slice(-1).toLowerCase();
     let durationInMs = timeValue * (timeUnit === 'm' ? 60 : timeUnit === 'h' ? 3600 : 86400) * 1000;
-    
-    // ديسكورد لا يسمح بأكثر من 28 يوم (2419200000 ms)
-    if (durationInMs > 2419200000) return message.reply('-# **الصيغة غلط يا ذكي <:emoji_334:1388211595053760663>**');
-
-    // 4. التحقق إذا كان يعطي تايم لنفسه
-    if (member.id === message.author.id) {
-      return message.reply('-# **تبي تعطي تايم لنفسك ؟ واضح عقلك فيه خلل ما بسويها لك <:rimuruWut:1388211603140247565> **');
-    }
-
-    // 5. محاولة تنفيذ التايم (التعامل مع الرتب الأعلى)
+    if (durationInMs > 2419200000) return message.channel.send(`${message.author}, -# **الصيغة غلط يا ذكي <:emoji_334:1388211595053760663>**`);
+    if (member.id === message.author.id) return message.channel.send(`${message.author}, -# **تبي تعطي تايم لنفسك ؟ واضح عقلك فيه خلل ما بسويها لك <:rimuruWut:1388211603140247565> **`);
     try {
       await member.timeout(durationInMs);
-      message.reply(`-# **تم اسكات العضو ${member} ليش ما يستحي هو يارب ما يعيدها عشان ما يبلع مره ثانيه <a:DancingShark:1469030444774199439>**`);
+      message.channel.send(`-# **تم اسكات ${member} يارب ما يعيدها <a:DancingShark:1469030444774199439>**`);
     } catch (error) {
-      // إذا كانت رتبته أعلى أو البوت ما يقدر عليه
-      message.reply('-# **ما تقدر تسويها هو يدعس عليك <:emoji_43:1397804543789498428>**');
+      message.channel.send(`${message.author}, -# **ما تقدر تسويها هو يدعس عليك <:emoji_43:1397804543789498428>**`);
     }
   }
 
-  // أمر طرد
   if (args[0] === 'طرد') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.KickMembers)) return;
     const member = message.mentions.members.first();
-    if (!member) return message.reply('-# **منشن الشخص الي تبي تطرده يا ذكي <:emoji_334:1388211595053760663>**');
-    
-    if (member.id === message.author.id) return message.reply('-# **تبي تطرد نفسك؟ استهدي بالله <:rimuruWut:1388211603140247565>**');
-
+    if (!member) return message.channel.send(`${message.author}, -# **منشن الشخص الي تبي تطرده يا ذكي <:emoji_334:1388211595053760663>**`);
+    if (member.id === message.author.id) return message.channel.send(`${message.author}, -# **تبي تطرد نفسك؟ استهدي بالله <:rimuruWut:1388211603140247565>**`);
     try {
       await member.kick();
-      message.reply(`-# **تم طرد ${member.user.tag} بنجاح، الفكة منه!**`);
+      message.channel.send(`-# **تم طرد ${member.user.tag} بنجاح، الفكة منه!**`);
     } catch (error) {
-      message.reply('-# **ما تقدر تسويها هو يدعس عليك <:emoji_43:1397804543789498428>**');
+      message.channel.send(`${message.author}, -# **ما تقدر تسويها هو يدعس عليك <:emoji_43:1397804543789498428>**`);
     }
   }
 
@@ -158,9 +141,49 @@ client.on('messageCreate', async (message) => {
     const num = parseInt(args[1]);
     if (num > 0 && num <= 100) await message.channel.bulkDelete(num + 1);
   }
+
+  // --- أوامر الاقتصاد (محصورة في روم محدد) ---
+  const economyCommands = ['تحويل', 'دنانير', 'اغنياء', 'السجل'];
+  if (economyCommands.includes(args[0])) {
+    if (message.channel.id !== ECONOMY_CHANNEL_ID) return; // تجاهل لو مو في الروم المحدد
+
+    const userData = await getUserData(message.author.id);
+
+    if (args[0] === 'دنانير') {
+      const lastIn = userData.history.filter(h => h.type === 'TRANSFER_RECEIVE').pop() || { amount: 0 };
+      message.channel.send({ embeds: [new EmbedBuilder().setDescription(`-# **رصيدك الحالي ${userData.balance} دنانير و آخر عملية تحويل تلقيتها بـ ${lastIn.amount} <:money_with_wings:1388212679981666334>**`).setColor(0x2b2d31)] });
+    }
+
+    if (args[0] === 'تحويل') {
+      const target = message.mentions.users.first();
+      const amount = parseInt(args[2]);
+      if (!target || isNaN(amount) || amount <= 0) return message.channel.send(`${message.author}, -# **استخدم: تحويل @الشخص القيمة**`);
+      if (userData.balance < amount) return message.channel.send(`${message.author}, رصيدك لا يكفي.`);
+      if (target.id === message.author.id) return message.channel.send(`${message.author}, ما تقدر تحول لنفسك.`);
+      
+      const targetData = await getUserData(target.id);
+      userData.balance -= amount;
+      targetData.balance += amount;
+      targetData.history.push({ type: 'TRANSFER_RECEIVE', amount });
+      await userData.save(); await targetData.save();
+      message.channel.send({ embeds: [new EmbedBuilder().setDescription(`-# **تم تحويل ${amount} لـ ${target} رصيدك الآن ${userData.balance} <a:moneywith_:1470458218953179237>**`).setColor(0x2b2d31)] });
+    }
+
+    if (args[0] === 'اغنياء') {
+      const topUsers = await User.find().sort({ balance: -1 }).limit(5);
+      const topMsg = topUsers.map((u, idx) => `**${idx+1}.** <@${u.userId}> - ${u.balance}`).join('\n');
+      message.channel.send({ embeds: [new EmbedBuilder().setTitle('قائمة الأغنياء').setDescription(`\u200F${topMsg}`).setColor(0x2b2d31)] });
+    }
+
+    if (args[0] === 'السجل') {
+      const history = userData.history.slice(-5).reverse();
+      const historyMsg = history.map(h => `- **${h.type === 'TRANSFER_RECEIVE' ? 'استلام' : 'هدية'}**: ${h.amount} دنانير (${new Date(h.date).toLocaleDateString()})`).join('\n') || 'لا يوجد سجل.';
+      message.channel.send({ embeds: [new EmbedBuilder().setTitle('سجل التحويلات').setDescription(historyMsg).setColor(0x2b2d31)] });
+    }
+  }
 });
 
-// --- التفاعلات ---
+// --- التفاعلات (أوامر السلاش) ---
 client.on('interactionCreate', async (i) => {
   if (!i.guild || !ALLOWED_GUILDS.includes(i.guild.id)) return;
 
@@ -168,11 +191,16 @@ client.on('interactionCreate', async (i) => {
     const { commandName, options, user } = i;
     const sub = options.getSubcommand(false);
 
+    // حصر أوامر السلاش الخاصة بالاقتصاد أيضاً في الروم المحدد
+    if (commandName === 'economy' && i.channel.id !== ECONOMY_CHANNEL_ID) {
+      return i.reply({ content: `هذا الأمر مسموح به فقط في <#${ECONOMY_CHANNEL_ID}>`, ephemeral: true });
+    }
+
     if (commandName === 'bothelp') {
       const helpEmbed = new EmbedBuilder()
         .setTitle('قائمة أوامر البوت')
         .setColor(0x2b2d31)
-        .setDescription(`-# **/economy top - قائمة الاغنياء**\n-# **/ticket panel - انشاء لوحة تذاكر**\n-# **/welcome set - تعيين روم الترحيب**\n-# **/economy transfer- تحويل الأموال**\n-# **/economy balance - عرض الرصيد**\n-# **text cmd - أوامر الشات، حذف و تايم و طرد**`);
+        .setDescription(`-# **تحويل @الشخص القيمة - تحويل أموال**\n-# **دنانير - عرض الرصيد**\n-# **اغنياء - قائمة الأغنياء**\n-# **السجل - سجل التحويلات**\n-# **/ticket panel - انشاء لوحة تذاكر**\n-# **/welcome set - تعيين روم الترحيب**\n-# **text cmd - أوامر الشات، حذف و تايم و طرد**`);
       return i.reply({ embeds: [helpEmbed] });
     }
 
