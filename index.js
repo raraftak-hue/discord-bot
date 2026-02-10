@@ -108,8 +108,13 @@ client.on('messageCreate', async (message) => {
     const timeArg = args.find(a => /^\d+[mhd]$/i.test(a));
     if (!member || !timeArg) return message.reply('-# **الصيغة غلط يا ذكي <:emoji_334:1388211595053760663>**');
     let duration = parseInt(timeArg) * (timeArg.endsWith('m') ? 60 : timeArg.endsWith('h') ? 3600 : 86400) * 1000;
-    await member.timeout(duration).catch(() => message.reply('-# **ما تقدر تسويها هو يدعس عليك <:emoji_43:1397804543789498428>**'));
-    message.reply({ embeds: [new EmbedBuilder().setDescription(`-# **تم اسكات ${member} يارب ما يعيدها <a:DancingShark:1469030444774199439>**`).setColor(0x2b2d31)] });
+    
+    try {
+      await member.timeout(duration);
+      message.reply({ embeds: [new EmbedBuilder().setDescription(`-# **تم اسكات ${member} يارب ما يعيدها <a:DancingShark:1469030444774199439>**`).setColor(0x2b2d31)] });
+    } catch (error) {
+      message.reply('-# **ما تقدر تسويها هو يدعس عليك <:emoji_43:1397804543789498428>**');
+    }
   }
   if (args[0] === 'حذف') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return;
@@ -154,7 +159,7 @@ client.on('interactionCreate', async (i) => {
       if (sub === 'top') {
         const topUsers = await User.find().sort({ balance: -1 }).limit(5);
         const topMsg = topUsers.map((u, idx) => `**${idx+1}.** <@${u.userId}> - ${u.balance}`).join('\n');
-        i.reply({ embeds: [new EmbedBuilder().setTitle('قائمة الأغنياء').setDescription(topMsg).setColor(0x2b2d31)] });
+        i.reply({ embeds: [new EmbedBuilder().setTitle('قائمة الأغنياء').setDescription(`\u200F${topMsg}`).setColor(0x2b2d31)] });
       }
     }
 
