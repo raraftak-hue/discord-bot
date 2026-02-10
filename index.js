@@ -111,7 +111,7 @@ client.on('messageCreate', async (message) => {
     
     try {
       await member.timeout(duration);
-      message.reply({ embeds: [new EmbedBuilder().setDescription(`-# **تم اسكات ${member} يارب ما يعيدها <a:DancingShark:1469030444774199439>**`).setColor(0x2b2d31)] });
+      message.reply({ embeds: [new EmbedBuilder().setDescription(`-# **تم اسكات العضو ${member} ليش ما يستحي هو يارب ما يعيدها عشان ما يبلع مره ثانيه <a:DancingShark:1469030444774199439>**`).setColor(0x2b2d31)] });
     } catch (error) {
       message.reply('-# **ما تقدر تسويها هو يدعس عليك <:emoji_43:1397804543789498428>**');
     }
