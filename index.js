@@ -214,6 +214,33 @@ client.on('messageCreate', async (message) => {
   const args = message.content.trim().split(/\s+/);
   const command = args[0];
 
+  // معالجة كلمة "تأكيد" للتحويل
+  const pending = Array.from(pendingTransfers.values()).find(p => p.senderId === message.author.id && p.channelId === message.channel.id);
+  if (message.content === 'تأكيد' && pending) {
+    const data = pending;
+    const sender = await getUserData(data.senderId);
+    const target = await getUserData(data.targetId);
+    
+    if (sender.balance < data.amount) {
+      pendingTransfers.delete(data.msgId);
+      return message.channel.send(`-# **رصيدك ما يكفي الحين يا فقير <:emoji_464:1388211597197050029>**`);
+    }
+
+    sender.balance -= data.amount; target.balance += data.amount;
+    sender.history.push({ type: 'TRANSFER_SEND', amount: data.amount });
+    target.history.push({ type: 'TRANSFER_RECEIVE', amount: data.amount });
+    await sender.save(); await target.save();
+    transferCooldowns.set(data.senderId, Date.now()); 
+    
+    const confirmMsg = await message.channel.messages.fetch(data.msgId).catch(() => null);
+    if (confirmMsg) {
+      await confirmMsg.edit({ content: `-# **تم تحويل ${data.amount} لـ <@${data.targetId}> رصيدك الآن ${sender.balance} <a:moneywith_:1470458218953179237>**`, components: [] }).catch(() => {});
+    }
+    pendingTransfers.delete(data.msgId);
+    try { await message.delete(); } catch (e) {}
+    return;
+  }
+
   // أوامر الإدارة النصية
   if (command === 'تايم') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
@@ -292,18 +319,15 @@ client.on('messageCreate', async (message) => {
       return message.channel.send(`-# **انتظر ${remaining} ثواني قبل التحويل مرة أخرى <:emoji_334:1388211595053760663>**`);
     }
 
-    const confirmRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('confirm_transfer').setLabel('تأكيد').setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId('cancel_transfer').setLabel('إلغاء').setStyle(ButtonStyle.Danger)
-    );
-    const confirmMsg = await message.channel.send({ content: `-# **متأكد تبي تحول ${amount} دينار لـ ${target} ؟**`, components: [confirmRow] });
-    pendingTransfers.set(confirmMsg.id, { senderId: message.author.id, targetId: target.id, amount });
+    const confirmMsg = await message.channel.send({ content: `-# **اكتب "تأكيد" لو انت متأكد من عملية التحويل  **\n-# تجاهل الرسالة لو لم تكن متاكد` });
+    pendingTransfers.set(confirmMsg.id, { senderId: message.author.id, targetId: target.id, amount, msgId: confirmMsg.id, channelId: message.channel.id });
+    setTimeout(() => { if (pendingTransfers.has(confirmMsg.id)) { pendingTransfers.delete(confirmMsg.id); confirmMsg.delete().catch(() => {}); } }, 10000);
   }
 
   if (command === 'اغنياء') {
     const topUsers = await User.find().sort({ balance: -1 }).limit(5);
     const topMsg = topUsers.map((u, idx) => `-# **\u200F${idx+1}. \u202B<@${u.userId}>\u202C - ${u.balance} دينار**`).join('\n');
-    const embed = new EmbedBuilder().setTitle('قائمة الأغنياء').setDescription(topMsg).setColor(0x2b2d31);
+    const embed = new EmbedBuilder().setTitle('الطبقة الارستقراطية <:y_coroa:1404576666105417871>').setDescription(topMsg).setColor(0x2b2d31);
     message.channel.send({ embeds: [embed] });
   }
 
@@ -347,17 +371,15 @@ client.on('interactionCreate', async (i) => {
         const amount = options.getInteger('amount');
         if (userData.balance < amount) return i.reply({ content: 'رصيدك لا يكفي.', ephemeral: true });
         if (target.id === user.id) return i.reply({ content: 'ما تقدر تحول لنفسك.', ephemeral: true });
-        const confirmRow = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('confirm_transfer').setLabel('تأكيد').setStyle(ButtonStyle.Success),
-          new ButtonBuilder().setCustomId('cancel_transfer').setLabel('إلغاء').setStyle(ButtonStyle.Danger)
-        );
-        const confirmMsg = await i.reply({ content: `-# **متأكد تبي تحول ${amount} دينار لـ ${target} ؟**`, components: [confirmRow], fetchReply: true });
-        pendingTransfers.set(confirmMsg.id, { senderId: user.id, targetId: target.id, amount });
+        
+        const confirmMsg = await i.reply({ content: `-# **اكتب "تأكيد" لو انت متأكد من عملية التحويل  **\n-# تجاهل الرسالة لو لم تكن متاكد`, fetchReply: true });
+        pendingTransfers.set(confirmMsg.id, { senderId: user.id, targetId: target.id, amount, msgId: confirmMsg.id, channelId: i.channel.id });
+        setTimeout(() => { if (pendingTransfers.has(confirmMsg.id)) { pendingTransfers.delete(confirmMsg.id); i.deleteReply().catch(() => {}); } }, 10000);
       }
       if (sub === 'top') {
         const topUsers = await User.find().sort({ balance: -1 }).limit(5);
         const topMsg = topUsers.map((u, idx) => `-# **\u200F${idx+1}. \u202B<@${u.userId}>\u202C - ${u.balance} دينار**`).join('\n');
-        const embed = new EmbedBuilder().setTitle('قائمة الأغنياء').setDescription(topMsg).setColor(0x2b2d31);
+        const embed = new EmbedBuilder().setTitle('الطبقة الارستقراطية <:y_coroa:1404576666105417871>').setDescription(topMsg).setColor(0x2b2d31);
         return i.reply({ embeds: [embed] });
       }
     }
@@ -381,7 +403,7 @@ client.on('interactionCreate', async (i) => {
           return i.reply({ content: 'تحتاج رتبة admin عشان تسوي لعبة مافيا يا ذكي <:emoji_43:1397804543789498428>', ephemeral: true });
         }
         const joinRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_mafia').setLabel('انضمام').setStyle(ButtonStyle.Secondary));
-        const embed = new EmbedBuilder().setTitle('لعبة المافيا <:emoji_38:1401773302619439147>').setDescription(`-# **اضغط على الزر للانضمام! نحتاج 4 لاعبين على الأقل.**\n-# **اللاعبين الحاليين: 0**`).setColor(0x2b2d31);
+        const embed = new EmbedBuilder().setTitle('لعبة المافيا <:emoji_38:1401773302619439147>').setDescription(`-# **اضغط على الزر للانضمام! نحتاج 4 لاعبين على الأقل.**\n-# **اللاعبين الحاليين: 0**\n\n-# **شرح اللعبة**\n-# اللعبة فيها قاتل و طبيب و شرطي و مواطنين\n-# القاتل يحاول يقتل الكل بدون ما ينكشف\n-# الطبيب يحمي شخص كل ليلة من القتل\n-# الشرطي يكشف هويات الناس بالليل\n-# المواطنين لازم يصوتون على القاتل ويطردونه عشان يفوزون`).setColor(0x2b2d31);
         const msg = await i.reply({ embeds: [embed], components: [joinRow], fetchReply: true });
         activeMafiaGames.set(msg.id, { hostId: user.id, players: [], started: false, alive: [], roles: {}, votes: new Map(), turn: 0 });
         
@@ -484,25 +506,6 @@ client.on('interactionCreate', async (i) => {
   }
 
   if (i.isButton()) {
-    // معالجة أزرار التحويل
-    if (i.customId === 'confirm_transfer' || i.customId === 'cancel_transfer') {
-      const data = pendingTransfers.get(i.message.id);
-      if (!data || i.user.id !== data.senderId) return i.reply({ content: 'هذا الطلب ليس لك أو انتهى.', ephemeral: true });
-      if (i.customId === 'cancel_transfer') {
-        pendingTransfers.delete(i.message.id);
-        return i.update({ content: '❌ تم إلغاء عملية التحويل.', components: [] });
-      }
-      const sender = await getUserData(data.senderId);
-      const target = await getUserData(data.targetId);
-      sender.balance -= data.amount; target.balance += data.amount;
-      sender.history.push({ type: 'TRANSFER_SEND', amount: data.amount });
-      target.history.push({ type: 'TRANSFER_RECEIVE', amount: data.amount });
-      await sender.save(); await target.save();
-      transferCooldowns.set(data.senderId, Date.now()); 
-      pendingTransfers.delete(i.message.id);
-      return i.update({ content: `-# **تم تحويل ${data.amount} لـ <@${data.targetId}> رصيدك الآن ${sender.balance} <a:moneywith_:1470458218953179237>**`, components: [] });
-    }
-
     // معالجة أزرار المافيا
     if (i.customId === 'join_mafia') {
       const game = activeMafiaGames.get(i.message.id);
@@ -511,7 +514,7 @@ client.on('interactionCreate', async (i) => {
       game.players.push(i.user.id);
       const embed = EmbedBuilder.from(i.message.embeds[0]);
       const playersList = game.players.map(p => `\u200F<@${p}>\u202C`).join(', ');
-      embed.setDescription(`-# **اضغط على الزر للانضمام! نحتاج 4 لاعبين على الأقل.**\n-# **اللاعبين الحاليين: ${game.players.length}**\n${playersList}`);
+      embed.setDescription(`-# **اضغط على الزر للانضمام! نحتاج 4 لاعبين على الأقل.**\n-# **اللاعبين الحاليين: ${game.players.length}**\n${playersList}\n\n-# **شرح اللعبة**\n-# اللعبة فيها قاتل و طبيب و شرطي و مواطنين\n-# القاتل يحاول يقتل الكل بدون ما ينكشف\n-# الطبيب يحمي شخص كل ليلة من القتل\n-# الشرطي يكشف هويات الناس بالليل\n-# المواطنين لازم يصوتون على القاتل ويطردونه عشان يفوزون`);
       const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_mafia').setLabel('انضمام').setStyle(ButtonStyle.Secondary));
       if (game.players.length >= 4) row.addComponents(new ButtonBuilder().setCustomId('start_mafia').setLabel('بدء اللعبة').setStyle(ButtonStyle.Success));
       await i.update({ embeds: [embed], components: [row] }).catch(() => {});
