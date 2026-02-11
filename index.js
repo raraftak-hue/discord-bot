@@ -372,7 +372,7 @@ client.on('interactionCreate', async (i) => {
       if (sub === 'top') {
         const topUsers = await User.find().sort({ balance: -1 }).limit(5);
         const topMsg = topUsers.map((u, idx) => `-# **\u200F${idx+1}. \u202B<@${u.userId}>\u202C - ${u.balance} دينار**`).join('\n');
-        const embed = new EmbedBuilder().setTitle('الطبقة الارستقراطية <:y_coroa:1404576666105417871>').setDescription(topMsg).setColor(0x2b2d31);
+        const embed = new EmbedBuilder().setTitle('قائمة الأغنياء').setDescription(topMsg).setColor(0x2b2d31);
         return i.reply({ embeds: [embed] });
       }
     }
