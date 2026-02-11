@@ -474,7 +474,7 @@ client.on('interactionCreate', async (i) => {
           }
           const endEmbed = EmbedBuilder.from(embed).setDescription(`-# **انتهى السحب على ${prize}**\n-# **الفائزين:** ${winners.join(', ')}`);
           await msg.edit({ embeds: [endEmbed], components: [] }).catch(() => {});
-          msg.channel.send(`مبروك-# **${winners.join(', ')}! فزتوا بـ ${prize} <:money_with_wings:1388212679981666334> **`).catch(() => {});
+          msg.channel.send(`مبروك${winners.join(', ')}! فزتوا بـ **${prize}**! 🥳`).catch(() => {});
         });
       }
     }
