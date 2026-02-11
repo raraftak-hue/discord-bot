@@ -697,7 +697,7 @@ async function startNight(channel, game) {
     game.alive.filter(id => id !== mafiaId).slice(0, 5).forEach(pId => {
       row.addComponents(new ButtonBuilder().setCustomId(`mafia_kill_${pId}`).setLabel(client.users.cache.get(pId)?.username || pId).setStyle(ButtonStyle.Secondary));
     });
-    channel.send({ content: `<@${mafiaId}> اختر ضحيتك (الأزرار تظهر لك فقط)`, components: [row] }).catch(() => {});
+    channel.send({ content: `<@${mafiaId}> -# **اختر ضحيتك تراك بس الي شايف ذي الخيارات محد شايفهم غيرك <:emoji_38:1401773302619439147> **`, components: [row] }).catch(() => {});
   }
 
   setTimeout(async () => {
@@ -726,7 +726,7 @@ async function startNight(channel, game) {
     setTimeout(() => {
       const killedId = game.nightAction.target;
       const savedId = game.nightAction.doctorTarget;
-      const roleNames = { mafia: 'مافيا 🔪', doctor: 'طبيب 💉', police: 'شرطي 🔍', citizen: 'مواطن 👨‍🌾' };
+      const roleNames = { mafia: 'مافيا ', doctor: 'طبيب ', police: 'شرطي ', citizen: 'مواطن ' };
       const role = game.roles[killedId];
 
       if (killedId && killedId !== savedId) {
@@ -776,7 +776,7 @@ async function startVoting(channel, game) {
         game.protectedByCloak = null;
       } else {
         const role = game.roles[kickedId];
-        const roleNames = { mafia: 'مافيا 🔪', doctor: 'طبيب 💉', police: 'شرطي 🔍', citizen: 'مواطن 👨‍🌾' };
+        const roleNames = { mafia: 'مافيا ', doctor: 'طبيب ', police: 'شرطي ', citizen: 'مواطن ' };
         game.alive = game.alive.filter(id => id !== kickedId);
         
         if (role === 'mafia') {
