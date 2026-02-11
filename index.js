@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionsBitField } = require('discord.js');
+ const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionsBitField } = require('discord.js');
 const { REST, Routes } = require('discord.js');
 const express = require('express');
 const mongoose = require('mongoose');
@@ -255,99 +255,84 @@ client.on('messageCreate', async (message) => {
       await member.kick();
       message.channel.send(`-# **انطرد ${memberTag} يا مسكين وش سوا يا ترى <:s7_discord:1388214117365453062>**`);
     } catch (error) {
-      message.channel.send(`-# **ما تقدر تسويها هو يدعس عليك <:emoji_43:1397804543789498428>**`);
+      message.channel.send(`-# **ما اقدر اطرده، تأكد من صلاحيات البوت <:emoji_43:1397804543789498428>**`);
     }
   }
 
   if (command === 'حذف') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return;
-    const num = parseInt(args[1]);
-    if (num > 0 && num <= 100) await message.channel.bulkDelete(num + 1);
+    const amount = parseInt(args[1]);
+    if (isNaN(amount) || amount < 1 || amount > 100) return message.channel.send(`-# **حدد عدد الرسايل الي تبي تحذفها (1-100) يا ذكي <:emoji_334:1388211595053760663>**`);
+    try {
+      await message.channel.bulkDelete(amount + 1);
+      const msg = await message.channel.send(`-# **تم حذف ${amount} رسايل بنجاح <:2thumbup:1467287897429512396>**`);
+      setTimeout(() => msg.delete().catch(() => {}), 3000);
+    } catch (error) {
+      message.channel.send(`-# **ما اقدر احذف الرسايل، تأكد من صلاحيات البوت <:emoji_43:1397804543789498428>**`);
+    }
   }
 
-  // أوامر الاقتصاد النصية
-  if (message.channel.id === ECONOMY_CHANNEL_ID) {
-    const userData = await getUserData(message.author.id);
-    if (command === 'دنانير') {
-      const lastIn = userData.history.filter(h => h.type === 'TRANSFER_RECEIVE').pop() || { amount: 0 };
-      message.channel.send({ embeds: [new EmbedBuilder().setDescription(`-# **رصيدك الحالي ${userData.balance} من دنانير و آخر عملية تحويل تلقيتها بـ ${lastIn.amount} <:money_with_wings:1388212679981666334>**`).setColor(0x2b2d31)] });
+  if (command === 'دنانير') {
+    const user = message.mentions.users.first() || message.author;
+    const userData = await getUserData(user.id);
+    message.channel.send(`-# **رصيد ${user} هو ${userData.balance} دنانير <:money_with_wings:1388212679981666334>**`);
+  }
+
+  if (command === 'تحويل') {
+    const target = message.mentions.users.first();
+    const amount = parseInt(args.find(a => !isNaN(a)));
+    if (!target || isNaN(amount) || amount <= 0) return message.channel.send(`-# **الصيغة غلط يا ذكي <:emoji_334:1388211595053760663>**`);
+    const senderData = await getUserData(message.author.id);
+    if (senderData.balance < amount) return message.channel.send(`-# **رصيدك ما يكفي يا فقير <:emoji_464:1388211597197050029>**`);
+    if (target.id === message.author.id) return message.channel.send(`-# **ما تقدر تحول لنفسك يا اهبل <:emoji_464:1388211597197050029>**`);
+    
+    const lastTransfer = transferCooldowns.get(message.author.id);
+    if (lastTransfer && Date.now() - lastTransfer < 10000) {
+      const remaining = Math.ceil((10000 - (Date.now() - lastTransfer)) / 1000);
+      return message.channel.send(`-# **انتظر ${remaining} ثواني قبل التحويل مرة أخرى <:emoji_334:1388211595053760663>**`);
     }
-    if (command === 'تحويل') {
-      const lastTransfer = transferCooldowns.get(message.author.id);
-      if (lastTransfer && Date.now() - lastTransfer < 10000) {
-        const remaining = Math.ceil((10000 - (Date.now() - lastTransfer)) / 1000);
-        return message.channel.send(`-# **انتظر ${remaining} ثواني قبل التحويل مرة أخرى.**`);
-      }
-      const target = message.mentions.users.first();
-      const amount = parseInt(args.find(a => /^\d+$/.test(a)));
-      if (!target || isNaN(amount) || amount <= 0) return message.channel.send(`-# **استخدم: تحويل @الشخص القيمة**`);
-      if (userData.balance < amount) return message.channel.send(`رصيدك لا يكفي.`);
-      if (target.id === message.author.id) return message.channel.send(`ما تقدر تحول لنفسك.`);
-      const confirmRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('confirm_transfer').setLabel('تأكيد').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('cancel_transfer').setLabel('إلغاء').setStyle(ButtonStyle.Danger)
-      );
-      const confirmMsg = await message.channel.send({ content: `-# **متأكد تبي تحول ${amount} دينار لـ ${target} ؟**`, components: [confirmRow] });
-      pendingTransfers.set(confirmMsg.id, { senderId: message.author.id, targetId: target.id, amount });
-    }
-    if (command === 'اغنياء') {
-      const topUsers = await User.find().sort({ balance: -1 }).limit(5);
-      const topMsg = topUsers.map((u, idx) => `-# **\u200F${idx+1}. \u202B<@${u.userId}>\u202C - ${u.balance} دينار**`).join('\n');
-      const embed = new EmbedBuilder().setTitle('قائمة الأغنياء').setDescription(topMsg).setColor(0x2b2d31);
-      message.channel.send({ embeds: [embed] });
-    }
-    if (command === 'السجل') {
-      const history = userData.history.slice(-5).reverse();
-      const historyMsg = history.map(h => {
-        let typeText = 'هدية';
-        if (h.type === 'TRANSFER_RECEIVE') typeText = 'استلام';
-        if (h.type === 'TRANSFER_SEND') typeText = 'تحويل';
-        return `-# **\u200F${typeText} ${h.amount} دنانير**`;
-      }).join('\n') || '-# **لا يوجد سجل.**';
-      const embed = new EmbedBuilder().setTitle('سجل التحويلات').setDescription(historyMsg).setColor(0x2b2d31);
-      message.channel.send({ embeds: [embed] });
-    }
+
+    const confirmRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('confirm_transfer').setLabel('تأكيد').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('cancel_transfer').setLabel('إلغاء').setStyle(ButtonStyle.Danger)
+    );
+    const confirmMsg = await message.channel.send({ content: `-# **متأكد تبي تحول ${amount} دينار لـ ${target} ؟**`, components: [confirmRow] });
+    pendingTransfers.set(confirmMsg.id, { senderId: message.author.id, targetId: target.id, amount });
+  }
+
+  if (command === 'اغنياء') {
+    const topUsers = await User.find().sort({ balance: -1 }).limit(5);
+    const topMsg = topUsers.map((u, idx) => `-# **\u200F${idx+1}. \u202B<@${u.userId}>\u202C - ${u.balance} دينار**`).join('\n');
+    const embed = new EmbedBuilder().setTitle('قائمة الأغنياء').setDescription(topMsg).setColor(0x2b2d31);
+    message.channel.send({ embeds: [embed] });
+  }
+
+  if (command === 'السجل') {
+    const user = message.mentions.users.first() || message.author;
+    const userData = await getUserData(user.id);
+    const history = userData.history.slice(-5).reverse().map(h => `-# **${h.type}: ${h.amount} (${h.date.toLocaleDateString()})**`).join('\n') || 'لا يوجد سجل.';
+    message.channel.send({ embeds: [new EmbedBuilder().setTitle(`سجل ${user.username}`).setDescription(history).setColor(0x2b2d31)] });
   }
 });
 
 client.on('interactionCreate', async (i) => {
   const globalSettings = await getGlobalSettings();
-  if (!i.guild || !globalSettings.allowedGuilds.includes(i.guild.id)) return;
+  if (i.guild && !globalSettings.allowedGuilds.includes(i.guild.id)) return;
 
   if (i.isChatInputCommand()) {
     const { commandName, options, user, member } = i;
-
-    if (commandName === 'owner') {
-      if (user.id !== OWNER_ID) return i.reply({ content: 'هذا الأمر للمالك فقط يا ذكي <:emoji_43:1397804543789498428>', ephemeral: true });
-      const sub = options.getSubcommand();
-      if (sub === 'guilds') {
-        const action = options.getString('action');
-        const guildId = options.getString('id');
-        if (action === 'add') {
-          if (globalSettings.allowedGuilds.includes(guildId)) return i.reply({ content: 'السيرفر موجود أصلاً!', ephemeral: true });
-          globalSettings.allowedGuilds.push(guildId);
-          await globalSettings.save();
-          return i.reply({ content: `✅ تمت إضافة السيرفر ${guildId} بنجاح!` });
-        } else {
-          globalSettings.allowedGuilds = globalSettings.allowedGuilds.filter(id => id !== guildId);
-          await globalSettings.save();
-          return i.reply({ content: `✅ تم حذف السيرفر ${guildId} من القائمة!` });
-        }
-      }
-    }
+    const userData = await getUserData(user.id);
 
     if (commandName === 'bothelp') {
-      const helpEmbed = new EmbedBuilder()
-        .setTitle('قائمة أوامر البوت')
+      const embed = new EmbedBuilder()
+        .setTitle('قائمة الأوامر')
         .setColor(0x2b2d31)
         .setDescription(`-# **/economy balance - عرض الرصيد**\n-# **/economy transfer - تحويل أموال**\n-# **/economy top - قائمة الأغنياء**\n-# **/games rps - تحدي حجر ورقة مقص**\n-# **/games mafia - لعبة مافيا**\n-# **/welcome test - تجربة الترحيب**\n-# **/giveaway start - بدء قيف أوي**\n-# **أوامر نصية: دنانير، تحويل، اغنياء، السجل، تايم، طرد، حذف**`);
-      return i.reply({ embeds: [helpEmbed] });
+      return i.reply({ embeds: [embed] });
     }
 
     if (commandName === 'economy') {
-      if (i.channel.id !== ECONOMY_CHANNEL_ID) return i.reply({ content: `هذه الأوامر مسموحة فقط في <#${ECONOMY_CHANNEL_ID}>`, ephemeral: true });
       const sub = options.getSubcommand();
-      const userData = await getUserData(user.id);
       if (sub === 'balance') {
         const lastIn = userData.history.filter(h => h.type === 'TRANSFER_RECEIVE').pop() || { amount: 0 };
         return i.reply({ embeds: [new EmbedBuilder().setDescription(`-# **رصيدك الحالي ${userData.balance} دنانير و آخر عملية تحويل تلقيتها بـ ${lastIn.amount} <:money_with_wings:1388212679981666334>**`).setColor(0x2b2d31)] });
@@ -396,9 +381,19 @@ client.on('interactionCreate', async (i) => {
           return i.reply({ content: 'تحتاج رتبة admin عشان تسوي لعبة مافيا يا ذكي <:emoji_43:1397804543789498428>', ephemeral: true });
         }
         const joinRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_mafia').setLabel('انضمام').setStyle(ButtonStyle.Secondary));
-        const embed = new EmbedBuilder().setTitle('لعبة مافيا 🕵️‍♂️').setDescription(`-# **اضغط على الزر للانضمام! نحتاج 4 لاعبين على الأقل.**\n-# **اللاعبين الحاليين: 0**`).setColor(0x2b2d31);
+        const embed = new EmbedBuilder().setTitle('لعبة المافيا <:emoji_38:1401773302619439147>').setDescription(`-# **اضغط على الزر للانضمام! نحتاج 4 لاعبين على الأقل.**\n-# **اللاعبين الحاليين: 0**`).setColor(0x2b2d31);
         const msg = await i.reply({ embeds: [embed], components: [joinRow], fetchReply: true });
-        activeMafiaGames.set(msg.id, { hostId: user.id, players: [], started: false, alive: [], roles: {}, votes: new Map() });
+        activeMafiaGames.set(msg.id, { hostId: user.id, players: [], started: false, alive: [], roles: {}, votes: new Map(), turn: 0 });
+        
+        setTimeout(async () => {
+          const game = activeMafiaGames.get(msg.id);
+          if (game && !game.started) {
+            if (game.players.length < 4) {
+              await i.editReply({ content: '-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **', embeds: [], components: [] }).catch(() => {});
+              activeMafiaGames.delete(msg.id);
+            }
+          }
+        }, 30000);
       }
     }
 
@@ -472,9 +467,9 @@ client.on('interactionCreate', async (i) => {
             const winnerIdx = Math.floor(Math.random() * list.length);
             winners.push(`<@${list.splice(winnerIdx, 1)[0]}>`);
           }
-          const endEmbed = EmbedBuilder.from(embed).setDescription(`-# **انتهى السحب على ${prize}**\n-# **الفائزين:** ${winners.join(', ')}`);
+          const endEmbed = EmbedBuilder.from(embed).setDescription(`-# **انتهى السحب على ${prize}**\n-# **الفائزين هم** ${winners.join(', ')}`);
           await msg.edit({ embeds: [endEmbed], components: [] }).catch(() => {});
-          msg.channel.send(`مبروك${winners.join(', ')}! فزتوا بـ **${prize}**! 🥳`).catch(() => {});
+          msg.channel.send(`-# **مبروك فزتم بـ ${prize} افتحوا تكت عشان تستلموها <:emoji_33:1401771703306027008> **\n-# **${winners.join(', ')}**`).catch(() => {});
         });
       }
     }
@@ -498,7 +493,6 @@ client.on('interactionCreate', async (i) => {
         return i.update({ content: '❌ تم إلغاء عملية التحويل.', components: [] });
       }
       const sender = await getUserData(data.senderId);
-      if (sender.balance < data.amount) return i.update({ content: '❌ رصيدك لا يكفي.', components: [] });
       const target = await getUserData(data.targetId);
       sender.balance -= data.amount; target.balance += data.amount;
       sender.history.push({ type: 'TRANSFER_SEND', amount: data.amount });
@@ -536,12 +530,12 @@ client.on('interactionCreate', async (i) => {
       players.slice(3).forEach(p => game.roles[p] = 'citizen');
 
       await i.update({ content: '✅ بدأت اللعبة! اضغط على الزر لمعرفة دورك.', embeds: [], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('reveal_role').setLabel('كشف دوري').setStyle(ButtonStyle.Secondary))] }).catch(() => {});
-      setTimeout(() => startVoting(i.channel, game), 60000);
+      setTimeout(() => startNight(i.channel, game), 5000);
     }
 
     if (i.customId === 'reveal_role') {
       const game = Array.from(activeMafiaGames.values()).find(g => g.roles[i.user.id]);
-      if (!game) return i.reply({ content: 'أنت لست جزءاً من هذه اللعبة!', ephemeral: true });
+      if (!game) return i.reply({ content: '-# **انت غير مشارك اصلا**', ephemeral: true });
       
       const role = game.roles[i.user.id];
       const roleNames = { mafia: 'مافيا 🔪 <:emoji_38:1470920843398746215>', doctor: 'طبيب 💉 <:emoji_32:1401771771010613319>', police: 'شرطي 🔍 <:s7_discord:1388214117365453062>', citizen: 'مواطن 👨‍🌾 <:emoji_33:1401771703306027008>' };
@@ -550,10 +544,29 @@ client.on('interactionCreate', async (i) => {
       return i.reply({ content: `-# **بدأت اللعبة لا تقول لأحد مين انت <:emoji_84:1389404919672340592> **\n-# **انت الحين ${roleNames[role]} الي تقدر تسويه ${roleDescs[role]}**`, ephemeral: true }).catch(() => {});
     }
 
+    if (i.customId.startsWith('mafia_kill_') || i.customId.startsWith('doctor_save_') || i.customId.startsWith('police_check_')) {
+      const game = Array.from(activeMafiaGames.values()).find(g => g.alive.includes(i.user.id));
+      if (!game) return i.reply({ content: '-# **انت غير مشارك اصلا**', ephemeral: true });
+      if (!game.alive.includes(i.user.id)) return i.reply({ content: 'أنت ميت!', ephemeral: true });
+
+      const [action, , targetId] = i.customId.split('_');
+      if (action === 'mafia') {
+        game.nightAction = { type: 'kill', target: targetId };
+        await i.reply({ content: `اخترت قتل <@${targetId}>`, ephemeral: true });
+      } else if (action === 'doctor') {
+        game.nightAction = { ...game.nightAction, doctorTarget: targetId };
+        await i.reply({ content: `اخترت حماية <@${targetId}>`, ephemeral: true });
+      } else if (action === 'police') {
+        const isMafia = game.roles[targetId] === 'mafia';
+        await i.reply({ content: `الشخص <@${targetId}> هو ${isMafia ? 'المافيا! 🔪' : 'مواطن بريء 😇'}`, ephemeral: true });
+      }
+    }
+
     if (i.customId.startsWith('vote_')) {
       const targetId = i.customId.split('_')[1];
       const game = Array.from(activeMafiaGames.values()).find(g => g.alive.includes(i.user.id));
-      if (!game) return i.reply({ content: 'لست في لعبة نشطة أو أنك ميت!', ephemeral: true });
+      if (!game) return i.reply({ content: '-# **انت غير مشارك اصلا**', ephemeral: true });
+      if (!game.alive.includes(i.user.id)) return i.reply({ content: 'أنت ميت!', ephemeral: true });
       game.votes.set(i.user.id, targetId);
       return i.reply({ content: `تم تسجيل تصويتك ضد <@${targetId}>`, ephemeral: true }).catch(() => {});
     }
@@ -610,6 +623,63 @@ client.on('interactionCreate', async (i) => {
   }
 });
 
+async function startNight(channel, game) {
+  if (game.alive.length <= 1) return checkWinner(channel, game);
+  game.nightAction = {};
+  const mafiaId = Object.keys(game.roles).find(id => game.roles[id] === 'mafia' && game.alive.includes(id));
+  const doctorId = Object.keys(game.roles).find(id => game.roles[id] === 'doctor' && game.alive.includes(id));
+  const policeId = Object.keys(game.roles).find(id => game.roles[id] === 'police' && game.alive.includes(id));
+
+  channel.send('🌃 حل الليل... الأدوار تقوم بمهامها.');
+
+  if (mafiaId) {
+    const row = new ActionRowBuilder();
+    game.alive.filter(id => id !== mafiaId).slice(0, 5).forEach(pId => {
+      row.addComponents(new ButtonBuilder().setCustomId(`mafia_kill_${pId}`).setLabel(client.users.cache.get(pId)?.username || pId).setStyle(ButtonStyle.Danger));
+    });
+    const mafiaUser = await client.users.fetch(mafiaId);
+    mafiaUser.send({ content: 'اختر ضحيتك لهذا الليل:', components: [row] }).catch(() => {});
+  }
+
+  setTimeout(async () => {
+    if (!game.nightAction.target && mafiaId) {
+      game.alive = game.alive.filter(id => id !== mafiaId);
+      channel.send(`-# **تم طرد القاتل <@${mafiaId}> لأنه لم ينفذ مهمته في الوقت المحدد!**`);
+      return checkWinner(channel, game);
+    }
+
+    if (doctorId) {
+      const row = new ActionRowBuilder();
+      game.alive.slice(0, 5).forEach(pId => {
+        row.addComponents(new ButtonBuilder().setCustomId(`doctor_save_${pId}`).setLabel(client.users.cache.get(pId)?.username || pId).setStyle(ButtonStyle.Success));
+      });
+      const doctorUser = await client.users.fetch(doctorId);
+      doctorUser.send({ content: 'اختر شخصاً لحمايته:', components: [row] }).catch(() => {});
+    }
+
+    if (policeId) {
+      const row = new ActionRowBuilder();
+      game.alive.filter(id => id !== policeId).slice(0, 5).forEach(pId => {
+        row.addComponents(new ButtonBuilder().setCustomId(`police_check_${pId}`).setLabel(client.users.cache.get(pId)?.username || pId).setStyle(ButtonStyle.Primary));
+      });
+      const policeUser = await client.users.fetch(policeId);
+      policeUser.send({ content: 'اختر شخصاً للكشف عن هويته:', components: [row] }).catch(() => {});
+    }
+
+    setTimeout(() => {
+      const killedId = game.nightAction.target;
+      const savedId = game.nightAction.doctorTarget;
+      if (killedId && killedId !== savedId) {
+        game.alive = game.alive.filter(id => id !== killedId);
+        channel.send(`🌅 طلع الصبح... للأسف تم قتل <@${killedId}>.`);
+      } else {
+        channel.send('🌅 طلع الصبح... لم يمت أحد هذا الليل.');
+      }
+      startVoting(channel, game);
+    }, 15000);
+  }, 30000);
+}
+
 async function startVoting(channel, game) {
   if (game.alive.length <= 1) return checkWinner(channel, game);
   const row = new ActionRowBuilder();
@@ -630,9 +700,9 @@ async function startVoting(channel, game) {
       if (role === 'mafia') return checkWinner(channel, game);
     } else { channel.send('لم يتم التصويت على أحد، تستمر اللعبة...').catch(() => {}); }
     game.votes.clear();
-    if (game.alive.length > 1) setTimeout(() => startVoting(channel, game), 60000);
+    if (game.alive.length > 1) startNight(channel, game);
     else checkWinner(channel, game);
-  }, 60000);
+  }, 30000);
 }
 
 function checkWinner(channel, game) {
