@@ -255,117 +255,125 @@ client.on('messageCreate', async (message) => {
       await member.kick();
       message.channel.send(`-# **انطرد ${memberTag} يا مسكين وش سوا يا ترى <:s7_discord:1388214117365453062>**`);
     } catch (error) {
-      message.channel.send(`-# **ما اقدر اطرده، تأكد من صلاحيات البوت <:emoji_43:1397804543789498428>**`);
+      message.channel.send(`-# **ما تقدر تسويها هو يدعس عليك <:emoji_43:1397804543789498428>**`);
     }
   }
 
   if (command === 'حذف') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return;
-    const amount = parseInt(args[1]);
-    if (isNaN(amount) || amount < 1 || amount > 100) return message.channel.send(`-# **حدد عدد الرسائل (1-100) يا ذكي <:emoji_334:1388211595053760663>**`);
-    try {
-      await message.channel.bulkDelete(amount + 1);
-      const msg = await message.channel.send(`-# **تم حذف ${amount} رسالة بنجاح <:2thumbup:1467287897429512396>**`);
-      setTimeout(() => msg.delete().catch(() => {}), 3000);
-    } catch (error) {
-      message.channel.send(`-# **ما اقدر احذف الرسائل، تأكد من صلاحيات البوت <:emoji_43:1397804543789498428>**`);
+    const num = parseInt(args[1]);
+    if (num > 0 && num <= 100) await message.channel.bulkDelete(num + 1);
+  }
+
+  // أوامر الاقتصاد النصية
+  if (message.channel.id === ECONOMY_CHANNEL_ID) {
+    const userData = await getUserData(message.author.id);
+    if (command === 'دنانير') {
+      const lastIn = userData.history.filter(h => h.type === 'TRANSFER_RECEIVE').pop() || { amount: 0 };
+      message.channel.send({ embeds: [new EmbedBuilder().setDescription(`-# **رصيدك الحالي ${userData.balance} من دنانير و آخر عملية تحويل تلقيتها بـ ${lastIn.amount} <:money_with_wings:1388212679981666334>**`).setColor(0x2b2d31)] });
     }
-  }
-
-  if (command === 'دنانير') {
-    const user = await getUserData(message.author.id);
-    message.channel.send(`-# **رصيدك الحالي هو ${user.balance} دينار <a:moneywith_:1470458218953179237>**`);
-  }
-
-  if (command === 'تحويل') {
-    const target = message.mentions.users.first();
-    const amount = parseInt(args.find(a => /^\d+$/.test(a)));
-    if (!target || isNaN(amount) || amount <= 0) return message.channel.send(`-# **الصيغة غلط يا ذكي: تحويل @شخص 100 <:emoji_334:1388211595053760663>**`);
-    if (target.id === message.author.id) return message.channel.send(`-# **ما تقدر تحول لنفسك يا اهبل <:emoji_464:1388211597197050029>**`);
-    if (target.bot) return message.channel.send(`-# **البوتات ما تحتاج فلوس، عندها شغل أهم منك <:emoji_464:1388211597197050029>**`);
-    
-    const sender = await getUserData(message.author.id);
-    if (sender.balance < amount) return message.channel.send(`-# **ما عندك رصيد كافي يا طفران <:emoji_464:1388211597197050029>**`);
-    
-    const cooldown = transferCooldowns.get(message.author.id);
-    if (cooldown && Date.now() - cooldown < 10000) return message.channel.send(`-# **انتظر شوي بين التحويلات يا مستعجل <:emoji_464:1388211597197050029>**`);
-
-    const embed = new EmbedBuilder()
-      .setTitle('تأكيد التحويل')
-      .setDescription(`-# **هل أنت متأكد من تحويل ${amount} دينار إلى ${target}؟**`)
-      .setColor(0x2b2d31);
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('confirm_transfer').setLabel('تأكيد').setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId('cancel_transfer').setLabel('إلغاء').setStyle(ButtonStyle.Danger)
-    );
-    const msg = await message.channel.send({ embeds: [embed], components: [row] });
-    pendingTransfers.set(msg.id, { senderId: message.author.id, targetId: target.id, amount });
-  }
-
-  if (command === 'اغنياء') {
-    const topUsers = await User.find().sort({ balance: -1 }).limit(10);
-    const list = topUsers.map((u, i) => `${i + 1}. <@${u.userId}> - ${u.balance} دينار`).join('\n');
-    const embed = new EmbedBuilder().setTitle('قائمة الأغنياء 💰').setDescription(list || 'لا يوجد مستخدمين بعد.').setColor(0x2b2d31);
-    message.channel.send({ embeds: [embed] });
-  }
-
-  if (command === 'السجل') {
-    const user = await getUserData(message.author.id);
-    const history = user.history.slice(-5).reverse().map(h => `- ${h.type}: ${h.amount} (${new Date(h.date).toLocaleDateString()})`).join('\n');
-    const embed = new EmbedBuilder().setTitle('سجل المعاملات').setDescription(history || 'لا يوجد سجل بعد.').setColor(0x2b2d31);
-    message.channel.send({ embeds: [embed] });
+    if (command === 'تحويل') {
+      const lastTransfer = transferCooldowns.get(message.author.id);
+      if (lastTransfer && Date.now() - lastTransfer < 10000) {
+        const remaining = Math.ceil((10000 - (Date.now() - lastTransfer)) / 1000);
+        return message.channel.send(`-# **انتظر ${remaining} ثواني قبل التحويل مرة أخرى.**`);
+      }
+      const target = message.mentions.users.first();
+      const amount = parseInt(args.find(a => /^\d+$/.test(a)));
+      if (!target || isNaN(amount) || amount <= 0) return message.channel.send(`-# **استخدم: تحويل @الشخص القيمة**`);
+      if (userData.balance < amount) return message.channel.send(`رصيدك لا يكفي.`);
+      if (target.id === message.author.id) return message.channel.send(`ما تقدر تحول لنفسك.`);
+      const confirmRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('confirm_transfer').setLabel('تأكيد').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('cancel_transfer').setLabel('إلغاء').setStyle(ButtonStyle.Danger)
+      );
+      const confirmMsg = await message.channel.send({ content: `-# **متأكد تبي تحول ${amount} دينار لـ ${target} ؟**`, components: [confirmRow] });
+      pendingTransfers.set(confirmMsg.id, { senderId: message.author.id, targetId: target.id, amount });
+    }
+    if (command === 'اغنياء') {
+      const topUsers = await User.find().sort({ balance: -1 }).limit(5);
+      const topMsg = topUsers.map((u, idx) => `-# **\u200F${idx+1}. \u202B<@${u.userId}>\u202C - ${u.balance} دينار**`).join('\n');
+      const embed = new EmbedBuilder().setTitle('قائمة الأغنياء').setDescription(topMsg).setColor(0x2b2d31);
+      message.channel.send({ embeds: [embed] });
+    }
+    if (command === 'السجل') {
+      const history = userData.history.slice(-5).reverse();
+      const historyMsg = history.map(h => {
+        let typeText = 'هدية';
+        if (h.type === 'TRANSFER_RECEIVE') typeText = 'استلام';
+        if (h.type === 'TRANSFER_SEND') typeText = 'تحويل';
+        return `-# **\u200F${typeText} ${h.amount} دنانير**`;
+      }).join('\n') || '-# **لا يوجد سجل.**';
+      const embed = new EmbedBuilder().setTitle('سجل التحويلات').setDescription(historyMsg).setColor(0x2b2d31);
+      message.channel.send({ embeds: [embed] });
+    }
   }
 });
 
 client.on('interactionCreate', async (i) => {
   const globalSettings = await getGlobalSettings();
-  if (!globalSettings.allowedGuilds.includes(i.guild.id)) return;
+  if (!i.guild || !globalSettings.allowedGuilds.includes(i.guild.id)) return;
 
   if (i.isChatInputCommand()) {
     const { commandName, options, user, member } = i;
 
+    if (commandName === 'owner') {
+      if (user.id !== OWNER_ID) return i.reply({ content: 'هذا الأمر للمالك فقط يا ذكي <:emoji_43:1397804543789498428>', ephemeral: true });
+      const sub = options.getSubcommand();
+      if (sub === 'guilds') {
+        const action = options.getString('action');
+        const guildId = options.getString('id');
+        if (action === 'add') {
+          if (globalSettings.allowedGuilds.includes(guildId)) return i.reply({ content: 'السيرفر موجود أصلاً!', ephemeral: true });
+          globalSettings.allowedGuilds.push(guildId);
+          await globalSettings.save();
+          return i.reply({ content: `✅ تمت إضافة السيرفر ${guildId} بنجاح!` });
+        } else {
+          globalSettings.allowedGuilds = globalSettings.allowedGuilds.filter(id => id !== guildId);
+          await globalSettings.save();
+          return i.reply({ content: `✅ تم حذف السيرفر ${guildId} من القائمة!` });
+        }
+      }
+    }
+
     if (commandName === 'bothelp') {
-      const embed = new EmbedBuilder()
-        .setTitle('قائمة أوامر البوت 🤖')
-        .setDescription(`-# **/economy balance - عرض الرصيد**\n-# **/economy transfer - تحويل أموال**\n-# **/economy top - قائمة الأغنياء**\n-# **/games rps - تحدي حجر ورقة مقص**\n-# **/games mafia - لعبة مافيا**\n-# **/welcome test - تجربة الترحيب**\n-# **/giveaway start - بدء قيف أوي**\n-# **أوامر نصية: دنانير، تحويل، اغنياء، السجل، تايم، طرد، حذف**`)
-        .setColor(0x2b2d31);
-      i.reply({ embeds: [embed] });
+      const helpEmbed = new EmbedBuilder()
+        .setTitle('قائمة أوامر البوت')
+        .setColor(0x2b2d31)
+        .setDescription(`-# **/economy balance - عرض الرصيد**\n-# **/economy transfer - تحويل أموال**\n-# **/economy top - قائمة الأغنياء**\n-# **/games rps - تحدي حجر ورقة مقص**\n-# **/games mafia - لعبة مافيا**\n-# **/welcome test - تجربة الترحيب**\n-# **/giveaway start - بدء قيف أوي**\n-# **أوامر نصية: دنانير، تحويل، اغنياء، السجل، تايم، طرد، حذف**`);
+      return i.reply({ embeds: [helpEmbed] });
     }
 
     if (commandName === 'economy') {
+      if (i.channel.id !== ECONOMY_CHANNEL_ID) return i.reply({ content: `هذه الأوامر مسموحة فقط في <#${ECONOMY_CHANNEL_ID}>`, ephemeral: true });
       const sub = options.getSubcommand();
+      const userData = await getUserData(user.id);
       if (sub === 'balance') {
-        const userData = await getUserData(user.id);
-        i.reply({ content: `-# **رصيدك الحالي هو ${userData.balance} دينار <a:moneywith_:1470458218953179237>**` });
+        const lastIn = userData.history.filter(h => h.type === 'TRANSFER_RECEIVE').pop() || { amount: 0 };
+        return i.reply({ embeds: [new EmbedBuilder().setDescription(`-# **رصيدك الحالي ${userData.balance} دنانير و آخر عملية تحويل تلقيتها بـ ${lastIn.amount} <:money_with_wings:1388212679981666334>**`).setColor(0x2b2d31)] });
       }
       if (sub === 'transfer') {
+        const lastTransfer = transferCooldowns.get(user.id);
+        if (lastTransfer && Date.now() - lastTransfer < 10000) {
+          const remaining = Math.ceil((10000 - (Date.now() - lastTransfer)) / 1000);
+          return i.reply({ content: `انتظر ${remaining} ثواني قبل التحويل مرة أخرى.`, ephemeral: true });
+        }
         const target = options.getUser('user');
         const amount = options.getInteger('amount');
-        if (target.id === user.id) return i.reply({ content: '-# **ما تقدر تحول لنفسك يا اهبل <:emoji_464:1388211597197050029>**', ephemeral: true });
-        if (target.bot) return i.reply({ content: '-# **البوتات ما تحتاج فلوس، عندها شغل أهم منك <:emoji_464:1388211597197050029>**', ephemeral: true });
-        
-        const sender = await getUserData(user.id);
-        if (sender.balance < amount) return i.reply({ content: '-# **ما عندك رصيد كافي يا طفران <:emoji_464:1388211597197050029>**', ephemeral: true });
-        
-        const cooldown = transferCooldowns.get(user.id);
-        if (cooldown && Date.now() - cooldown < 10000) return i.reply({ content: '-# **انتظر شوي بين التحويلات يا مستعجل <:emoji_464:1388211597197050029>**', ephemeral: true });
-
-        const embed = new EmbedBuilder()
-          .setTitle('تأكيد التحويل')
-          .setDescription(`-# **هل أنت متأكد من تحويل ${amount} دينار إلى ${target}؟**`)
-          .setColor(0x2b2d31);
-        const row = new ActionRowBuilder().addComponents(
+        if (userData.balance < amount) return i.reply({ content: 'رصيدك لا يكفي.', ephemeral: true });
+        if (target.id === user.id) return i.reply({ content: 'ما تقدر تحول لنفسك.', ephemeral: true });
+        const confirmRow = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId('confirm_transfer').setLabel('تأكيد').setStyle(ButtonStyle.Success),
           new ButtonBuilder().setCustomId('cancel_transfer').setLabel('إلغاء').setStyle(ButtonStyle.Danger)
         );
-        const msg = await i.reply({ embeds: [embed], components: [row], fetchReply: true });
-        pendingTransfers.set(msg.id, { senderId: user.id, targetId: target.id, amount });
+        const confirmMsg = await i.reply({ content: `-# **متأكد تبي تحول ${amount} دينار لـ ${target} ؟**`, components: [confirmRow], fetchReply: true });
+        pendingTransfers.set(confirmMsg.id, { senderId: user.id, targetId: target.id, amount });
       }
       if (sub === 'top') {
-        const topUsers = await User.find().sort({ balance: -1 }).limit(10);
-        const list = topUsers.map((u, idx) => `${idx + 1}. <@${u.userId}> - ${u.balance} دينار`).join('\n');
-        const embed = new EmbedBuilder().setTitle('قائمة الأغنياء 💰').setDescription(list || 'لا يوجد مستخدمين بعد.').setColor(0x2b2d31);
-        i.reply({ embeds: [embed] });
+        const topUsers = await User.find().sort({ balance: -1 }).limit(5);
+        const topMsg = topUsers.map((u, idx) => `-# **\u200F${idx+1}. \u202B<@${u.userId}>\u202C - ${u.balance} دينار**`).join('\n');
+        const embed = new EmbedBuilder().setTitle('قائمة الأغنياء').setDescription(topMsg).setColor(0x2b2d31);
+        return i.reply({ embeds: [embed] });
       }
     }
 
@@ -388,18 +396,9 @@ client.on('interactionCreate', async (i) => {
           return i.reply({ content: 'تحتاج رتبة admin عشان تسوي لعبة مافيا يا ذكي <:emoji_43:1397804543789498428>', ephemeral: true });
         }
         const joinRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_mafia').setLabel('انضمام').setStyle(ButtonStyle.Secondary));
-        const embed = new EmbedBuilder().setTitle('لعبة المافيا <:emoji_38:1401773302619439147>').setDescription(`-# **اضغط على الزر للانضمام! نحتاج 4 لاعبين على الأقل.**\n-# **اللاعبين الحاليين: 0**`).setColor(0x2b2d31);
+        const embed = new EmbedBuilder().setTitle('لعبة مافيا 🕵️‍♂️').setDescription(`-# **اضغط على الزر للانضمام! نحتاج 4 لاعبين على الأقل.**\n-# **اللاعبين الحاليين: 0**`).setColor(0x2b2d31);
         const msg = await i.reply({ embeds: [embed], components: [joinRow], fetchReply: true });
         activeMafiaGames.set(msg.id, { hostId: user.id, players: [], started: false, alive: [], roles: {}, votes: new Map() });
-        
-        // تعديل: فشل اللعبة بعد 30 ثانية لو محد دخل
-        setTimeout(async () => {
-          const game = activeMafiaGames.get(msg.id);
-          if (game && !game.started && game.players.length < 4) {
-            activeMafiaGames.delete(msg.id);
-            await msg.edit({ content: '-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **', embeds: [], components: [] }).catch(() => {});
-          }
-        }, 30000);
       }
     }
 
@@ -473,11 +472,9 @@ client.on('interactionCreate', async (i) => {
             const winnerIdx = Math.floor(Math.random() * list.length);
             winners.push(`<@${list.splice(winnerIdx, 1)[0]}>`);
           }
-          // تعديل: الفائزين هم
-          const endEmbed = EmbedBuilder.from(embed).setDescription(`-# **انتهى السحب على ${prize}**\n-# **الفائزين هم ** ${winners.join(', ')}`);
+          const endEmbed = EmbedBuilder.from(embed).setDescription(`-# **انتهى السحب على ${prize}**\n-# **الفائزين:** ${winners.join(', ')}`);
           await msg.edit({ embeds: [endEmbed], components: [] }).catch(() => {});
-          // تعديل: رسالة الانتهاء
-          msg.channel.send(`-# **مبروك فزتم بـ ${prize} افتحوا تكت عشان تستلموها <:emoji_33:1401771703306027008> **\n-# ** ${winners.join(', ')}**`).catch(() => {});
+          msg.channel.send(`مبروك${winners.join(', ')}! فزتوا بـ **${prize}**! 🥳`).catch(() => {});
         });
       }
     }
@@ -501,6 +498,7 @@ client.on('interactionCreate', async (i) => {
         return i.update({ content: '❌ تم إلغاء عملية التحويل.', components: [] });
       }
       const sender = await getUserData(data.senderId);
+      if (sender.balance < data.amount) return i.update({ content: '❌ رصيدك لا يكفي.', components: [] });
       const target = await getUserData(data.targetId);
       sender.balance -= data.amount; target.balance += data.amount;
       sender.history.push({ type: 'TRANSFER_SEND', amount: data.amount });
@@ -537,7 +535,7 @@ client.on('interactionCreate', async (i) => {
       game.roles[players[2]] = 'police';
       players.slice(3).forEach(p => game.roles[p] = 'citizen');
 
-      await i.update({ content: '-# **✅ بدأت اللعبة! اضغط على الزر لمعرفة دورك.**', embeds: [], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('reveal_role').setLabel('كشف دوري').setStyle(ButtonStyle.Secondary))] }).catch(() => {});
+      await i.update({ content: '✅ بدأت اللعبة! اضغط على الزر لمعرفة دورك.', embeds: [], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('reveal_role').setLabel('كشف دوري').setStyle(ButtonStyle.Secondary))] }).catch(() => {});
       setTimeout(() => startVoting(i.channel, game), 60000);
     }
 
@@ -557,7 +555,7 @@ client.on('interactionCreate', async (i) => {
       const game = Array.from(activeMafiaGames.values()).find(g => g.alive.includes(i.user.id));
       if (!game) return i.reply({ content: 'لست في لعبة نشطة أو أنك ميت!', ephemeral: true });
       game.votes.set(i.user.id, targetId);
-      return i.reply({ content: `-# **تم تسجيل تصويتك ضد <@${targetId}>**`, ephemeral: true }).catch(() => {});
+      return i.reply({ content: `تم تسجيل تصويتك ضد <@${targetId}>`, ephemeral: true }).catch(() => {});
     }
 
     // معالجة أزرار RPS
@@ -569,7 +567,7 @@ client.on('interactionCreate', async (i) => {
       
       if (i.customId === 'rps_decline') {
         activeRPSGames.delete(i.message.id);
-        return i.update({ content: '-# **❌ تم رفض التحدي.**', components: [] }).catch(() => {});
+        return i.update({ content: '❌ تم رفض التحدي.', components: [] }).catch(() => {});
       }
       game.accepted = true;
       const row = new ActionRowBuilder().addComponents(
@@ -577,7 +575,7 @@ client.on('interactionCreate', async (i) => {
         new ButtonBuilder().setCustomId('rps_paper').setLabel('ورقة 📄').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('rps_scissors').setLabel('مقص ✂️').setStyle(ButtonStyle.Primary)
       );
-      await i.update({ content: '-# **بدأ التحدي! اختاروا أسلحتكم (الرسائل مخفية)**', components: [row] }).catch(() => {});
+      await i.update({ content: 'بدأ التحدي! اختاروا أسلحتكم (الرسائل مخفية)', components: [row] }).catch(() => {});
     }
 
     if (['rps_rock', 'rps_paper', 'rps_scissors'].includes(i.customId)) {
@@ -591,13 +589,13 @@ client.on('interactionCreate', async (i) => {
         if (game.opponentChoice) return i.reply({ content: 'اخترت خلاص!', ephemeral: true }).catch(() => {});
         game.opponentChoice = choice;
       }
-      await i.reply({ content: `-# **اخترت ${choice === 'rock' ? 'حجر' : choice === 'paper' ? 'ورقة' : 'مقص'}!**`, ephemeral: true }).catch(() => {});
+      await i.reply({ content: `اخترت ${choice === 'rock' ? 'حجر' : choice === 'paper' ? 'ورقة' : 'مقص'}!`, ephemeral: true }).catch(() => {});
       if (game.challengerChoice && game.opponentChoice) {
         const names = { rock: 'حجر 🪨', paper: 'ورقة 📄', scissors: 'مقص ✂️' };
         let result = '';
-        if (game.challengerChoice === game.opponentChoice) result = '-# **تعادل! 🤝**';
-        else if ((game.challengerChoice === 'rock' && game.opponentChoice === 'scissors') || (game.challengerChoice === 'paper' && game.opponentChoice === 'rock') || (game.challengerChoice === 'scissors' && game.opponentChoice === 'paper')) result = `-# **\u200F<@${game.challenger}>\u202C فاز على \u200F<@${game.opponent}>\u202C! 🏆**`;
-        else result = `-# **\u200F<@${game.opponent}>\u202C فاز على \u200F<@${game.challenger}>\u202C! 🏆**`;
+        if (game.challengerChoice === game.opponentChoice) result = 'تعادل! 🤝';
+        else if ((game.challengerChoice === 'rock' && game.opponentChoice === 'scissors') || (game.challengerChoice === 'paper' && game.opponentChoice === 'rock') || (game.challengerChoice === 'scissors' && game.opponentChoice === 'paper')) result = `\u200F<@${game.challenger}>\u202C فاز على \u200F<@${game.opponent}>\u202C! 🏆`;
+        else result = `\u200F<@${game.opponent}>\u202C فاز على \u200F<@${game.challenger}>\u202C! 🏆`;
         await i.message.edit({ content: `**انتهى التحدي!**\n-# \u200F<@${game.challenger}>\u202C: ${names[game.challengerChoice]}\n-# \u200F<@${game.opponent}>\u202C: ${names[game.opponentChoice]}\n\n${result}`, components: [] }).catch(() => {});
         activeRPSGames.delete(i.message.id);
       }
@@ -606,9 +604,9 @@ client.on('interactionCreate', async (i) => {
     if (i.customId === 'open_ticket') {
       const ch = await i.guild.channels.create({ name: `ticket-${i.user.username}`, type: ChannelType.GuildText, permissionOverwrites: [{ id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] }, { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }] });
       ch.send({ content: `${i.user}`, components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق').setStyle(ButtonStyle.Danger))] });
-      i.reply({ content: `-# **تم فتح التذكرة ${ch}**`, ephemeral: true });
+      i.reply({ content: `تم فتح التذكرة ${ch}`, ephemeral: true });
     }
-    if (i.customId === 'close_ticket') { await i.reply('-# **سيتم الإغلاق...**'); setTimeout(() => i.channel.delete(), 3000); }
+    if (i.customId === 'close_ticket') { await i.reply('سيتم الإغلاق...'); setTimeout(() => i.channel.delete(), 3000); }
   }
 });
 
@@ -630,7 +628,7 @@ async function startVoting(channel, game) {
       game.alive = game.alive.filter(id => id !== kickedId);
       channel.send(`-# ** تم طرد <@${kickedId}> و هو كان ${roleNames[role]} **`).catch(() => {});
       if (role === 'mafia') return checkWinner(channel, game);
-    } else { channel.send('-# **لم يتم التصويت على أحد، تستمر اللعبة...**').catch(() => {}); }
+    } else { channel.send('لم يتم التصويت على أحد، تستمر اللعبة...').catch(() => {}); }
     game.votes.clear();
     if (game.alive.length > 1) setTimeout(() => startVoting(channel, game), 60000);
     else checkWinner(channel, game);
