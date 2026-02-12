@@ -511,11 +511,12 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // 3️⃣ أوامر الاقتصاد
+  // 3️⃣ أوامر الاقتصاد - ✅ تعديل رسالة الرصيد
   if (command === 'دنانير') {
     const user = message.mentions.users.first() || message.author;
     const userData = await getUserData(user.id);
-    message.channel.send(`-# **رصيد ${user} هو ${userData.balance} دينار <:money_with_wings:1388212679981666334>**`);
+    const lastIn = userData.history.filter(h => h.type === 'TRANSFER_RECEIVE').pop() || { amount: 0 };
+    message.channel.send(`-# **رصيدك الحالي ${userData.balance} و اخر عملية تحويل تلقيتها كانت بـ ${lastIn.amount}**`);
     return;
   }
 
@@ -574,7 +575,6 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // ✅ أمر ايقاف اللعبة - مضبوط 100%
   if (command === 'ايقاف') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
     
@@ -691,7 +691,7 @@ client.on('interactionCreate', async (i) => {
       const sub = options.getSubcommand();
       if (sub === 'balance') {
         const lastIn = userData.history.filter(h => h.type === 'TRANSFER_RECEIVE').pop() || { amount: 0 };
-        return i.reply({ embeds: [new EmbedBuilder().setDescription(`-# **رصيدك الحالي ${userData.balance} دينار و آخر عملية تحويل تلقيتها بـ ${lastIn.amount} <:money_with_wings:1388212679981666334>**`).setColor(0x2b2d31)] });
+        return i.reply({ content: `-# **رصيدك الحالي ${userData.balance} و اخر عملية تحويل تلقيتها كانت بـ ${lastIn.amount}**`, ephemeral: false });
       }
       if (sub === 'transfer') {
         const lastTransfer = transferCooldowns.get(user.id);
@@ -737,6 +737,7 @@ client.on('interactionCreate', async (i) => {
       return;
     }
 
+    // ✅ نظام القيف أوي - زر الخروج شغال 100%
     if (commandName === 'giveaway') {
       const sub = options.getSubcommand();
       if (sub === 'start') {
@@ -759,20 +760,41 @@ client.on('interactionCreate', async (i) => {
         const msg = await i.reply({ embeds: [embed], components: [row], fetchReply: true });
         const participants = new Set();
         const collector = msg.createMessageComponentCollector({ time: durationMs });
+        
         collector.on('collect', async (btn) => {
           if (btn.customId === 'join_giveaway') {
             if (participants.has(btn.user.id)) {
-              const exitRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('exit_giveaway').setLabel('خروج').setStyle(ButtonStyle.Secondary));
-              return btn.reply({ content: `-# **انت داخل السحب اصلا تبي تطلع ؟ <:__:1467633552408576192> **`, components: [exitRow], ephemeral: true }).catch(() => { });
+              const exitRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                  .setCustomId(`exit_giveaway_${msg.id}`)
+                  .setLabel('خروج')
+                  .setStyle(ButtonStyle.Secondary)
+              );
+              return btn.reply({ 
+                content: `-# **انت داخل السحب اصلا تبي تطلع ؟ <:__:1467633552408576192> **`, 
+                components: [exitRow], 
+                ephemeral: true 
+              }).catch(() => { });
             }
             participants.add(btn.user.id);
-            btn.reply({ content: `-# **تم دخولك فالسحب يا رب تفوز <:2thumbup:1467287897429512396> **`, ephemeral: true }).catch(() => { });
+            await btn.reply({ 
+              content: `-# **تم دخولك فالسحب يا رب تفوز <:2thumbup:1467287897429512396> **`, 
+              ephemeral: true 
+            }).catch(() => { });
           }
-          if (btn.customId === 'exit_giveaway') {
-            participants.delete(btn.user.id);
-            btn.update({ content: `-# **تم خروجك من السحب <:s7_discord:1388214117365453062> **`, components: [], ephemeral: true }).catch(() => { });
+          
+          if (btn.customId === `exit_giveaway_${msg.id}`) {
+            if (participants.has(btn.user.id)) {
+              participants.delete(btn.user.id);
+              await btn.update({ 
+                content: `-# **تم خروجك من السحب <:s7_discord:1388214117365453062> **`, 
+                components: [], 
+                ephemeral: true 
+              }).catch(() => { });
+            }
           }
         });
+
         collector.on('end', async () => {
           const list = Array.from(participants);
           if (list.length === 0) return msg.edit({ content: '❌ انتهى القيف أوي بدون مشاركين.', embeds: [], components: [] }).catch(() => { });
