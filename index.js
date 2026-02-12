@@ -449,7 +449,7 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // 2️⃣ أوامر الإدارة - بدون شرط الروم
+  // 2️⃣ أوامر الإدارة
   if (command === 'تايم') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
     const member = message.mentions.members.first();
@@ -511,9 +511,13 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // 3️⃣ أوامر الاقتصاد - ✅ شرط الروم مضاف
+  // 3️⃣ أوامر الاقتصاد - ✅ شرط الروم + استثناء الأدمن
+  const isAdmin = message.member.permissions.has(PermissionsBitField.Flags.Administrator);
+  
   if (command === 'دنانير' || command === 'تحويل' || command === 'اغنياء' || command === 'السجل') {
-    if (message.channel.id !== ECONOMY_CHANNEL_ID) return;
+    if (!isAdmin && message.channel.id !== ECONOMY_CHANNEL_ID) {
+      return message.channel.send(`-# **هذا الامر في روم <#${ECONOMY_CHANNEL_ID}> <:1_81:1467286889877999843> **`);
+    }
   }
 
   if (command === 'دنانير') {
@@ -680,7 +684,7 @@ client.on('interactionCreate', async (i) => {
   if (i.guild && !globalSettings.allowedGuilds.includes(i.guild.id)) return;
 
   if (i.isChatInputCommand()) {
-    const { commandName, options, user, member, guild } = i;
+    const { commandName, options, user, member } = i;
     const userData = await getUserData(user.id);
 
     if (commandName === 'bothelp') {
@@ -692,9 +696,13 @@ client.on('interactionCreate', async (i) => {
     }
 
     if (commandName === 'economy') {
-      // ✅ شرط الروم لأوامر الاقتصاد السلاشية
-      if (i.channel.id !== ECONOMY_CHANNEL_ID) {
-        return i.reply({ content: `❌ أوامر الاقتصاد فقط في <#${ECONOMY_CHANNEL_ID}>`, ephemeral: true });
+      // ✅ شرط الروم + استثناء الأدمن
+      const isAdmin = member.permissions.has(PermissionsBitField.Flags.Administrator);
+      if (!isAdmin && i.channel.id !== ECONOMY_CHANNEL_ID) {
+        return i.reply({ 
+          content: `-# **هذا الامر في روم <#${ECONOMY_CHANNEL_ID}> <:1_81:1467286889877999843> **`, 
+          ephemeral: false 
+        });
       }
 
       const sub = options.getSubcommand();
@@ -746,7 +754,7 @@ client.on('interactionCreate', async (i) => {
       return;
     }
 
-    // ✅ نظام القيف أوي - زر الخروج شغال 100%
+    // ✅ نظام القيف أوي - بدون زر خروج
     if (commandName === 'giveaway') {
       const sub = options.getSubcommand();
       if (sub === 'start') {
@@ -773,15 +781,8 @@ client.on('interactionCreate', async (i) => {
         collector.on('collect', async (btn) => {
           if (btn.customId === 'join_giveaway') {
             if (participants.has(btn.user.id)) {
-              const exitRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                  .setCustomId(`exit_giveaway_${msg.id}`)
-                  .setLabel('خروج')
-                  .setStyle(ButtonStyle.Secondary)
-              );
               return btn.reply({ 
-                content: `-# **انت داخل السحب اصلا تبي تطلع ؟ <:__:1467633552408576192> **`, 
-                components: [exitRow], 
+                content: `-# **انت داخل القيف اصلا <:__:1467633552408576192> **`, 
                 ephemeral: true 
               }).catch(() => { });
             }
@@ -790,17 +791,6 @@ client.on('interactionCreate', async (i) => {
               content: `-# **تم دخولك فالسحب يا رب تفوز <:2thumbup:1467287897429512396> **`, 
               ephemeral: true 
             }).catch(() => { });
-          }
-          
-          if (btn.customId === `exit_giveaway_${msg.id}`) {
-            if (participants.has(btn.user.id)) {
-              participants.delete(btn.user.id);
-              await btn.update({ 
-                content: `-# **تم خروجك من السحب <:s7_discord:1388214117365453062> **`, 
-                components: [], 
-                ephemeral: true 
-              }).catch(() => { });
-            }
           }
         });
 
@@ -929,8 +919,10 @@ client.on('interactionCreate', async (i) => {
       if (!game || game.started) { return i.reply({ content: `-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **`, ephemeral: true }).catch(() => { }); }
       if (game.players.length >= 6) { return i.reply({ content: `-# **اللعبة ممتلئة للأسف ليش ما جيت بسرعه <:emoji_84:1389404919672340592> **`, ephemeral: true }).catch(() => { }); }
       if (game.players.includes(i.user.id)) {
-        const exitRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`exit_number_game_${i.message.id}`).setLabel('خروج').setStyle(ButtonStyle.Secondary));
-        return i.reply({ content: `-# **انت داخل اللعبة اصلا تبي تطلع ؟ <:__:1467633552408576192> **`, components: [exitRow], ephemeral: true }).catch(() => { });
+        return i.reply({ 
+          content: `-# **انت داخل اللعبة اصلا <:__:1467633552408576192> **`, 
+          ephemeral: true 
+        }).catch(() => { });
       }
       game.players.push(i.user.id);
       game.attempts.set(i.user.id, 0);
