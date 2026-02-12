@@ -449,7 +449,7 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // 2️⃣ أوامر الإدارة
+  // 2️⃣ أوامر الإدارة - بدون شرط الروم
   if (command === 'تايم') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
     const member = message.mentions.members.first();
@@ -511,7 +511,11 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // 3️⃣ أوامر الاقتصاد - ✅ تعديل رسالة الرصيد
+  // 3️⃣ أوامر الاقتصاد - ✅ شرط الروم مضاف
+  if (command === 'دنانير' || command === 'تحويل' || command === 'اغنياء' || command === 'السجل') {
+    if (message.channel.id !== ECONOMY_CHANNEL_ID) return;
+  }
+
   if (command === 'دنانير') {
     const user = message.mentions.users.first() || message.author;
     const userData = await getUserData(user.id);
@@ -688,6 +692,11 @@ client.on('interactionCreate', async (i) => {
     }
 
     if (commandName === 'economy') {
+      // ✅ شرط الروم لأوامر الاقتصاد السلاشية
+      if (i.channel.id !== ECONOMY_CHANNEL_ID) {
+        return i.reply({ content: `❌ أوامر الاقتصاد فقط في <#${ECONOMY_CHANNEL_ID}>`, ephemeral: true });
+      }
+
       const sub = options.getSubcommand();
       if (sub === 'balance') {
         const lastIn = userData.history.filter(h => h.type === 'TRANSFER_RECEIVE').pop() || { amount: 0 };
