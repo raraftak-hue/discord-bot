@@ -357,8 +357,14 @@ async function startNumberGameAfterDelay(msg, gameData) {
 async function startNextTurn(channel, gameId) {
   const game = activeNumberGames.get(gameId);
   if (!game || !game.started || game.winner) return;
+  
   const maxAttempts = game.players.length === 1 ? 5 : 3;
-  game.alivePlayers = game.players.filter(p => { const attempts = game.attempts.get(p) || 0; return attempts < maxAttempts; });
+  
+  game.alivePlayers = game.players.filter(p => {
+    const attempts = game.attempts.get(p) || 0;
+    return attempts < maxAttempts;
+  });
+  
   if (game.alivePlayers.length === 0) {
     const guesses = game.guesses || [];
     const closest = findClosestGuess(guesses, game.secretNumber);
@@ -371,27 +377,56 @@ async function startNextTurn(channel, gameId) {
     activeNumberGames.delete(gameId);
     return;
   }
+  
+  // ✅ في الوضع الفردي: لا نبدأ دور جديد إذا فيه دور نشط
+  if (game.players.length === 1 && game.currentTurn) {
+    return;
+  }
+  
+  // ✅ تعطيل التخمين للكل أولاً
+  if (!game.canGuess) game.canGuess = new Map();
+  game.players.forEach(p => game.canGuess.set(p, false));
+  
   if (game.currentTurnIndex >= game.alivePlayers.length) game.currentTurnIndex = 0;
+  
   const currentPlayer = game.alivePlayers[game.currentTurnIndex];
   game.currentTurn = currentPlayer;
+  
   await channel.send(`-# **دور المشارك ${getUserTag(currentPlayer)} للتخمين **`).catch(() => { });
+  
+  // ✅ تفعيل التخمين لهذا اللاعب فقط
+  game.canGuess.set(currentPlayer, true);
+  
   if (game.timer) { clearTimeout(game.timer); game.timer = null; }
+  
   const timer = setTimeout(async () => {
     const game = activeNumberGames.get(gameId);
     if (!game || !game.started || game.winner) return;
     if (game.currentTurn === currentPlayer) {
+      
+      // ✅ تعطيل التخمين قبل الطرد
+      if (game.canGuess) game.canGuess.set(currentPlayer, false);
+      
       await channel.send(`-# **المشارك ${getUserTag(currentPlayer)} انطرد عشان ما خمن قبل انتهاء الوقت <:s7_discord:1388214117365453062> **`).catch(() => { });
+      
       const attempts = game.attempts.get(currentPlayer) || 0;
       const maxAttempts = game.players.length === 1 ? 5 : 3;
       game.attempts.set(currentPlayer, attempts + maxAttempts);
+      
       game.currentTurnIndex++;
+      game.currentTurn = null;
+      
+      // ✅ الوضع الفردي: لا نبدأ دور تلقائي
+      if (game.players.length === 1) return;
+      
       setTimeout(() => { startNextTurn(channel, gameId); }, 8000);
     }
   }, 15000);
+  
   game.timer = timer;
 }
 
-// ==================== 📝 معالج الرسائل الموحد (واحد بس!) ====================
+// ==================== 📝 معالج الرسائل الموحد ====================
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
   const globalSettings = await getGlobalSettings();
@@ -565,20 +600,33 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // 5️⃣ معالجة التخمينات
+  // 5️⃣ معالجة التخمينات - مع شرط canGuess ✅
   let activeGame = null;
   let gameId = null;
   for (const [id, game] of activeNumberGames.entries()) {
-    if (game.started && game.alivePlayers && game.alivePlayers.includes(message.author.id) && game.currentTurn === message.author.id) {
-      activeGame = game; gameId = id; break;
+    if (game.started && 
+        game.alivePlayers && 
+        game.alivePlayers.includes(message.author.id) && 
+        game.currentTurn === message.author.id &&
+        game.canGuess?.get(message.author.id) === true) {  // ✅ شرط canGuess
+      activeGame = game;
+      gameId = id;
+      break;
     }
   }
+  
   if (activeGame) {
     const game = activeGame;
     const guess = parseInt(message.content);
     if (isNaN(guess) || guess < 1 || guess > 100) return;
+    
     if (game.timer) { clearTimeout(game.timer); game.timer = null; }
+    
+    // ✅ تعطيل التخمين فوراً بعد الاستلام
+    if (game.canGuess) game.canGuess.set(message.author.id, false);
+    
     game.guesses.push({ userId: message.author.id, guess: guess });
+    
     if (guess === game.secretNumber) {
       game.winner = message.author.id;
       if (game.players.length === 1) {
@@ -589,9 +637,11 @@ client.on('messageCreate', async (message) => {
       activeNumberGames.delete(gameId);
       return;
     }
+    
     const attempts = game.attempts.get(message.author.id) || 0;
     game.attempts.set(message.author.id, attempts + 1);
     const maxAttempts = game.players.length === 1 ? 5 : 3;
+    
     if (game.players.length === 1) {
       if (guess < game.secretNumber) { await message.channel.send(`-# **تخمينك غلط و الرقم اكبر من ${guess} <:1_12:1467286888489422984> **`).catch(() => { }); }
       else { await message.channel.send(`-# **تخمينك غلط و الرقم اصغر من ${guess} <:1_12:1467286888489422984> **`).catch(() => { }); }
@@ -599,13 +649,25 @@ client.on('messageCreate', async (message) => {
       if (guess < game.secretNumber) { await message.channel.send(`-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم أكبر من الرقم ${guess} **`).catch(() => { }); }
       else { await message.channel.send(`-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم أصغر من الرقم ${guess} **`).catch(() => { }); }
     }
+    
     if (attempts + 1 >= maxAttempts) {
       await message.channel.send(`-# **المشارك ${getUserTag(message.author.id)} انطرد عشان خلصت محاولاته ${maxAttempts} <:s7_discord:1388214117365453062> **`).catch(() => { });
       game.currentTurnIndex++;
+      game.currentTurn = null;
+      
+      // ✅ الوضع الفردي: لا نبدأ دور تلقائي
+      if (game.players.length === 1) return;
+      
       setTimeout(() => { startNextTurn(message.channel, gameId); }, 8000);
       return;
     }
+    
     game.currentTurnIndex++;
+    game.currentTurn = null;
+    
+    // ✅ الوضع الفردي: لا نبدأ دور تلقائي
+    if (game.players.length === 1) return;
+    
     setTimeout(() => { startNextTurn(message.channel, gameId); }, 8000);
     return;
   }
