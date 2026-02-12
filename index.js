@@ -24,6 +24,7 @@ mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ متصل بـ MongoDB بنجاح!'))
   .catch(err => console.error('❌ فشل الاتصال بـ MongoDB:', err));
 
+// ==================== 📊 Schemas ====================
 const UserSchema = new mongoose.Schema({
   userId: String,
   balance: { type: Number, default: 5 },
@@ -53,6 +54,7 @@ const Settings = mongoose.model('Settings', SettingsSchema);
 const GlobalSettings = mongoose.model('GlobalSettings', GlobalSettingsSchema);
 const TicketSettings = mongoose.model('TicketSettings', TicketSettingsSchema);
 
+// ==================== 🔧 الدوال المساعدة ====================
 async function getGlobalSettings() {
   let settings = await GlobalSettings.findOne();
   if (!settings) {
@@ -89,7 +91,7 @@ async function getTicketSettings(guildId) {
   return settings;
 }
 
-// --- تعريف أوامر السلاش ---
+// ==================== 📋 أوامر السلاش ====================
 const slashCommands = [
   { name: 'bothelp', description: 'عرض جميع الأوامر' },
   { 
@@ -121,6 +123,11 @@ const slashCommands = [
     name: 'resetall',
     description: 'إعادة تعيين رصيد الجميع إلى 5 دنانير',
     default_member_permissions: "0"
+  },
+  {
+    name: 'numbers',
+    description: 'لعبة الأرقام',
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString()
   }
 ];
 
@@ -172,6 +179,7 @@ const adminSlashCommands = [
   }
 ];
 
+// ==================== 🤖 Client Ready ====================
 client.once('ready', async () => {
   console.log(`✅ ${client.user.tag} أونلاين!`);
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
@@ -189,12 +197,35 @@ client.once('ready', async () => {
     }
   } catch (e) { console.error(e); }
   
+  // ==================== 💰 نظام الزكاة الأسبوعي ====================
   cron.schedule('0 0 * * 5', async () => {
-    await User.updateMany({ balance: { $gt: 0 } }, [{ $set: { balance: { $subtract: ["$balance", { $floor: { $multiply: ["$balance", 0.025] } }] } } }]);
-    console.log("✅ تم خصم ضريبة الجمعة من الجميع.");
+    console.log("⏰ بدأ تحصيل الزكاة الأسبوعية...");
+    
+    const users = await User.find({ balance: { $gt: 50 } });
+    let totalTax = 0;
+    
+    for (const user of users) {
+      const oldBalance = user.balance;
+      const taxAmount = (oldBalance * 0.025).toFixed(2);
+      const tax = parseFloat(taxAmount);
+      
+      user.balance = parseFloat((oldBalance - tax).toFixed(2));
+      user.history.push({ type: 'WEEKLY_TAX', amount: -tax });
+      await user.save();
+      
+      totalTax += tax;
+      
+      const discordUser = await client.users.fetch(user.userId).catch(() => null);
+      if (discordUser) {
+        await discordUser.send(`-# ** تم جمع الزكاة الاسبوعية التي تقدر بـ 2.5% على الثروة التي تبلغ فوق الـ50 دينار <:florktahehe:1458398337874268307> **`).catch(() => {});
+      }
+    }
+    
+    console.log(`✅ تم خصم الزكاة من ${users.length} عضو بمجموع ${totalTax.toFixed(2)} دينار`);
   });
 });
 
+// ==================== 👋 نظام الترحيب ====================
 async function sendWelcome(member, guildSettings) {
   const { channelId, title, description, color, image } = guildSettings.welcomeSettings;
   if (!channelId) return;
@@ -221,10 +252,128 @@ client.on('guildMemberAdd', async (member) => {
   await sendWelcome(member, settings);
 });
 
+// ==================== 💸 نظام التحويل ====================
 const pendingTransfers = new Map();
 const transferCooldowns = new Map();
 
-// --- معالجة الأوامر النصية ---
+// ==================== 🎮 لعبة الأرقام ====================
+const activeNumberGames = new Map();
+
+function getUserTag(userId) {
+  const user = client.users.cache.get(userId);
+  return user ? `<@${userId}>` : userId;
+}
+
+function findClosestGuess(guesses, secretNumber) {
+  if (!guesses || guesses.length === 0) return null;
+  let closest = guesses[0];
+  let minDiff = Math.abs(guesses[0].guess - secretNumber);
+  
+  for (const g of guesses) {
+    const diff = Math.abs(g.guess - secretNumber);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closest = g;
+    }
+  }
+  return closest;
+}
+
+async function startNumberGameAfterDelay(msg, gameData) {
+  setTimeout(async () => {
+    const game = activeNumberGames.get(msg.id);
+    if (!game) return;
+    
+    if (game.players.length === 0) {
+      await msg.edit({ 
+        content: `-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **`,
+        components: [] 
+      }).catch(() => {});
+      activeNumberGames.delete(msg.id);
+      return;
+    }
+    
+    game.started = true;
+    game.secretNumber = Math.floor(Math.random() * 100) + 1;
+    
+    const playersList = game.players.map(p => getUserTag(p)).join(' ');
+    await msg.channel.send(
+      `-# ** تم بدأ اللعبة كل واحد من المشاركين عنده جولة يخمن فيها الرقم و كل مشارك له 3 محاولات الا اذا فاز احد فيكم <:new_emoji:1388436089584226387> **\n` +
+      `-# المشاركين هم ${playersList}`
+    ).catch(() => {});
+    
+    setTimeout(async () => {
+      await msg.delete().catch(() => {});
+    }, 10000);
+    
+    setTimeout(() => {
+      startNextTurn(msg.channel, msg.id);
+    }, 10000);
+    
+  }, 20000);
+}
+
+async function startNextTurn(channel, gameId) {
+  const game = activeNumberGames.get(gameId);
+  if (!game || !game.started || game.winner) return;
+  
+  game.alivePlayers = game.players.filter(p => {
+    const attempts = game.attempts.get(p) || 0;
+    return attempts < 3;
+  });
+  
+  if (game.alivePlayers.length === 0) {
+    const guesses = game.guesses || [];
+    const closest = findClosestGuess(guesses, game.secretNumber);
+    
+    if (game.players.length === 1) {
+      await channel.send(
+        `-# ** نفذت خلصت محاولاتك و الرقم الصح كان ${game.secretNumber} <:emoji_11:1467287898448724039> **`
+      ).catch(() => {});
+    } else {
+      const closestUser = closest ? getUserTag(closest.userId) : 'لا يوجد';
+      await channel.send(
+        `-# ** الرقم الصح كان ${game.secretNumber} محد جابها صح و نفذت كل محاولات كل المشتركين بس اقرب واحد جاب تخمين هو ${closestUser} <:emoji_11:1467287898448724039> **`
+      ).catch(() => {});
+    }
+    
+    activeNumberGames.delete(gameId);
+    return;
+  }
+  
+  if (!game.currentTurnIndex) game.currentTurnIndex = 0;
+  if (game.currentTurnIndex >= game.alivePlayers.length) {
+    game.currentTurnIndex = 0;
+  }
+  
+  const currentPlayer = game.alivePlayers[game.currentTurnIndex];
+  game.currentTurn = currentPlayer;
+  
+  await channel.send(
+    `-# **دور المشارك ${getUserTag(currentPlayer)} للتخمين **`
+  ).catch(() => {});
+  
+  const timer = setTimeout(async () => {
+    const game = activeNumberGames.get(gameId);
+    if (!game || !game.started || game.winner) return;
+    if (game.currentTurn === currentPlayer) {
+      
+      await channel.send(
+        `-# **المشارك ${getUserTag(currentPlayer)} انطرد عشان ما خمن قبل انتهاء الوقت <:s7_discord:1388214117365453062> **`
+      ).catch(() => {});
+      
+      const attempts = game.attempts.get(currentPlayer) || 0;
+      game.attempts.set(currentPlayer, attempts + 3);
+      
+      game.currentTurnIndex++;
+      startNextTurn(channel, gameId);
+    }
+  }, 10000);
+  
+  game.timer = timer;
+}
+
+// ==================== 📝 الأوامر النصية ====================
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
   const globalSettings = await getGlobalSettings();
@@ -233,6 +382,7 @@ client.on('messageCreate', async (message) => {
   const args = message.content.trim().split(/\s+/);
   const command = args[0];
 
+  // معالجة كلمة "تأكيد" للتحويل
   const pending = Array.from(pendingTransfers.values()).find(p => p.senderId === message.author.id && p.channelId === message.channel.id);
   if (message.content === 'تأكيد' && pending) {
     const data = pending;
@@ -244,8 +394,9 @@ client.on('messageCreate', async (message) => {
       return message.channel.send(`-# **رصيدك ما يكفي الحين يا فقير <:emoji_464:1388211597197050029>**`);
     }
 
-    sender.balance -= data.amount; target.balance += data.amount;
-    sender.history.push({ type: 'TRANSFER_SEND', amount: data.amount });
+    sender.balance = parseFloat((sender.balance - data.amount).toFixed(2));
+    target.balance = parseFloat((target.balance + data.amount).toFixed(2));
+    sender.history.push({ type: 'TRANSFER_SEND', amount: -data.amount });
     target.history.push({ type: 'TRANSFER_RECEIVE', amount: data.amount });
     await sender.save(); await target.save();
     transferCooldowns.set(data.senderId, Date.now()); 
@@ -259,6 +410,7 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
+  // أوامر الإدارة النصية
   if (command === 'تايم') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
     const member = message.mentions.members.first();
@@ -319,12 +471,12 @@ client.on('messageCreate', async (message) => {
   if (command === 'دنانير') {
     const user = message.mentions.users.first() || message.author;
     const userData = await getUserData(user.id);
-    message.channel.send(`-# **رصيد ${user} هو ${userData.balance} دنانير <:money_with_wings:1388212679981666334>**`);
+    message.channel.send(`-# **رصيد ${user} هو ${userData.balance} دينار <:money_with_wings:1388212679981666334>**`);
   }
 
   if (command === 'تحويل') {
     const target = message.mentions.users.first();
-    const amount = parseInt(args.find(a => !isNaN(a)));
+    const amount = parseFloat(args.find(a => !isNaN(a) && a.includes('.') ? parseFloat(a) : parseInt(a)));
     if (!target || isNaN(amount) || amount <= 0) return message.channel.send(`-# **الصيغة غلط يا ذكي <:emoji_334:1388211595053760663>**`);
     const senderData = await getUserData(message.author.id);
     if (senderData.balance < amount) return message.channel.send(`-# **رصيدك ما يكفي يا فقير <:emoji_464:1388211597197050029>**`);
@@ -354,12 +506,49 @@ client.on('messageCreate', async (message) => {
     const history = userData.history.slice(-5).reverse().map(h => `-# **${h.type}: ${h.amount} (${h.date.toLocaleDateString()})**`).join('\n') || 'لا يوجد سجل.';
     message.channel.send({ embeds: [new EmbedBuilder().setTitle(`سجل ${user.username}`).setDescription(history).setColor(0x2b2d31)] });
   }
+
+  // ==================== 🎮 أمر ارقام النصي ====================
+  if (command === 'ارقام') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+      return;
+    }
+    
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('join_number_game')
+        .setLabel('انضم للعبة')
+        .setStyle(ButtonStyle.Secondary)
+    );
+    
+    const msg = await message.channel.send({
+      content: `-# **تم بدأ لعبة التخمين مهمتكم رح تكون تخمين الرقم الصحيح من 1 الى 100 <:new_emoji:1388436089584226387> **`,
+      components: [row]
+    }).catch(() => {});
+    
+    activeNumberGames.set(msg.id, {
+      hostId: message.author.id,
+      players: [],
+      attempts: new Map(),
+      guesses: [],
+      started: false,
+      winner: null,
+      secretNumber: null,
+      currentTurn: null,
+      currentTurnIndex: 0,
+      alivePlayers: [],
+      timer: null
+    });
+    
+    startNumberGameAfterDelay(msg, activeNumberGames.get(msg.id));
+  }
 });
 
+// ==================== 🎮 تفاعلات الأزرار ====================
 client.on('interactionCreate', async (i) => {
   const globalSettings = await getGlobalSettings();
   if (i.guild && !globalSettings.allowedGuilds.includes(i.guild.id)) return;
 
+  // ==================== أوامر السلاش ====================
   if (i.isChatInputCommand()) {
     const { commandName, options, user, member, guild } = i;
     const userData = await getUserData(user.id);
@@ -368,7 +557,7 @@ client.on('interactionCreate', async (i) => {
       const embed = new EmbedBuilder()
         .setTitle('قائمة الأوامر')
         .setColor(0x2b2d31)
-        .setDescription(`-# **/economy balance - عرض الرصيد**\n-# **/economy transfer - تحويل أموال**\n-# **/economy top - قائمة الأغنياء**\n-# **/welcome test - تجربة الترحيب**\n-# **/giveaway start - بدء قيف أوي**\n-# **/ticket panel - لوحة التذاكر**\n-# **/ticket setup - تعديل إعدادات التذاكر**\n-# **أوامر نصية: دنانير، تحويل، اغنياء، السجل، تايم، طرد، حذف**`);
+        .setDescription(`-# **/economy balance - عرض الرصيد**\n-# **/economy transfer - تحويل أموال**\n-# **/economy top - قائمة الأغنياء**\n-# **/welcome test - تجربة الترحيب**\n-# **/giveaway start - بدء قيف أوي**\n-# **/ticket panel - لوحة التذاكر**\n-# **/ticket setup - تعديل إعدادات التذاكر**\n-# **/numbers - لعبة الأرقام**\n-# **أوامر نصية: دنانير، تحويل، اغنياء، السجل، تايم، طرد، حذف، ارقام**`);
       return i.reply({ embeds: [embed] });
     }
 
@@ -376,7 +565,7 @@ client.on('interactionCreate', async (i) => {
       const sub = options.getSubcommand();
       if (sub === 'balance') {
         const lastIn = userData.history.filter(h => h.type === 'TRANSFER_RECEIVE').pop() || { amount: 0 };
-        return i.reply({ embeds: [new EmbedBuilder().setDescription(`-# **رصيدك الحالي ${userData.balance} دنانير و آخر عملية تحويل تلقيتها بـ ${lastIn.amount} <:money_with_wings:1388212679981666334>**`).setColor(0x2b2d31)] });
+        return i.reply({ embeds: [new EmbedBuilder().setDescription(`-# **رصيدك الحالي ${userData.balance} دينار و آخر عملية تحويل تلقيتها بـ ${lastIn.amount} <:money_with_wings:1388212679981666334>**`).setColor(0x2b2d31)] });
       }
       if (sub === 'transfer') {
         const lastTransfer = transferCooldowns.get(user.id);
@@ -537,8 +726,45 @@ client.on('interactionCreate', async (i) => {
       });
       return i.reply('✅ تم إعادة تعيين رصيد الجميع إلى **5 دنانير**.');
     }
+
+    if (commandName === 'numbers') {
+      if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+        return i.reply({ content: '❌ هذا الأمر للأدمن فقط.', ephemeral: true });
+      }
+      
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('join_number_game')
+          .setLabel('انضم للعبة')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      
+      await i.reply({
+        content: `-# **تم بدأ لعبة التخمين مهمتكم رح تكون تخمين الرقم الصحيح من 1 الى 100 <:new_emoji:1388436089584226387> **`,
+        components: [row]
+      });
+      
+      const msg = await i.fetchReply();
+      
+      activeNumberGames.set(msg.id, {
+        hostId: i.user.id,
+        players: [],
+        attempts: new Map(),
+        guesses: [],
+        started: false,
+        winner: null,
+        secretNumber: null,
+        currentTurn: null,
+        currentTurnIndex: 0,
+        alivePlayers: [],
+        timer: null
+      });
+      
+      startNumberGameAfterDelay(msg, activeNumberGames.get(msg.id));
+    }
   }
 
+  // ==================== أزرار التذاكر ====================
   if (i.isButton()) {
     if (i.customId === 'open_ticket') {
       const ticketSettings = await getTicketSettings(i.guild.id);
@@ -570,230 +796,51 @@ client.on('interactionCreate', async (i) => {
       });
       i.reply({ content: `✅ تم فتح التذكرة: ${ch}`, ephemeral: true });
     }
+
     if (i.customId === 'close_ticket') { 
       await i.reply('🔒 سيتم إغلاق التذكرة خلال 3 ثواني...'); 
       setTimeout(() => i.channel.delete().catch(() => {}), 3000); 
     }
+
+    // ==================== أزرار لعبة الأرقام ====================
+    if (i.customId === 'join_number_game') {
+      const game = activeNumberGames.get(i.message.id);
+      if (!game || game.started) {
+        return i.reply({ 
+          content: `-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **`, 
+          ephemeral: true 
+        }).catch(() => {});
+      }
+      
+      if (game.players.length >= 6) {
+        return i.reply({ 
+          content: `-# **اللعبة ممتلئة للأسف ليش ما جيت بسرعه <:emoji_84:1389404919672340592> **`, 
+          ephemeral: true 
+        }).catch(() => {});
+      }
+      
+      if (game.players.includes(i.user.id)) {
+        return i.reply({ 
+          content: `-# **تم انت الحين مشارك فاللعبة <:2thumbup:1467287897429512396> **`, 
+          ephemeral: true 
+        }).catch(() => {});
+      }
+      
+      game.players.push(i.user.id);
+      game.attempts.set(i.user.id, 0);
+      
+      await i.reply({ 
+        content: `-# **تم انت الحين مشارك فاللعبة <:2thumbup:1467287897429512396> **`, 
+        ephemeral: true 
+      }).catch(() => {});
+    }
   }
 });
-
-// ==================== 🎮 قسم لعبة الأرقام ====================
-const activeNumberGames = new Map();
-
-// دالة مساعدة لجلب اسم المستخدم
-function getUserTag(userId) {
-  const user = client.users.cache.get(userId);
-  return user ? `<@${userId}>` : userId;
-}
-
-// دالة لحساب أقرب تخمين
-function findClosestGuess(guesses, secretNumber) {
-  if (!guesses || guesses.length === 0) return null;
-  let closest = guesses[0];
-  let minDiff = Math.abs(guesses[0].guess - secretNumber);
-  
-  for (const g of guesses) {
-    const diff = Math.abs(g.guess - secretNumber);
-    if (diff < minDiff) {
-      minDiff = diff;
-      closest = g;
-    }
-  }
-  return closest;
-}
-
-// دالة لبدء اللعبة بعد 20 ثانية
-async function startNumberGameAfterDelay(msg, gameData) {
-  setTimeout(async () => {
-    const game = activeNumberGames.get(msg.id);
-    if (!game) return;
-    
-    // إذا فشلت اللعبة (0 لاعبين)
-    if (game.players.length === 0) {
-      await msg.edit({ 
-        content: `-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **`,
-        components: [] 
-      }).catch(() => {});
-      activeNumberGames.delete(msg.id);
-      return;
-    }
-    
-    // بدأ اللعبة
-    game.started = true;
-    game.secretNumber = Math.floor(Math.random() * 100) + 1;
-    
-    // رسالة بدأ اللعبة
-    const playersList = game.players.map(p => getUserTag(p)).join(' ');
-    await msg.channel.send(
-      `-# ** تم بدأ اللعبة كل واحد من المشاركين عنده جولة يخمن فيها الرقم و كل مشارك له 3 محاولات الا اذا فاز احد فيكم <:new_emoji:1388436089584226387> **\n` +
-      `-# المشاركين هم ${playersList}`
-    ).catch(() => {});
-    
-    // حذف رسالة الإنشاء بعد 10 ثواني
-    setTimeout(async () => {
-      await msg.delete().catch(() => {});
-    }, 10000);
-    
-    // بدأ أول دور بعد 10 ثواني
-    setTimeout(() => {
-      startNextTurn(msg.channel, msg.id);
-    }, 10000);
-    
-  }, 20000);
-}
-
-// دالة لبدء الدور التالي
-async function startNextTurn(channel, gameId) {
-  const game = activeNumberGames.get(gameId);
-  if (!game || !game.started || game.winner) return;
-  
-  // تصفية اللاعبين الأحياء (لهم محاولات)
-  game.alivePlayers = game.players.filter(p => {
-    const attempts = game.attempts.get(p) || 0;
-    return attempts < 3;
-  });
-  
-  if (game.alivePlayers.length === 0) {
-    // انتهت اللعبة بدون فائز
-    const guesses = game.guesses || [];
-    const closest = findClosestGuess(guesses, game.secretNumber);
-    
-    if (game.players.length === 1) {
-      // حالة فردي
-      await channel.send(
-        `-# ** نفذت خلصت محاولاتك و الرقم الصح كان ${game.secretNumber} <:emoji_11:1467287898448724039> **`
-      ).catch(() => {});
-    } else {
-      // حالة جماعي
-      const closestUser = closest ? getUserTag(closest.userId) : 'لا يوجد';
-      await channel.send(
-        `-# ** الرقم الصح كان ${game.secretNumber} محد جابها صح و نفذت كل محاولات كل المشتركين بس اقرب واحد جاب تخمين هو ${closestUser} <:emoji_11:1467287898448724039> **`
-      ).catch(() => {});
-    }
-    
-    activeNumberGames.delete(gameId);
-    return;
-  }
-  
-  // تحديد الدور الحالي
-  if (!game.currentTurnIndex) game.currentTurnIndex = 0;
-  if (game.currentTurnIndex >= game.alivePlayers.length) {
-    game.currentTurnIndex = 0;
-  }
-  
-  const currentPlayer = game.alivePlayers[game.currentTurnIndex];
-  game.currentTurn = currentPlayer;
-  
-  // رسالة دور المشارك
-  const turnMsg = await channel.send(
-    `-# **دور المشارك ${getUserTag(currentPlayer)} للتخمين **`
-  ).catch(() => {});
-  
-  // تايمر 10 ثواني
-  const timer = setTimeout(async () => {
-    const game = activeNumberGames.get(gameId);
-    if (!game || !game.started || game.winner) return;
-    if (game.currentTurn === currentPlayer) {
-      
-      // رسالة طرد لعدم التخمين
-      await channel.send(
-        `-# **المشارك ${getUserTag(currentPlayer)} انطرد عشان ما خمن قبل انتهاء الوقت <:s7_discord:1388214117365453062> **`
-      ).catch(() => {});
-      
-      // زيادة عدد محاولاته عشان يطرد
-      const attempts = game.attempts.get(currentPlayer) || 0;
-      game.attempts.set(currentPlayer, attempts + 3); // يضمن طرده
-      
-      // الدور التالي
-      game.currentTurnIndex++;
-      startNextTurn(channel, gameId);
-    }
-  }, 10000);
-  
-  game.timer = timer;
-}
-
-// ==================== أوامر اللعبة ====================
-// الأمر النصي
-if (command === 'ارقام') {
-  if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-    return; // يتجاهل غير الأدمن
-  }
-  
-  // رسالة الإنشاء
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('join_number_game')
-      .setLabel('انضم للعبة')
-      .setStyle(ButtonStyle.Secondary)
-  );
-  
-  const msg = await message.channel.send({
-    content: `-# **تم بدأ لعبة التخمين مهمتكم رح تكون تخمين الرقم الصحيح من 1 الى 100 <:new_emoji:1388436089584226387> **`,
-    components: [row]
-  }).catch(() => {});
-  
-  // تخزين بيانات اللعبة
-  activeNumberGames.set(msg.id, {
-    hostId: message.author.id,
-    players: [],
-    attempts: new Map(),
-    guesses: [],
-    started: false,
-    winner: null,
-    secretNumber: null,
-    currentTurn: null,
-    currentTurnIndex: 0,
-    alivePlayers: [],
-    timer: null
-  });
-  
-  // بدأ العد التنازلي 20 ثانية
-  startNumberGameAfterDelay(msg, activeNumberGames.get(msg.id));
-}
-
-// ==================== أزرار اللعبة ====================
-if (i.customId === 'join_number_game') {
-  const game = activeNumberGames.get(i.message.id);
-  if (!game || game.started) {
-    return i.reply({ 
-      content: `-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **`, 
-      ephemeral: true 
-    }).catch(() => {});
-  }
-  
-  // التحقق من العدد الأقصى
-  if (game.players.length >= 6) {
-    return i.reply({ 
-      content: `-# **اللعبة ممتلئة للأسف ليش ما جيت بسرعه <:emoji_84:1389404919672340592> **`, 
-      ephemeral: true 
-    }).catch(() => {});
-  }
-  
-  // التحقق من التكرار
-  if (game.players.includes(i.user.id)) {
-    return i.reply({ 
-      content: `-# **تم انت الحين مشارك فاللعبة <:2thumbup:1467287897429512396> **`, 
-      ephemeral: true 
-    }).catch(() => {});
-  }
-  
-  // إضافة اللاعب
-  game.players.push(i.user.id);
-  game.attempts.set(i.user.id, 0);
-  
-  // رسالة انضمام خاصة
-  await i.reply({ 
-    content: `-# **تم انت الحين مشارك فاللعبة <:2thumbup:1467287897429512396> **`, 
-    ephemeral: true 
-  }).catch(() => {});
-}
 
 // ==================== معالجة التخمينات ====================
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   
-  // البحث عن لعبة نشطة
   let activeGame = null;
   let gameId = null;
   
@@ -810,31 +857,25 @@ client.on('messageCreate', async (message) => {
   const game = activeGame;
   const guess = parseInt(message.content);
   
-  // التحقق من صحة الرقم
   if (isNaN(guess) || guess < 1 || guess > 100) {
     return message.reply(`-# **يرجى إدخال رقم بين 1 و 100**`).catch(() => {});
   }
   
-  // إلغاء التايمر
   if (game.timer) clearTimeout(game.timer);
   
-  // تسجيل التخمين
   game.guesses.push({
     userId: message.author.id,
     guess: guess
   });
   
-  // التحقق من الفوز
   if (guess === game.secretNumber) {
     game.winner = message.author.id;
     
     if (game.players.length === 1) {
-      // حالة فردي
       await message.channel.send(
         `-# **مبروك ${getUserTag(message.author.id)} جبت الرقم الصح و هو ${game.secretNumber} هذا ذكاء ولا حظ يا ترى …. <:1_81:1467286889877999843> **`
       ).catch(() => {});
     } else {
-      // حالة جماعي
       await message.channel.send(
         `-# **مبروك المشارك ${getUserTag(message.author.id)} جاب الرقم الصح و هو ${game.secretNumber} حظا اوفر للمشاركين الآخرين فالمرات القادمة <:1_81:1467286889877999843> **`
       ).catch(() => {});
@@ -844,11 +885,9 @@ client.on('messageCreate', async (message) => {
     return;
   }
   
-  // تخمين غلط
   const attempts = game.attempts.get(message.author.id) || 0;
   game.attempts.set(message.author.id, attempts + 1);
   
-  // رسالة التخمين الغلط (بدون محاولات)
   if (guess < game.secretNumber) {
     await message.channel.send(
       `-# **دور المشارك ${getUserTag(message.author.id)} للتخمين **\n` +
@@ -861,61 +900,16 @@ client.on('messageCreate', async (message) => {
     ).catch(() => {});
   }
   
-  // التحقق من انتهاء المحاولات
   if (attempts + 1 >= 3) {
     await message.channel.send(
       `-# **المشارك ${getUserTag(message.author.id)} انطرد عشان خلصت محاولاته الثلاث <:s7_discord:1388214117365453062> **`
     ).catch(() => {});
   }
   
-  // الدور التالي
   game.currentTurnIndex++;
   startNextTurn(message.channel, gameId);
 });
 
-// ==================== أمر السلاش ====================
-{
-  name: 'numbers',
-  description: 'لعبة الأرقام',
-  default_member_permissions: PermissionsBitField.Flags.Administrator.toString()
-}
-
-// معالجة أمر السلاش
-if (commandName === 'numbers') {
-  if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-    return i.reply({ content: '❌ هذا الأمر للأدمن فقط.', ephemeral: true });
-  }
-  
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('join_number_game')
-      .setLabel('انضم للعبة')
-      .setStyle(ButtonStyle.Secondary)
-  );
-  
-  await i.reply({
-    content: `-# **تم بدأ لعبة التخمين مهمتكم رح تكون تخمين الرقم الصحيح من 1 الى 100 <:new_emoji:1388436089584226387> **`,
-    components: [row]
-  });
-  
-  const msg = await i.fetchReply();
-  
-  activeNumberGames.set(msg.id, {
-    hostId: i.user.id,
-    players: [],
-    attempts: new Map(),
-    guesses: [],
-    started: false,
-    winner: null,
-    secretNumber: null,
-    currentTurn: null,
-    currentTurnIndex: 0,
-    alivePlayers: [],
-    timer: null
-  });
-  
-  startNumberGameAfterDelay(msg, activeNumberGames.get(msg.id));
-}
-
+// ==================== 🚀 تشغيل البوت ====================
 app.get('/', (req, res) => res.send('Bot is Live!'));
 app.listen(3000, () => client.login(process.env.TOKEN));
