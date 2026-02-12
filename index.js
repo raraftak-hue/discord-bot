@@ -577,5 +577,345 @@ client.on('interactionCreate', async (i) => {
   }
 });
 
+// ==================== 🎮 قسم لعبة الأرقام ====================
+const activeNumberGames = new Map();
+
+// دالة مساعدة لجلب اسم المستخدم
+function getUserTag(userId) {
+  const user = client.users.cache.get(userId);
+  return user ? `<@${userId}>` : userId;
+}
+
+// دالة لحساب أقرب تخمين
+function findClosestGuess(guesses, secretNumber) {
+  if (!guesses || guesses.length === 0) return null;
+  let closest = guesses[0];
+  let minDiff = Math.abs(guesses[0].guess - secretNumber);
+  
+  for (const g of guesses) {
+    const diff = Math.abs(g.guess - secretNumber);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closest = g;
+    }
+  }
+  return closest;
+}
+
+// دالة لبدء اللعبة بعد 20 ثانية
+async function startNumberGameAfterDelay(msg, gameData) {
+  setTimeout(async () => {
+    const game = activeNumberGames.get(msg.id);
+    if (!game) return;
+    
+    // إذا فشلت اللعبة (0 لاعبين)
+    if (game.players.length === 0) {
+      await msg.edit({ 
+        content: `-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **`,
+        components: [] 
+      }).catch(() => {});
+      activeNumberGames.delete(msg.id);
+      return;
+    }
+    
+    // بدأ اللعبة
+    game.started = true;
+    game.secretNumber = Math.floor(Math.random() * 100) + 1;
+    
+    // رسالة بدأ اللعبة
+    const playersList = game.players.map(p => getUserTag(p)).join(' ');
+    await msg.channel.send(
+      `-# ** تم بدأ اللعبة كل واحد من المشاركين عنده جولة يخمن فيها الرقم و كل مشارك له 3 محاولات الا اذا فاز احد فيكم <:new_emoji:1388436089584226387> **\n` +
+      `-# المشاركين هم ${playersList}`
+    ).catch(() => {});
+    
+    // حذف رسالة الإنشاء بعد 10 ثواني
+    setTimeout(async () => {
+      await msg.delete().catch(() => {});
+    }, 10000);
+    
+    // بدأ أول دور بعد 10 ثواني
+    setTimeout(() => {
+      startNextTurn(msg.channel, msg.id);
+    }, 10000);
+    
+  }, 20000);
+}
+
+// دالة لبدء الدور التالي
+async function startNextTurn(channel, gameId) {
+  const game = activeNumberGames.get(gameId);
+  if (!game || !game.started || game.winner) return;
+  
+  // تصفية اللاعبين الأحياء (لهم محاولات)
+  game.alivePlayers = game.players.filter(p => {
+    const attempts = game.attempts.get(p) || 0;
+    return attempts < 3;
+  });
+  
+  if (game.alivePlayers.length === 0) {
+    // انتهت اللعبة بدون فائز
+    const guesses = game.guesses || [];
+    const closest = findClosestGuess(guesses, game.secretNumber);
+    
+    if (game.players.length === 1) {
+      // حالة فردي
+      await channel.send(
+        `-# ** نفذت خلصت محاولاتك و الرقم الصح كان ${game.secretNumber} <:emoji_11:1467287898448724039> **`
+      ).catch(() => {});
+    } else {
+      // حالة جماعي
+      const closestUser = closest ? getUserTag(closest.userId) : 'لا يوجد';
+      await channel.send(
+        `-# ** الرقم الصح كان ${game.secretNumber} محد جابها صح و نفذت كل محاولات كل المشتركين بس اقرب واحد جاب تخمين هو ${closestUser} <:emoji_11:1467287898448724039> **`
+      ).catch(() => {});
+    }
+    
+    activeNumberGames.delete(gameId);
+    return;
+  }
+  
+  // تحديد الدور الحالي
+  if (!game.currentTurnIndex) game.currentTurnIndex = 0;
+  if (game.currentTurnIndex >= game.alivePlayers.length) {
+    game.currentTurnIndex = 0;
+  }
+  
+  const currentPlayer = game.alivePlayers[game.currentTurnIndex];
+  game.currentTurn = currentPlayer;
+  
+  // رسالة دور المشارك
+  const turnMsg = await channel.send(
+    `-# **دور المشارك ${getUserTag(currentPlayer)} للتخمين **`
+  ).catch(() => {});
+  
+  // تايمر 10 ثواني
+  const timer = setTimeout(async () => {
+    const game = activeNumberGames.get(gameId);
+    if (!game || !game.started || game.winner) return;
+    if (game.currentTurn === currentPlayer) {
+      
+      // رسالة طرد لعدم التخمين
+      await channel.send(
+        `-# **المشارك ${getUserTag(currentPlayer)} انطرد عشان ما خمن قبل انتهاء الوقت <:s7_discord:1388214117365453062> **`
+      ).catch(() => {});
+      
+      // زيادة عدد محاولاته عشان يطرد
+      const attempts = game.attempts.get(currentPlayer) || 0;
+      game.attempts.set(currentPlayer, attempts + 3); // يضمن طرده
+      
+      // الدور التالي
+      game.currentTurnIndex++;
+      startNextTurn(channel, gameId);
+    }
+  }, 10000);
+  
+  game.timer = timer;
+}
+
+// ==================== أوامر اللعبة ====================
+// الأمر النصي
+if (command === 'ارقام') {
+  if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+    return; // يتجاهل غير الأدمن
+  }
+  
+  // رسالة الإنشاء
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('join_number_game')
+      .setLabel('انضم للعبة')
+      .setStyle(ButtonStyle.Secondary)
+  );
+  
+  const msg = await message.channel.send({
+    content: `-# **تم بدأ لعبة التخمين مهمتكم رح تكون تخمين الرقم الصحيح من 1 الى 100 <:new_emoji:1388436089584226387> **`,
+    components: [row]
+  }).catch(() => {});
+  
+  // تخزين بيانات اللعبة
+  activeNumberGames.set(msg.id, {
+    hostId: message.author.id,
+    players: [],
+    attempts: new Map(),
+    guesses: [],
+    started: false,
+    winner: null,
+    secretNumber: null,
+    currentTurn: null,
+    currentTurnIndex: 0,
+    alivePlayers: [],
+    timer: null
+  });
+  
+  // بدأ العد التنازلي 20 ثانية
+  startNumberGameAfterDelay(msg, activeNumberGames.get(msg.id));
+}
+
+// ==================== أزرار اللعبة ====================
+if (i.customId === 'join_number_game') {
+  const game = activeNumberGames.get(i.message.id);
+  if (!game || game.started) {
+    return i.reply({ 
+      content: `-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **`, 
+      ephemeral: true 
+    }).catch(() => {});
+  }
+  
+  // التحقق من العدد الأقصى
+  if (game.players.length >= 6) {
+    return i.reply({ 
+      content: `-# **اللعبة ممتلئة للأسف ليش ما جيت بسرعه <:emoji_84:1389404919672340592> **`, 
+      ephemeral: true 
+    }).catch(() => {});
+  }
+  
+  // التحقق من التكرار
+  if (game.players.includes(i.user.id)) {
+    return i.reply({ 
+      content: `-# **تم انت الحين مشارك فاللعبة <:2thumbup:1467287897429512396> **`, 
+      ephemeral: true 
+    }).catch(() => {});
+  }
+  
+  // إضافة اللاعب
+  game.players.push(i.user.id);
+  game.attempts.set(i.user.id, 0);
+  
+  // رسالة انضمام خاصة
+  await i.reply({ 
+    content: `-# **تم انت الحين مشارك فاللعبة <:2thumbup:1467287897429512396> **`, 
+    ephemeral: true 
+  }).catch(() => {});
+}
+
+// ==================== معالجة التخمينات ====================
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  
+  // البحث عن لعبة نشطة
+  let activeGame = null;
+  let gameId = null;
+  
+  for (const [id, game] of activeNumberGames.entries()) {
+    if (game.started && game.alivePlayers && game.alivePlayers.includes(message.author.id) && game.currentTurn === message.author.id) {
+      activeGame = game;
+      gameId = id;
+      break;
+    }
+  }
+  
+  if (!activeGame) return;
+  
+  const game = activeGame;
+  const guess = parseInt(message.content);
+  
+  // التحقق من صحة الرقم
+  if (isNaN(guess) || guess < 1 || guess > 100) {
+    return message.reply(`-# **يرجى إدخال رقم بين 1 و 100**`).catch(() => {});
+  }
+  
+  // إلغاء التايمر
+  if (game.timer) clearTimeout(game.timer);
+  
+  // تسجيل التخمين
+  game.guesses.push({
+    userId: message.author.id,
+    guess: guess
+  });
+  
+  // التحقق من الفوز
+  if (guess === game.secretNumber) {
+    game.winner = message.author.id;
+    
+    if (game.players.length === 1) {
+      // حالة فردي
+      await message.channel.send(
+        `-# **مبروك ${getUserTag(message.author.id)} جبت الرقم الصح و هو ${game.secretNumber} هذا ذكاء ولا حظ يا ترى …. <:1_81:1467286889877999843> **`
+      ).catch(() => {});
+    } else {
+      // حالة جماعي
+      await message.channel.send(
+        `-# **مبروك المشارك ${getUserTag(message.author.id)} جاب الرقم الصح و هو ${game.secretNumber} حظا اوفر للمشاركين الآخرين فالمرات القادمة <:1_81:1467286889877999843> **`
+      ).catch(() => {});
+    }
+    
+    activeNumberGames.delete(gameId);
+    return;
+  }
+  
+  // تخمين غلط
+  const attempts = game.attempts.get(message.author.id) || 0;
+  game.attempts.set(message.author.id, attempts + 1);
+  
+  // رسالة التخمين الغلط (بدون محاولات)
+  if (guess < game.secretNumber) {
+    await message.channel.send(
+      `-# **دور المشارك ${getUserTag(message.author.id)} للتخمين **\n` +
+      `-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم أصغر من الرقم ${guess} **`
+    ).catch(() => {});
+  } else {
+    await message.channel.send(
+      `-# **دور المشارك ${getUserTag(message.author.id)} للتخمين **\n` +
+      `-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم أكبر من الرقم ${guess} **`
+    ).catch(() => {});
+  }
+  
+  // التحقق من انتهاء المحاولات
+  if (attempts + 1 >= 3) {
+    await message.channel.send(
+      `-# **المشارك ${getUserTag(message.author.id)} انطرد عشان خلصت محاولاته الثلاث <:s7_discord:1388214117365453062> **`
+    ).catch(() => {});
+  }
+  
+  // الدور التالي
+  game.currentTurnIndex++;
+  startNextTurn(message.channel, gameId);
+});
+
+// ==================== أمر السلاش ====================
+{
+  name: 'numbers',
+  description: 'لعبة الأرقام',
+  default_member_permissions: PermissionsBitField.Flags.Administrator.toString()
+}
+
+// معالجة أمر السلاش
+if (commandName === 'numbers') {
+  if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+    return i.reply({ content: '❌ هذا الأمر للأدمن فقط.', ephemeral: true });
+  }
+  
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('join_number_game')
+      .setLabel('انضم للعبة')
+      .setStyle(ButtonStyle.Secondary)
+  );
+  
+  await i.reply({
+    content: `-# **تم بدأ لعبة التخمين مهمتكم رح تكون تخمين الرقم الصحيح من 1 الى 100 <:new_emoji:1388436089584226387> **`,
+    components: [row]
+  });
+  
+  const msg = await i.fetchReply();
+  
+  activeNumberGames.set(msg.id, {
+    hostId: i.user.id,
+    players: [],
+    attempts: new Map(),
+    guesses: [],
+    started: false,
+    winner: null,
+    secretNumber: null,
+    currentTurn: null,
+    currentTurnIndex: 0,
+    alivePlayers: [],
+    timer: null
+  });
+  
+  startNumberGameAfterDelay(msg, activeNumberGames.get(msg.id));
+}
+
 app.get('/', (req, res) => res.send('Bot is Live!'));
 app.listen(3000, () => client.login(process.env.TOKEN));
