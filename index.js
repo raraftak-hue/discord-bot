@@ -341,7 +341,6 @@ async function startNextTurn(channel, gameId) {
     return;
   }
   
-  if (!game.currentTurnIndex) game.currentTurnIndex = 0;
   if (game.currentTurnIndex >= game.alivePlayers.length) {
     game.currentTurnIndex = 0;
   }
@@ -366,7 +365,10 @@ async function startNextTurn(channel, gameId) {
       game.attempts.set(currentPlayer, attempts + 3);
       
       game.currentTurnIndex++;
-      startNextTurn(channel, gameId);
+      
+      setTimeout(() => {
+        startNextTurn(channel, gameId);
+      }, 5000);
     }
   }, 10000);
   
@@ -382,7 +384,6 @@ client.on('messageCreate', async (message) => {
   const args = message.content.trim().split(/\s+/);
   const command = args[0];
 
-  // معالجة كلمة "تأكيد" للتحويل
   const pending = Array.from(pendingTransfers.values()).find(p => p.senderId === message.author.id && p.channelId === message.channel.id);
   if (message.content === 'تأكيد' && pending) {
     const data = pending;
@@ -410,7 +411,6 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // أوامر الإدارة النصية
   if (command === 'تايم') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
     const member = message.mentions.members.first();
@@ -507,7 +507,6 @@ client.on('messageCreate', async (message) => {
     message.channel.send({ embeds: [new EmbedBuilder().setTitle(`سجل ${user.username}`).setDescription(history).setColor(0x2b2d31)] });
   }
 
-  // ==================== 🎮 أمر ارقام النصي ====================
   if (command === 'ارقام') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
       return;
@@ -543,12 +542,85 @@ client.on('messageCreate', async (message) => {
   }
 });
 
+// ==================== معالجة التخمينات ====================
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  
+  let activeGame = null;
+  let gameId = null;
+  
+  for (const [id, game] of activeNumberGames.entries()) {
+    if (game.started && game.alivePlayers && game.alivePlayers.includes(message.author.id) && game.currentTurn === message.author.id) {
+      activeGame = game;
+      gameId = id;
+      break;
+    }
+  }
+  
+  if (!activeGame) return;
+  
+  const game = activeGame;
+  const guess = parseInt(message.content);
+  
+  if (isNaN(guess) || guess < 1 || guess > 100) {
+    return message.reply(`-# **يرجى إدخال رقم بين 1 و 100**`).catch(() => {});
+  }
+  
+  if (game.timer) clearTimeout(game.timer);
+  
+  game.guesses.push({
+    userId: message.author.id,
+    guess: guess
+  });
+  
+  if (guess === game.secretNumber) {
+    game.winner = message.author.id;
+    
+    if (game.players.length === 1) {
+      await message.channel.send(
+        `-# **مبروك ${getUserTag(message.author.id)} جبت الرقم الصح و هو ${game.secretNumber} هذا ذكاء ولا حظ يا ترى …. <:1_81:1467286889877999843> **`
+      ).catch(() => {});
+    } else {
+      await message.channel.send(
+        `-# **مبروك المشارك ${getUserTag(message.author.id)} جاب الرقم الصح و هو ${game.secretNumber} حظا اوفر للمشاركين الآخرين فالمرات القادمة <:1_81:1467286889877999843> **`
+      ).catch(() => {});
+    }
+    
+    activeNumberGames.delete(gameId);
+    return;
+  }
+  
+  const attempts = game.attempts.get(message.author.id) || 0;
+  game.attempts.set(message.author.id, attempts + 1);
+  
+  if (guess < game.secretNumber) {
+    await message.channel.send(
+      `-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم أصغر من الرقم ${guess} **`
+    ).catch(() => {});
+  } else {
+    await message.channel.send(
+      `-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم أكبر من الرقم ${guess} **`
+    ).catch(() => {});
+  }
+  
+  if (attempts + 1 >= 3) {
+    await message.channel.send(
+      `-# **المشارك ${getUserTag(message.author.id)} انطرد عشان خلصت محاولاته الثلاث <:s7_discord:1388214117365453062> **`
+    ).catch(() => {});
+  }
+  
+  game.currentTurnIndex++;
+  
+  setTimeout(() => {
+    startNextTurn(message.channel, gameId);
+  }, 5000);
+});
+
 // ==================== 🎮 تفاعلات الأزرار ====================
 client.on('interactionCreate', async (i) => {
   const globalSettings = await getGlobalSettings();
   if (i.guild && !globalSettings.allowedGuilds.includes(i.guild.id)) return;
 
-  // ==================== أوامر السلاش ====================
   if (i.isChatInputCommand()) {
     const { commandName, options, user, member, guild } = i;
     const userData = await getUserData(user.id);
@@ -764,7 +836,6 @@ client.on('interactionCreate', async (i) => {
     }
   }
 
-  // ==================== أزرار التذاكر ====================
   if (i.isButton()) {
     if (i.customId === 'open_ticket') {
       const ticketSettings = await getTicketSettings(i.guild.id);
@@ -802,7 +873,6 @@ client.on('interactionCreate', async (i) => {
       setTimeout(() => i.channel.delete().catch(() => {}), 3000); 
     }
 
-    // ==================== أزرار لعبة الأرقام ====================
     if (i.customId === 'join_number_game') {
       const game = activeNumberGames.get(i.message.id);
       if (!game || game.started) {
@@ -835,79 +905,6 @@ client.on('interactionCreate', async (i) => {
       }).catch(() => {});
     }
   }
-});
-
-// ==================== معالجة التخمينات ====================
-client.on('messageCreate', async (message) => {
-  if (message.author.bot) return;
-  
-  let activeGame = null;
-  let gameId = null;
-  
-  for (const [id, game] of activeNumberGames.entries()) {
-    if (game.started && game.alivePlayers && game.alivePlayers.includes(message.author.id) && game.currentTurn === message.author.id) {
-      activeGame = game;
-      gameId = id;
-      break;
-    }
-  }
-  
-  if (!activeGame) return;
-  
-  const game = activeGame;
-  const guess = parseInt(message.content);
-  
-  if (isNaN(guess) || guess < 1 || guess > 100) {
-    return message.reply(`-# **يرجى إدخال رقم بين 1 و 100**`).catch(() => {});
-  }
-  
-  if (game.timer) clearTimeout(game.timer);
-  
-  game.guesses.push({
-    userId: message.author.id,
-    guess: guess
-  });
-  
-  if (guess === game.secretNumber) {
-    game.winner = message.author.id;
-    
-    if (game.players.length === 1) {
-      await message.channel.send(
-        `-# **مبروك ${getUserTag(message.author.id)} جبت الرقم الصح و هو ${game.secretNumber} هذا ذكاء ولا حظ يا ترى …. <:1_81:1467286889877999843> **`
-      ).catch(() => {});
-    } else {
-      await message.channel.send(
-        `-# **مبروك المشارك ${getUserTag(message.author.id)} جاب الرقم الصح و هو ${game.secretNumber} حظا اوفر للمشاركين الآخرين فالمرات القادمة <:1_81:1467286889877999843> **`
-      ).catch(() => {});
-    }
-    
-    activeNumberGames.delete(gameId);
-    return;
-  }
-  
-  const attempts = game.attempts.get(message.author.id) || 0;
-  game.attempts.set(message.author.id, attempts + 1);
-  
-  if (guess < game.secretNumber) {
-    await message.channel.send(
-      `-# **دور المشارك ${getUserTag(message.author.id)} للتخمين **\n` +
-      `-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم أصغر من الرقم ${guess} **`
-    ).catch(() => {});
-  } else {
-    await message.channel.send(
-      `-# **دور المشارك ${getUserTag(message.author.id)} للتخمين **\n` +
-      `-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم أكبر من الرقم ${guess} **`
-    ).catch(() => {});
-  }
-  
-  if (attempts + 1 >= 3) {
-    await message.channel.send(
-      `-# **المشارك ${getUserTag(message.author.id)} انطرد عشان خلصت محاولاته الثلاث <:s7_discord:1388214117365453062> **`
-    ).catch(() => {});
-  }
-  
-  game.currentTurnIndex++;
-  startNextTurn(message.channel, gameId);
 });
 
 // ==================== 🚀 تشغيل البوت ====================
