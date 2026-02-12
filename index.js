@@ -368,7 +368,7 @@ async function startNextTurn(channel, gameId) {
       
       setTimeout(() => {
         startNextTurn(channel, gameId);
-      }, 5000);
+      }, 8000);
     }
   }, 10000);
   
@@ -578,7 +578,7 @@ client.on('messageCreate', async (message) => {
     
     if (game.players.length === 1) {
       await message.channel.send(
-        `-# **مبروك ${getUserTag(message.author.id)} جبت الرقم الصح و هو ${game.secretNumber} هذا ذكاء ولا حظ يا ترى …. <:1_81:1467286889877999843> **`
+        `-# **مبروك جبت الرقم الصح و هو ${game.secretNumber} هذا ذكاء ولا حظ يا ترى …. <:1_81:1467286889877999843> **`
       ).catch(() => {});
     } else {
       await message.channel.send(
@@ -593,27 +593,45 @@ client.on('messageCreate', async (message) => {
   const attempts = game.attempts.get(message.author.id) || 0;
   game.attempts.set(message.author.id, attempts + 1);
   
-  if (guess < game.secretNumber) {
-    await message.channel.send(
-      `-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم أصغر من الرقم ${guess} **`
-    ).catch(() => {});
+  if (game.players.length === 1) {
+    if (guess < game.secretNumber) {
+      await message.channel.send(
+        `-# **تخمينك غلط و الرقم اصغر من ${guess} <:1_12:1467286888489422984> **`
+      ).catch(() => {});
+    } else {
+      await message.channel.send(
+        `-# **تخمينك غلط و الرقم اكبر من ${guess} <:1_12:1467286888489422984> **`
+      ).catch(() => {});
+    }
   } else {
-    await message.channel.send(
-      `-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم أكبر من الرقم ${guess} **`
-    ).catch(() => {});
+    if (guess < game.secretNumber) {
+      await message.channel.send(
+        `-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم أصغر من الرقم ${guess} **`
+      ).catch(() => {});
+    } else {
+      await message.channel.send(
+        `-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم أكبر من الرقم ${guess} **`
+      ).catch(() => {});
+    }
   }
   
   if (attempts + 1 >= 3) {
     await message.channel.send(
       `-# **المشارك ${getUserTag(message.author.id)} انطرد عشان خلصت محاولاته الثلاث <:s7_discord:1388214117365453062> **`
     ).catch(() => {});
+    game.currentTurnIndex++;
+    
+    setTimeout(() => {
+      startNextTurn(message.channel, gameId);
+    }, 8000);
+    return;
   }
   
   game.currentTurnIndex++;
   
   setTimeout(() => {
     startNextTurn(message.channel, gameId);
-  }, 5000);
+  }, 8000);
 });
 
 // ==================== 🎮 تفاعلات الأزرار ====================
