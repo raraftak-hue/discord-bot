@@ -298,7 +298,7 @@ async function startNumberGameAfterDelay(msg, gameData) {
     
     const playersList = game.players.map(p => getUserTag(p)).join(' ');
     await msg.channel.send(
-      `-# ** تم بدأ اللعبة كل واحد من المشاركين عنده جولة يخمن فيها الرقم و كل مشارك له 3 محاولات الا اذا فاز احد فيكم <:new_emoji:1388436089584226387> **\n` +
+      `-# ** تم بدأ اللعبة كل واحد من المشاركين عنده جولة يخمن فيها الرقم و كل مشارك له ${game.players.length === 1 ? '5' : '3'} محاولات الا اذا فاز احد فيكم <:new_emoji:1388436089584226387> **\n` +
       `-# المشاركين هم ${playersList}`
     ).catch(() => {});
     
@@ -317,9 +317,11 @@ async function startNextTurn(channel, gameId) {
   const game = activeNumberGames.get(gameId);
   if (!game || !game.started || game.winner) return;
   
+  const maxAttempts = game.players.length === 1 ? 5 : 3;
+  
   game.alivePlayers = game.players.filter(p => {
     const attempts = game.attempts.get(p) || 0;
-    return attempts < 3;
+    return attempts < maxAttempts;
   });
   
   if (game.alivePlayers.length === 0) {
@@ -328,7 +330,7 @@ async function startNextTurn(channel, gameId) {
     
     if (game.players.length === 1) {
       await channel.send(
-        `-# ** نفذت خلصت محاولاتك و الرقم الصح كان ${game.secretNumber} <:emoji_11:1467287898448724039> **`
+        `-# ** نفذت خلصت محاولاتك الـ 5 و الرقم الصح كان ${game.secretNumber} <:emoji_11:1467287898448724039> **`
       ).catch(() => {});
     } else {
       const closestUser = closest ? getUserTag(closest.userId) : 'لا يوجد';
@@ -352,6 +354,11 @@ async function startNextTurn(channel, gameId) {
     `-# **دور المشارك ${getUserTag(currentPlayer)} للتخمين **`
   ).catch(() => {});
   
+  if (game.timer) {
+    clearTimeout(game.timer);
+    game.timer = null;
+  }
+  
   const timer = setTimeout(async () => {
     const game = activeNumberGames.get(gameId);
     if (!game || !game.started || game.winner) return;
@@ -362,7 +369,8 @@ async function startNextTurn(channel, gameId) {
       ).catch(() => {});
       
       const attempts = game.attempts.get(currentPlayer) || 0;
-      game.attempts.set(currentPlayer, attempts + 3);
+      const maxAttempts = game.players.length === 1 ? 5 : 3;
+      game.attempts.set(currentPlayer, attempts + maxAttempts);
       
       game.currentTurnIndex++;
       
@@ -566,7 +574,10 @@ client.on('messageCreate', async (message) => {
     return message.reply(`-# **يرجى إدخال رقم بين 1 و 100**`).catch(() => {});
   }
   
-  if (game.timer) clearTimeout(game.timer);
+  if (game.timer) {
+    clearTimeout(game.timer);
+    game.timer = null;
+  }
   
   game.guesses.push({
     userId: message.author.id,
@@ -592,33 +603,35 @@ client.on('messageCreate', async (message) => {
   
   const attempts = game.attempts.get(message.author.id) || 0;
   game.attempts.set(message.author.id, attempts + 1);
+  const maxAttempts = game.players.length === 1 ? 5 : 3;
   
   if (game.players.length === 1) {
     if (guess < game.secretNumber) {
       await message.channel.send(
-        `-# **تخمينك غلط و الرقم اصغر من ${guess} <:1_12:1467286888489422984> **`
+        `-# **تخمينك غلط و الرقم اكبر من ${guess} <:1_12:1467286888489422984> **`
       ).catch(() => {});
     } else {
       await message.channel.send(
-        `-# **تخمينك غلط و الرقم اكبر من ${guess} <:1_12:1467286888489422984> **`
+        `-# **تخمينك غلط و الرقم اصغر من ${guess} <:1_12:1467286888489422984> **`
       ).catch(() => {});
     }
   } else {
     if (guess < game.secretNumber) {
       await message.channel.send(
-        `-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم أصغر من الرقم ${guess} **`
+        `-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم أكبر من الرقم ${guess} **`
       ).catch(() => {});
     } else {
       await message.channel.send(
-        `-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم أكبر من الرقم ${guess} **`
+        `-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم أصغر من الرقم ${guess} **`
       ).catch(() => {});
     }
   }
   
-  if (attempts + 1 >= 3) {
+  if (attempts + 1 >= maxAttempts) {
     await message.channel.send(
-      `-# **المشارك ${getUserTag(message.author.id)} انطرد عشان خلصت محاولاته الثلاث <:s7_discord:1388214117365453062> **`
+      `-# **المشارك ${getUserTag(message.author.id)} انطرد عشان خلصت محاولاته ${maxAttempts} <:s7_discord:1388214117365453062> **`
     ).catch(() => {});
+    
     game.currentTurnIndex++;
     
     setTimeout(() => {
