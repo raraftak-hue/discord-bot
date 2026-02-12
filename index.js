@@ -1,4 +1,4 @@
- const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionsBitField } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionsBitField } = require('discord.js');
 const { REST, Routes } = require('discord.js');
 const express = require('express');
 const mongoose = require('mongoose');
@@ -81,17 +81,6 @@ const slashCommands = [
       { name: 'transfer', description: 'تحويل الأموال', type: 1, options: [{ name: 'user', description: 'المستلم', type: 6, required: true }, { name: 'amount', description: 'المبلغ', type: 4, required: true }] },
       { name: 'top', description: 'قائمة الأغنياء', type: 1 }
     ] 
-  },
-  {
-    name: 'games',
-    description: 'قسم الألعاب الممتعة',
-    options: [
-      {
-        name: 'mafia',
-        description: 'بدء لعبة مافيا (تحتاج صلاحيات)',
-        type: 1
-      }
-    ]
   },
   {
     name: 'owner',
@@ -196,7 +185,6 @@ client.on('guildMemberAdd', async (member) => {
 
 const pendingTransfers = new Map();
 const transferCooldowns = new Map();
-const activeMafiaGames = new Map();
 
 // --- معالجة الأوامر النصية ---
 client.on('messageCreate', async (message) => {
@@ -330,37 +318,6 @@ client.on('messageCreate', async (message) => {
     const history = userData.history.slice(-5).reverse().map(h => `-# **${h.type}: ${h.amount} (${h.date.toLocaleDateString()})**`).join('\n') || 'لا يوجد سجل.';
     message.channel.send({ embeds: [new EmbedBuilder().setTitle(`سجل ${user.username}`).setDescription(history).setColor(0x2b2d31)] });
   }
-
-  if (command === 'مافيا') {
-    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-      return message.channel.send(`-# **للأسف السيرفر دكتاتوري ما معك صلاحية انك تشغل اللعبة <:__:1467633552408576192> **`);
-    }
-    const joinRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_mafia').setLabel('انضمام').setStyle(ButtonStyle.Secondary));
-    if (message.author.id === OWNER_ID) joinRow.addComponents(new ButtonBuilder().setCustomId('dev_start_mafia').setLabel('وضع المطور (تجربة وحدك)').setStyle(ButtonStyle.Danger));
-    
-    const embed = new EmbedBuilder().setTitle('لعبة المافيا <:emoji_38:1401773302619439147>').setDescription(`-# **اضغط على الزر للانضمام! نحتاج 4 لاعبين على الأقل.**\n-# **اللاعبين الحاليين: 0**\n\n-# **شرح اللعبة**\n-# اللعبة فيها قاتل و طبيب و شرطي و مواطنين\n-# القاتل يحاول يقتل الكل بدون ما ينكشف\n-# الطبيب يحمي شخص كل ليلة من القتل\n-# الشرطي يكشف هويات الناس بالليل\n-# المواطنين لازم يصوتون على القاتل ويطردونه عشان يفوزون`).setColor(0x2b2d31);
-    const msg = await message.channel.send({ embeds: [embed], components: [joinRow] });
-    activeMafiaGames.set(msg.id, { hostId: message.author.id, players: [], started: false, alive: [], roles: {}, votes: new Map(), usedAbilities: new Set(), protectedByCloak: null, monitored: null, devMode: false });
-    
-    setTimeout(async () => {
-      const game = activeMafiaGames.get(msg.id);
-      if (game && !game.started) {
-        if (game.players.length < 4 && !game.devMode) {
-          await msg.edit({ content: '-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **', embeds: [], components: [] }).catch(() => {});
-          activeMafiaGames.delete(msg.id);
-        }
-      }
-    }, 30000);
-  }
-
-  if (command === 'وقف') {
-    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
-    const gameEntry = Array.from(activeMafiaGames.entries()).find(([, g]) => g.hostId === message.author.id || message.member.permissions.has(PermissionsBitField.Flags.Administrator));
-    if (gameEntry) {
-      activeMafiaGames.delete(gameEntry[0]);
-      message.channel.send(`-# **تم وقفنا اللعبة عن التشغيل <:new_emoji:1388436095842385931> **`);
-    }
-  }
 });
 
 client.on('interactionCreate', async (i) => {
@@ -375,7 +332,7 @@ client.on('interactionCreate', async (i) => {
       const embed = new EmbedBuilder()
         .setTitle('قائمة الأوامر')
         .setColor(0x2b2d31)
-        .setDescription(`-# **/economy balance - عرض الرصيد**\n-# **/economy transfer - تحويل أموال**\n-# **/economy top - قائمة الأغنياء**\n-# **/games mafia - لعبة مافيا**\n-# **/welcome test - تجربة الترحيب**\n-# **/giveaway start - بدء قيف أوي**\n-# **أوامر نصية: دنانير، تحويل، اغنياء، السجل، تايم، طرد، حذف، مافيا، وقف**`);
+        .setDescription(`-# **/economy balance - عرض الرصيد**\n-# **/economy transfer - تحويل أموال**\n-# **/economy top - قائمة الأغنياء**\n-# **/welcome test - تجربة الترحيب**\n-# **/giveaway start - بدء قيف أوي**\n-# **أوامر نصية: دنانير، تحويل، اغنياء، السجل، تايم، طرد، حذف**`);
       return i.reply({ embeds: [embed] });
     }
 
@@ -405,31 +362,6 @@ client.on('interactionCreate', async (i) => {
         const topMsg = topUsers.map((u, idx) => `-# **\u200F${idx+1}. \u202B<@${u.userId}>\u202C - ${u.balance} دينار**`).join('\n');
         const embed = new EmbedBuilder().setTitle('الطبقة الارستقراطية <:y_coroa:1404576666105417871>').setDescription(topMsg).setColor(0x2b2d31);
         return i.reply({ embeds: [embed] });
-      }
-    }
-
-    if (commandName === 'games') {
-      const sub = options.getSubcommand();
-      if (sub === 'mafia') {
-        if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-          return i.reply({ content: '-# **للأسف السيرفر دكتاتوري ما معك صلاحية انك تشغل اللعبة <:__:1467633552408576192> **', ephemeral: true });
-        }
-        const joinRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_mafia').setLabel('انضمام').setStyle(ButtonStyle.Secondary));
-        if (user.id === OWNER_ID) joinRow.addComponents(new ButtonBuilder().setCustomId('dev_start_mafia').setLabel('وضع المطور (تجربة وحدك)').setStyle(ButtonStyle.Danger));
-        
-        const embed = new EmbedBuilder().setTitle('لعبة المافيا <:emoji_38:1401773302619439147>').setDescription(`-# **اضغط على الزر للانضمام! نحتاج 4 لاعبين على الأقل.**\n-# **اللاعبين الحاليين: 0**\n\n-# **شرح اللعبة**\n-# اللعبة فيها قاتل و طبيب و شرطي و مواطنين\n-# القاتل يحاول يقتل الكل بدون ما ينكشف\n-# الطبيب يحمي شخص كل ليلة من القتل\n-# الشرطي يكشف هويات الناس بالليل\n-# المواطنين لازم يصوتون على القاتل ويطردونه عشان يفوزون`).setColor(0x2b2d31);
-        const msg = await i.reply({ embeds: [embed], components: [joinRow], fetchReply: true });
-        activeMafiaGames.set(msg.id, { hostId: user.id, players: [], started: false, alive: [], roles: {}, votes: new Map(), usedAbilities: new Set(), protectedByCloak: null, monitored: null, devMode: false });
-        
-        setTimeout(async () => {
-          const game = activeMafiaGames.get(msg.id);
-          if (game && !game.started) {
-            if (game.players.length < 4 && !game.devMode) {
-              await i.editReply({ content: '-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **', embeds: [], components: [] }).catch(() => {});
-              activeMafiaGames.delete(msg.id);
-            }
-          }
-        }, 30000);
       }
     }
 
@@ -520,149 +452,6 @@ client.on('interactionCreate', async (i) => {
   }
 
   if (i.isButton()) {
-    // معالجة أزرار المافيا
-    if (i.customId === 'join_mafia') {
-      const game = activeMafiaGames.get(i.message.id);
-      if (!game || game.started) return i.reply({ content: 'اللعبة بدأت أو انتهت.', ephemeral: true });
-      if (game.players.includes(i.user.id)) return i.reply({ content: 'أنت منضم أصلاً!', ephemeral: true });
-      game.players.push(i.user.id);
-      const embed = EmbedBuilder.from(i.message.embeds[0]);
-      const playersList = game.players.map(p => `\u200F<@${p}>\u202C`).join(', ');
-      embed.setDescription(`-# **اضغط على الزر للانضمام! نحتاج 4 لاعبين على الأقل.**\n-# **اللاعبين الحاليين: ${game.players.length}**\n${playersList}\n\n-# **شرح اللعبة**\n-# اللعبة فيها قاتل و طبيب و شرطي و مواطنين\n-# القاتل يحاول يقتل الكل بدون ما ينكشف\n-# الطبيب يحمي شخص كل ليلة من القتل\n-# الشرطي يكشف هويات الناس بالليل\n-# المواطنين لازم يصوتون على القاتل ويطردونه عشان يفوزون`);
-      const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_mafia').setLabel('انضمام').setStyle(ButtonStyle.Secondary));
-      if (game.players.length >= 4) row.addComponents(new ButtonBuilder().setCustomId('start_mafia').setLabel('بدء اللعبة').setStyle(ButtonStyle.Success));
-      await i.update({ embeds: [embed], components: [row] }).catch(() => {});
-    }
-
-    if (i.customId === 'dev_start_mafia') {
-      const game = activeMafiaGames.get(i.message.id);
-      if (!game || i.user.id !== OWNER_ID) return i.reply({ content: 'هذا الزر للمطور فقط!', ephemeral: true });
-      game.devMode = true;
-      game.started = true;
-      game.players = [i.user.id, 'bot1', 'bot2', 'bot3'];
-      game.alive = [...game.players];
-      game.roles[i.user.id] = 'mafia';
-      game.roles['bot1'] = 'doctor';
-      game.roles['bot2'] = 'police';
-      game.roles['bot3'] = 'citizen';
-      await i.update({ content: '🚀 تم تفعيل وضع المطور! أنت الآن المافيا لتجربة كل شيء.', embeds: [], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('reveal_role').setLabel('كشف دوري').setStyle(ButtonStyle.Secondary))] }).catch(() => {});
-      setTimeout(() => startNight(i.channel, game), 5000);
-    }
-
-    if (i.customId === 'start_mafia') {
-      const game = activeMafiaGames.get(i.message.id);
-      if (!game || game.hostId !== i.user.id) return i.reply({ content: 'فقط صاحب الأمر يقدر يبدأ اللعبة!', ephemeral: true });
-      game.started = true;
-      game.alive = [...game.players];
-      const players = [...game.players].sort(() => Math.random() - 0.5);
-      
-      game.roles[players[0]] = 'mafia';
-      game.roles[players[1]] = 'doctor';
-      game.roles[players[2]] = 'police';
-      players.slice(3).forEach(p => game.roles[p] = 'citizen');
-
-      await i.update({ content: '✅ بدأت اللعبة! اضغط على الزر لمعرفة دورك.', embeds: [], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('reveal_role').setLabel('كشف دوري').setStyle(ButtonStyle.Secondary))] }).catch(() => {});
-      setTimeout(() => startNight(i.channel, game), 5000);
-    }
-
-    if (i.customId === 'reveal_role') {
-      const game = Array.from(activeMafiaGames.values()).find(g => g.roles[i.user.id]);
-      if (!game) return i.reply({ content: '-# **انت غير مشارك اصلا**', ephemeral: true });
-      
-      const role = game.roles[i.user.id];
-      const roleNames = { mafia: 'مافيا 🔪 <:emoji_38:1470920843398746215>', doctor: 'طبيب 💉 <:emoji_32:1401771771010613319>', police: 'شرطي 🔍 <:s7_discord:1388214117365453062>', citizen: 'مواطن 👨‍🌾 <:emoji_33:1401771703306027008>' };
-      const roleDescs = { mafia: 'تقتل الناس بدون ما يدرون عنك.', doctor: 'تحمي شخص واحد كل جولة من القتل.', police: 'تحاول تكشف مين هو القاتل.', citizen: 'تحاول تعيش وتصوت على الشخص الصح.' };
-
-      return i.reply({ content: `-# **بدأت اللعبة لا تقول لأحد مين انت <:emoji_84:1389404919672340592> **\n-# **انت الحين ${roleNames[role]} الي تقدر تسويه ${roleDescs[role]}**`, ephemeral: true }).catch(() => {});
-    }
-
-    if (i.customId === 'open_mafia_shop') {
-      const game = Array.from(activeMafiaGames.values()).find(g => g.alive.includes(i.user.id));
-      if (!game) return i.reply({ content: '-# **انت غير مشارك اصلا**', ephemeral: true });
-      const role = game.roles[i.user.id];
-      const row = new ActionRowBuilder();
-      
-      if (role === 'doctor') row.addComponents(new ButtonBuilder().setCustomId('buy_ability_heal').setLabel('شراء الشفاء (20)').setStyle(ButtonStyle.Primary));
-      if (role === 'mafia') row.addComponents(new ButtonBuilder().setCustomId('buy_ability_cloak').setLabel('شراء العباءة (10)').setStyle(ButtonStyle.Primary));
-      if (role === 'police') row.addComponents(new ButtonBuilder().setCustomId('buy_ability_monitor').setLabel('شراء المراقبة (10)').setStyle(ButtonStyle.Primary));
-      
-      const shopEmbed = new EmbedBuilder()
-        .setTitle('متجر القدرات 🛒')
-        .setDescription(`-# **قدرة الشفاء 20 دينار**\n-# خاصة بالطبيب ترجع شخص واحد تم اقصائه للحياة\n-# **قدرة العبائة - 10 دينار**\n-# خاصة بالقاتل تنقذك من الكشف و التصويت مره واحدة في اللعبة الواحدة\n-# ** قدرة المراقبة - 10 دينار**\n-# تضع المراقبة على شخص واحد ليتم كشف هوية القاتل عندما يقتل الشخص الذي راقبته فالجولة السابقة`)
-        .setColor(0x2b2d31);
-      
-      return i.reply({ embeds: [shopEmbed], components: row.components.length > 0 ? [row] : [], ephemeral: true });
-    }
-
-    if (i.customId.startsWith('buy_ability_')) {
-      const ability = i.customId.replace('buy_ability_', '');
-      const prices = { heal: 20, cloak: 10, monitor: 10 };
-      const price = prices[ability];
-      const userData = await getUserData(i.user.id);
-      
-      if (userData.balance < price) return i.reply({ content: '-# **تراك مطفر افتح تكت خذ عملات <:money_with_wings:1388212679981666334> **', ephemeral: true });
-      
-      const confirmRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`confirm_buy_${ability}`).setLabel('تأكيد الشراء').setStyle(ButtonStyle.Success));
-      return i.reply({ content: `هل أنت متأكد من شراء القدرة بـ ${price} دينار؟`, components: [confirmRow], ephemeral: true });
-    }
-
-    if (i.customId.startsWith('confirm_buy_')) {
-      const ability = i.customId.replace('confirm_buy_', '');
-      const prices = { heal: 20, cloak: 10, monitor: 10 };
-      const price = prices[ability];
-      const userData = await getUserData(i.user.id);
-      const game = Array.from(activeMafiaGames.values()).find(g => g.alive.includes(i.user.id));
-      
-      if (!game) return i.reply({ content: 'انتهت اللعبة!', ephemeral: true });
-      if (game.usedAbilities.has(`${i.user.id}_${ability}`)) return i.reply({ content: 'استخدمت هذه القدرة بالفعل في هذه المباراة!', ephemeral: true });
-
-      userData.balance -= price;
-      userData.history.push({ type: 'BUY_ABILITY', amount: price });
-      await userData.save();
-      game.usedAbilities.add(`${i.user.id}_${ability}`);
-      
-      if (ability === 'cloak') game.protectedByCloak = i.user.id;
-      
-      await i.update({ content: '✅ تم الشراء بنجاح! تم تفعيل القدرة.', components: [], embeds: [] });
-    }
-
-    if (i.customId.startsWith('mafia_kill_') || i.customId.startsWith('doctor_save_') || i.customId.startsWith('police_check_')) {
-      const game = Array.from(activeMafiaGames.values()).find(g => g.alive.includes(i.user.id));
-      if (!game) return i.reply({ content: '-# **انت غير مشارك اصلا**', ephemeral: true });
-      if (!game.alive.includes(i.user.id)) return i.reply({ content: 'أنت ميت!', ephemeral: true });
-
-      const [action, , targetId] = i.customId.split('_');
-      if (action === 'mafia') {
-        game.nightAction = { type: 'kill', target: targetId };
-        await i.reply({ content: `اخترت قتل <@${targetId}>`, ephemeral: true });
-      } else if (action === 'doctor') {
-        game.nightAction = { ...game.nightAction, doctorTarget: targetId };
-        await i.reply({ content: `اخترت حماية <@${targetId}>`, ephemeral: true });
-      } else if (action === 'police') {
-        if (game.protectedByCloak === targetId) {
-          await i.reply({ content: `الشخص <@${targetId}> هو مواطن بريء 😇 (تم استخدام العباءة)`, ephemeral: true });
-          game.protectedByCloak = null;
-        } else {
-          const isMafia = game.roles[targetId] === 'mafia';
-          await i.reply({ content: `الشخص <@${targetId}> هو ${isMafia ? 'المافيا! 🔪' : 'مواطن بريء 😇'}`, ephemeral: true });
-        }
-      }
-    }
-
-    if (i.customId.startsWith('vote_')) {
-      const targetId = i.customId.split('_')[1];
-      const game = Array.from(activeMafiaGames.values()).find(g => g.alive.includes(i.user.id));
-      if (!game) return i.reply({ content: '-# **انت غير مشارك اصلا**', ephemeral: true });
-      if (!game.alive.includes(i.user.id)) return i.reply({ content: 'أنت ميت!', ephemeral: true });
-      
-      if (game.protectedByCloak === targetId) {
-        return i.reply({ content: 'هذا الشخص محمي بعباءة الإخفاء! لا يمكنك التصويت ضده الآن.', ephemeral: true });
-      }
-      
-      game.votes.set(i.user.id, targetId);
-      return i.reply({ content: `تم تسجيل تصويتك ضد <@${targetId}>`, ephemeral: true }).catch(() => {});
-    }
-
     if (i.customId === 'open_ticket') {
       const ch = await i.guild.channels.create({ name: `ticket-${i.user.username}`, type: ChannelType.GuildText, permissionOverwrites: [{ id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] }, { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }] });
       ch.send({ content: `${i.user}`, components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق').setStyle(ButtonStyle.Danger))] });
@@ -671,112 +460,6 @@ client.on('interactionCreate', async (i) => {
     if (i.customId === 'close_ticket') { await i.reply('سيتم الإغلاق...'); setTimeout(() => i.channel.delete(), 3000); }
   }
 });
-
-async function startNight(channel, game) {
-  if (game.alive.length <= 1) return checkWinner(channel, game);
-  game.nightAction = {};
-  const mafiaId = Object.keys(game.roles).find(id => game.roles[id] === 'mafia' && game.alive.includes(id));
-  const doctorId = Object.keys(game.roles).find(id => game.roles[id] === 'doctor' && game.alive.includes(id));
-  const policeId = Object.keys(game.roles).find(id => game.roles[id] === 'police' && game.alive.includes(id));
-
-  const shopRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('open_mafia_shop').setLabel('القدرات').setStyle(ButtonStyle.Secondary));
-  channel.send({ content: '🌃 حل الليل... الأدوار تقوم بمهامها. يمكنك شراء قدرات الآن!', components: [shopRow] });
-
-  if (mafiaId && mafiaId !== 'bot1' && mafiaId !== 'bot2' && mafiaId !== 'bot3') {
-    const row = new ActionRowBuilder();
-    game.alive.filter(id => id !== mafiaId).slice(0, 5).forEach(pId => {
-      row.addComponents(new ButtonBuilder().setCustomId(`mafia_kill_${pId}`).setLabel(client.users.cache.get(pId)?.username || pId).setStyle(ButtonStyle.Danger));
-    });
-    channel.send({ content: `<@${mafiaId}> اختر ضحيتك (الأزرار تظهر لك فقط)`, components: [row] }).catch(() => {});
-  }
-
-  setTimeout(async () => {
-    if (!game.nightAction.target && mafiaId && !game.devMode) {
-      game.alive = game.alive.filter(id => id !== mafiaId);
-      channel.send(`-# **تم طرد القاتل <@${mafiaId}> لأنه لم ينفذ مهمته في الوقت المحدد!**`);
-      return checkWinner(channel, game);
-    }
-
-    if (doctorId && doctorId !== 'bot1' && doctorId !== 'bot2' && doctorId !== 'bot3') {
-      const row = new ActionRowBuilder();
-      game.alive.slice(0, 5).forEach(pId => {
-        row.addComponents(new ButtonBuilder().setCustomId(`doctor_save_${pId}`).setLabel(client.users.cache.get(pId)?.username || pId).setStyle(ButtonStyle.Success));
-      });
-      channel.send({ content: `<@${doctorId}> اختر شخصاً لحمايته`, components: [row] }).catch(() => {});
-    }
-
-    if (policeId && policeId !== 'bot1' && policeId !== 'bot2' && policeId !== 'bot3') {
-      const row = new ActionRowBuilder();
-      game.alive.filter(id => id !== policeId).slice(0, 5).forEach(pId => {
-        row.addComponents(new ButtonBuilder().setCustomId(`police_check_${pId}`).setLabel(client.users.cache.get(pId)?.username || pId).setStyle(ButtonStyle.Primary));
-      });
-      channel.send({ content: `<@${policeId}> اختر شخصاً للكشف عن هويته`, components: [row] }).catch(() => {});
-    }
-
-    setTimeout(() => {
-      const killedId = game.nightAction.target;
-      const savedId = game.nightAction.doctorTarget;
-      if (killedId && killedId !== savedId) {
-        game.alive = game.alive.filter(id => id !== killedId);
-        channel.send(`🌅 طلع الصبح... للأسف تم قتل <@${killedId}>.`);
-      } else {
-        channel.send('🌅 طلع الصبح... لم يمت أحد هذا الليل.');
-      }
-      startVoting(channel, game);
-    }, 15000);
-  }, 30000);
-}
-
-async function startVoting(channel, game) {
-  if (game.alive.length <= 1) return checkWinner(channel, game);
-  const rows = [];
-  let currentRow = new ActionRowBuilder();
-  game.alive.forEach((pId, index) => {
-    if (index > 0 && index % 5 === 0) { rows.push(currentRow); currentRow = new ActionRowBuilder(); }
-    currentRow.addComponents(new ButtonBuilder().setCustomId(`vote_${pId}`).setLabel(client.users.cache.get(pId)?.username || pId).setStyle(ButtonStyle.Secondary));
-  });
-  rows.push(currentRow);
-  
-  const shopRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('open_mafia_shop').setLabel('القدرات').setStyle(ButtonStyle.Secondary));
-  rows.push(shopRow);
-
-  const voteMsg = await channel.send({ content: `-# ** صوتوا على الشخص الي تشوفونه هو القاتل <:emoji_38:1470920843398746215> **`, components: rows }).catch(() => {});
-  
-  setTimeout(async () => {
-    const voteCounts = {};
-    game.votes.forEach(targetId => voteCounts[targetId] = (voteCounts[targetId] || 0) + 1);
-    let kickedId = null; let maxVotes = 0;
-    for (const [id, count] of Object.entries(voteCounts)) { if (count > maxVotes) { maxVotes = count; kickedId = id; } }
-    
-    if (kickedId) {
-      if (game.protectedByCloak === kickedId) {
-        channel.send(`-# **حاولتم طرد <@${kickedId}> لكنه استخدم عباءة الإخفاء ونجا!**`);
-        game.protectedByCloak = null;
-      } else {
-        const role = game.roles[kickedId];
-        const roleNames = { mafia: 'مافيا 🔪', doctor: 'طبيب 💉', police: 'شرطي 🔍', citizen: 'مواطن 👨‍🌾' };
-        game.alive = game.alive.filter(id => id !== kickedId);
-        channel.send(`-# ** تم طرد <@${kickedId}> و هو كان ${roleNames[role]} **`).catch(() => {});
-        if (role === 'mafia') return checkWinner(channel, game);
-      }
-    } else { channel.send('لم يتم التصويت على أحد، تستمر اللعبة...').catch(() => {}); }
-    
-    game.votes.clear();
-    if (game.alive.length > 1) startNight(channel, game);
-    else checkWinner(channel, game);
-  }, 30000);
-}
-
-function checkWinner(channel, game) {
-  const mafiaAlive = game.alive.some(id => game.roles[id] === 'mafia');
-  const mafiaId = Object.keys(game.roles).find(id => game.roles[id] === 'mafia');
-  const policeId = Object.keys(game.roles).find(id => game.roles[id] === 'police');
-  const doctorId = Object.keys(game.roles).find(id => game.roles[id] === 'doctor');
-  const citizens = Object.keys(game.roles).filter(id => game.roles[id] === 'citizen').map(id => `<@${id}>`).join(', ');
-  if (!mafiaAlive) { channel.send(`-# **المواطنين فازوا  الشرطي <@${policeId}><:s7_discord:1388214117365453062>  المواطنين ${citizens} <:emoji_33:1401771703306027008>  الطبيب <@${doctorId}> <:emoji_32:1401771771010613319>**`).catch(() => {}); }
-  else { channel.send(`-# **القاتل <@${mafiaId}> <:emoji_38:1470920843398746215> لعب فيهم لعب و فاز و محد كشفه <:emoji_33:1401771703306027008>  **`).catch(() => {}); }
-  for (const [key, val] of activeMafiaGames.entries()) { if (val === game) activeMafiaGames.delete(key); }
-}
 
 app.get('/', (req, res) => res.send('Bot is Live!'));
 app.listen(3000, () => client.login(process.env.TOKEN));
