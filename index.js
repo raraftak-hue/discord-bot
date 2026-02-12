@@ -378,7 +378,7 @@ async function startNextTurn(channel, gameId) {
         startNextTurn(channel, gameId);
       }, 8000);
     }
-  }, 10000);
+  }, 15000);
   
   game.timer = timer;
 }
@@ -515,6 +515,7 @@ client.on('messageCreate', async (message) => {
     message.channel.send({ embeds: [new EmbedBuilder().setTitle(`سجل ${user.username}`).setDescription(history).setColor(0x2b2d31)] });
   }
 
+  // ==================== 🎮 أمر ارقام النصي ====================
   if (command === 'ارقام') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
       return;
@@ -548,6 +549,30 @@ client.on('messageCreate', async (message) => {
     
     startNumberGameAfterDelay(msg, activeNumberGames.get(msg.id));
   }
+
+  // ==================== 🛑 أمر ايقاف اللعبة ====================
+  if (command === 'ايقاف') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
+    
+    let found = false;
+    for (const [id, game] of activeNumberGames.entries()) {
+      if (!game.started) {
+        const msg = await message.channel.messages.fetch(id).catch(() => null);
+        if (msg) {
+          await msg.edit({ 
+            content: `-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **`, 
+            components: [] 
+          }).catch(() => {});
+        }
+        activeNumberGames.delete(id);
+        found = true;
+      }
+    }
+    
+    if (found) {
+      message.channel.send(`-# **تم ايقاف جميع الالعاب المعلقة <:s7_discord:1388214117365453062> **`);
+    }
+  }
 });
 
 // ==================== معالجة التخمينات ====================
@@ -571,7 +596,7 @@ client.on('messageCreate', async (message) => {
   const guess = parseInt(message.content);
   
   if (isNaN(guess) || guess < 1 || guess > 100) {
-    return message.reply(`-# **يرجى إدخال رقم بين 1 و 100**`).catch(() => {});
+    return;
   }
   
   if (game.timer) {
@@ -660,7 +685,7 @@ client.on('interactionCreate', async (i) => {
       const embed = new EmbedBuilder()
         .setTitle('قائمة الأوامر')
         .setColor(0x2b2d31)
-        .setDescription(`-# **/economy balance - عرض الرصيد**\n-# **/economy transfer - تحويل أموال**\n-# **/economy top - قائمة الأغنياء**\n-# **/welcome test - تجربة الترحيب**\n-# **/giveaway start - بدء قيف أوي**\n-# **/ticket panel - لوحة التذاكر**\n-# **/ticket setup - تعديل إعدادات التذاكر**\n-# **/numbers - لعبة الأرقام**\n-# **أوامر نصية: دنانير، تحويل، اغنياء، السجل، تايم، طرد، حذف، ارقام**`);
+        .setDescription(`-# **/economy balance - عرض الرصيد**\n-# **/economy transfer - تحويل أموال**\n-# **/economy top - قائمة الأغنياء**\n-# **/welcome test - تجربة الترحيب**\n-# **/giveaway start - بدء قيف أوي**\n-# **/ticket panel - لوحة التذاكر**\n-# **/ticket setup - تعديل إعدادات التذاكر**\n-# **/numbers - لعبة الأرقام**\n-# **أوامر نصية: دنانير، تحويل، اغنياء، السجل، تايم، طرد، حذف، ارقام، ايقاف**`);
       return i.reply({ embeds: [embed] });
     }
 
@@ -743,15 +768,32 @@ client.on('interactionCreate', async (i) => {
         collector.on('collect', async (btn) => {
           if (btn.customId === 'join_giveaway') {
             if (participants.has(btn.user.id)) {
-              const exitRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('exit_giveaway').setLabel('خروج').setStyle(ButtonStyle.Secondary));
-              return btn.reply({ content: '-# **انت داخل السحب اصلا تبي تطلع ؟ <:__:1467633552408576192> **', components: [exitRow], ephemeral: true }).catch(() => {});
+              const exitRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                  .setCustomId('exit_giveaway')
+                  .setLabel('خروج')
+                  .setStyle(ButtonStyle.Secondary)
+              );
+              return btn.reply({ 
+                content: `-# **انت داخل السحب اصلا تبي تطلع ؟ <:__:1467633552408576192> **`, 
+                components: [exitRow],
+                ephemeral: true 
+              }).catch(() => {});
             }
             participants.add(btn.user.id);
-            btn.reply({ content: '-# **تم دخولك فالسحب يا رب تفوز <:2thumbup:1467287897429512396> **', ephemeral: true }).catch(() => {});
+            btn.reply({ 
+              content: `-# **تم دخولك فالسحب يا رب تفوز <:2thumbup:1467287897429512396> **`, 
+              ephemeral: true 
+            }).catch(() => {});
           }
+          
           if (btn.customId === 'exit_giveaway') {
             participants.delete(btn.user.id);
-            btn.reply({ content: '❌ تم خروجك من السحب.', ephemeral: true }).catch(() => {});
+            btn.update({ 
+              content: `-# **تم خروجك من السحب <:s7_discord:1388214117365453062> **`, 
+              components: [], 
+              ephemeral: true 
+            }).catch(() => {});
           }
         });
 
@@ -899,11 +941,19 @@ client.on('interactionCreate', async (i) => {
       i.reply({ content: `✅ تم فتح التذكرة: ${ch}`, ephemeral: true });
     }
 
-    if (i.customId === 'close_ticket') { 
-      await i.reply('🔒 سيتم إغلاق التذكرة خلال 3 ثواني...'); 
-      setTimeout(() => i.channel.delete().catch(() => {}), 3000); 
+    // ✅ زر إغلاق التذكرة - رجعناه مثل الأول
+    if (i.customId === 'close_ticket') {
+      await i.reply({ 
+        content: `🔒 سيتم إغلاق التذكرة خلال 3 ثواني...`, 
+        ephemeral: true 
+      });
+      
+      setTimeout(() => {
+        i.channel.delete().catch(() => {});
+      }, 3000);
     }
 
+    // ✅ زر الانضمام للعبة الأرقام
     if (i.customId === 'join_number_game') {
       const game = activeNumberGames.get(i.message.id);
       if (!game || game.started) {
@@ -921,8 +971,15 @@ client.on('interactionCreate', async (i) => {
       }
       
       if (game.players.includes(i.user.id)) {
+        const exitRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`exit_number_game_${i.message.id}`)
+            .setLabel('خروج')
+            .setStyle(ButtonStyle.Secondary)
+        );
         return i.reply({ 
-          content: `-# **تم انت الحين مشارك فاللعبة <:2thumbup:1467287897429512396> **`, 
+          content: `-# **انت داخل اللعبة اصلا تبي تطلع ؟ <:__:1467633552408576192> **`, 
+          components: [exitRow],
           ephemeral: true 
         }).catch(() => {});
       }
@@ -934,6 +991,24 @@ client.on('interactionCreate', async (i) => {
         content: `-# **تم انت الحين مشارك فاللعبة <:2thumbup:1467287897429512396> **`, 
         ephemeral: true 
       }).catch(() => {});
+    }
+
+    // ✅ زر الخروج من لعبة الأرقام
+    if (i.customId.startsWith('exit_number_game_')) {
+      const gameId = i.customId.replace('exit_number_game_', '');
+      const game = activeNumberGames.get(gameId);
+      
+      if (game && !game.started) {
+        const index = game.players.indexOf(i.user.id);
+        if (index > -1) {
+          game.players.splice(index, 1);
+          game.attempts.delete(i.user.id);
+          await i.update({ 
+            content: `-# **تم خروجك من اللعبة <:s7_discord:1388214117365453062> **`, 
+            components: [] 
+          }).catch(() => {});
+        }
+      }
     }
   }
 });
