@@ -49,7 +49,6 @@ const TicketSettingsSchema = new mongoose.Schema({
   embedImage: { type: String, default: null }
 });
 
-// ==================== 🛡️ نظام الحذف التلقائي - Schema ====================
 const AutoDeleteSchema = new mongoose.Schema({
   guildId: String,
   channelId: { type: String, default: null },
@@ -99,7 +98,6 @@ async function getTicketSettings(guildId) {
   return settings;
 }
 
-// ==================== 🛡️ دالة جلب إعدادات الحذف التلقائي ====================
 async function getAutoDeleteSettings(guildId) {
   let settings = await AutoDelete.findOne({ guildId });
   if (!settings) {
@@ -155,7 +153,6 @@ const slashCommands = [
     description: 'لعبة الأرقام',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString()
   },
-  // ==================== 🛡️ أمر الحذف التلقائي ====================
   {
     name: 'autodelete',
     description: 'إعدادات الحذف التلقائي (للمالك فقط)',
@@ -269,30 +266,23 @@ client.once('ready', async () => {
     }
   } catch (e) { console.error(e); }
 
-  // ==================== 💰 نظام الزكاة الأسبوعي ====================
   cron.schedule('0 0 * * 5', async () => {
     console.log("⏰ بدأ تحصيل الزكاة الأسبوعية...");
-
     const users = await User.find({ balance: { $gt: 50 } });
     let totalTax = 0;
-
     for (const user of users) {
       const oldBalance = user.balance;
       const taxAmount = (oldBalance * 0.025).toFixed(2);
       const tax = parseFloat(taxAmount);
-
       user.balance = parseFloat((oldBalance - tax).toFixed(2));
       user.history.push({ type: 'WEEKLY_TAX', amount: -tax });
       await user.save();
-
       totalTax += tax;
-
       const discordUser = await client.users.fetch(user.userId).catch(() => null);
       if (discordUser) {
         await discordUser.send(`-# ** تم جمع الزكاة الاسبوعية التي تقدر بـ 2.5% على الثروة التي تبلغ فوق الـ50 دينار <:florktahehe:1458398337874268307> **`).catch(() => { });
       }
     }
-
     console.log(`✅ تم خصم الزكاة من ${users.length} عضو بمجموع ${totalTax.toFixed(2)} دينار`);
   });
 });
@@ -303,17 +293,14 @@ async function sendWelcome(member, guildSettings) {
   if (!channelId) return;
   const channel = member.guild.channels.cache.get(channelId);
   if (!channel) return;
-
   const embed = new EmbedBuilder().setColor(parseInt(color, 16) || 0x2b2d31);
   const processText = (text) => text ? text.replace(/{member}/g, `${member}`) : null;
   const finalTitle = processText(title);
   const finalDesc = processText(description);
-
   if (finalTitle) embed.setTitle(finalTitle);
   if (finalDesc) embed.setDescription(finalDesc);
   if (image) embed.setImage(image);
   if (!finalTitle && !finalDesc && !image) return;
-
   channel.send({ embeds: [embed] }).catch(() => { });
 }
 
@@ -324,13 +311,12 @@ client.on('guildMemberAdd', async (member) => {
   await sendWelcome(member, settings);
 });
 
-// ==================== 💸 نظام التحويل ====================
+// ==================== 💸 المتغيرات العامة ====================
 const pendingTransfers = new Map();
 const transferCooldowns = new Map();
-
-// ==================== 🎮 لعبة الأرقام ====================
 const activeNumberGames = new Map();
 
+// ==================== 🎮 دوال لعبة الأرقام ====================
 function getUserTag(userId) {
   const user = client.users.cache.get(userId);
   return user ? `<@${userId}>` : userId;
@@ -340,7 +326,6 @@ function findClosestGuess(guesses, secretNumber) {
   if (!guesses || guesses.length === 0) return null;
   let closest = guesses[0];
   let minDiff = Math.abs(guesses[0].guess - secretNumber);
-
   for (const g of guesses) {
     const diff = Math.abs(g.guess - secretNumber);
     if (diff < minDiff) {
@@ -355,107 +340,58 @@ async function startNumberGameAfterDelay(msg, gameData) {
   setTimeout(async () => {
     const game = activeNumberGames.get(msg.id);
     if (!game) return;
-
     if (game.players.length === 0) {
-      await msg.edit({
-        content: `-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **`,
-        components: []
-      }).catch(() => { });
+      await msg.edit({ content: `-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **`, components: [] }).catch(() => { });
       activeNumberGames.delete(msg.id);
       return;
     }
-
     game.started = true;
     game.secretNumber = Math.floor(Math.random() * 100) + 1;
-
     const playersList = game.players.map(p => getUserTag(p)).join(' ');
-    await msg.channel.send(
-      `-# ** تم بدأ اللعبة كل واحد من المشاركين عنده جولة يخمن فيها الرقم و كل مشارك له ${game.players.length === 1 ? '5' : '3'} محاولات الا اذا فاز احد فيكم <:new_emoji:1388436089584226387> **\n` +
-      `-# المشاركين هم ${playersList}`
-    ).catch(() => { });
-
-    setTimeout(async () => {
-      await msg.delete().catch(() => { });
-    }, 10000);
-
-    setTimeout(() => {
-      startNextTurn(msg.channel, msg.id);
-    }, 10000);
-
+    await msg.channel.send(`-# ** تم بدأ اللعبة كل واحد من المشاركين عنده جولة يخمن فيها الرقم و كل مشارك له ${game.players.length === 1 ? '5' : '3'} محاولات الا اذا فاز احد فيكم <:new_emoji:1388436089584226387> **\n` + `-# المشاركين هم ${playersList}`).catch(() => { });
+    setTimeout(async () => { await msg.delete().catch(() => { }); }, 10000);
+    setTimeout(() => { startNextTurn(msg.channel, msg.id); }, 10000);
   }, 20000);
 }
 
 async function startNextTurn(channel, gameId) {
   const game = activeNumberGames.get(gameId);
   if (!game || !game.started || game.winner) return;
-
   const maxAttempts = game.players.length === 1 ? 5 : 3;
-
-  game.alivePlayers = game.players.filter(p => {
-    const attempts = game.attempts.get(p) || 0;
-    return attempts < maxAttempts;
-  });
-
+  game.alivePlayers = game.players.filter(p => { const attempts = game.attempts.get(p) || 0; return attempts < maxAttempts; });
   if (game.alivePlayers.length === 0) {
     const guesses = game.guesses || [];
     const closest = findClosestGuess(guesses, game.secretNumber);
-
     if (game.players.length === 1) {
-      await channel.send(
-        `-# ** نفذت خلصت محاولاتك الـ 5 و الرقم الصح كان ${game.secretNumber} <:emoji_11:1467287898448724039> **`
-      ).catch(() => { });
+      await channel.send(`-# ** نفذت خلصت محاولاتك الـ 5 و الرقم الصح كان ${game.secretNumber} <:emoji_11:1467287898448724039> **`).catch(() => { });
     } else {
       const closestUser = closest ? getUserTag(closest.userId) : 'لا يوجد';
-      await channel.send(
-        `-# ** الرقم الصح كان ${game.secretNumber} محد جابها صح و نفذت كل محاولات كل المشتركين بس اقرب واحد جاب تخمين هو ${closestUser} <:emoji_11:1467287898448724039> **`
-      ).catch(() => { });
+      await channel.send(`-# ** الرقم الصح كان ${game.secretNumber} محد جابها صح و نفذت كل محاولات كل المشتركين بس اقرب واحد جاب تخمين هو ${closestUser} <:emoji_11:1467287898448724039> **`).catch(() => { });
     }
-
     activeNumberGames.delete(gameId);
     return;
   }
-
-  if (game.currentTurnIndex >= game.alivePlayers.length) {
-    game.currentTurnIndex = 0;
-  }
-
+  if (game.currentTurnIndex >= game.alivePlayers.length) game.currentTurnIndex = 0;
   const currentPlayer = game.alivePlayers[game.currentTurnIndex];
   game.currentTurn = currentPlayer;
-
-  await channel.send(
-    `-# **دور المشارك ${getUserTag(currentPlayer)} للتخمين **`
-  ).catch(() => { });
-
-  if (game.timer) {
-    clearTimeout(game.timer);
-    game.timer = null;
-  }
-
+  await channel.send(`-# **دور المشارك ${getUserTag(currentPlayer)} للتخمين **`).catch(() => { });
+  if (game.timer) { clearTimeout(game.timer); game.timer = null; }
   const timer = setTimeout(async () => {
     const game = activeNumberGames.get(gameId);
     if (!game || !game.started || game.winner) return;
     if (game.currentTurn === currentPlayer) {
-
-      await channel.send(
-        `-# **المشارك ${getUserTag(currentPlayer)} انطرد عشان ما خمن قبل انتهاء الوقت <:s7_discord:1388214117365453062> **`
-      ).catch(() => { });
-
+      await channel.send(`-# **المشارك ${getUserTag(currentPlayer)} انطرد عشان ما خمن قبل انتهاء الوقت <:s7_discord:1388214117365453062> **`).catch(() => { });
       const attempts = game.attempts.get(currentPlayer) || 0;
       const maxAttempts = game.players.length === 1 ? 5 : 3;
       game.attempts.set(currentPlayer, attempts + maxAttempts);
-
       game.currentTurnIndex++;
-
-      setTimeout(() => {
-        startNextTurn(channel, gameId);
-      }, 8000);
+      setTimeout(() => { startNextTurn(channel, gameId); }, 8000);
     }
   }, 15000);
-
   game.timer = timer;
 }
 
-// ==================== 📝 الأوامر النصية ====================
+// ==================== 📝 معالج الرسائل الموحد (واحد بس!) ====================
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
   const globalSettings = await getGlobalSettings();
@@ -464,25 +400,22 @@ client.on('messageCreate', async (message) => {
   const args = message.content.trim().split(/\s+/);
   const command = args[0];
 
-  // تأكيد التحويل
+  // 1️⃣ تأكيد التحويل
   const pending = Array.from(pendingTransfers.values()).find(p => p.senderId === message.author.id && p.channelId === message.channel.id);
   if (message.content === 'تأكيد' && pending) {
     const data = pending;
     const sender = await getUserData(data.senderId);
     const target = await getUserData(data.targetId);
-
     if (sender.balance < data.amount) {
       pendingTransfers.delete(data.msgId);
       return message.channel.send(`-# **رصيدك ما يكفي الحين يا فقير <:emoji_464:1388211597197050029>**`);
     }
-
     sender.balance = parseFloat((sender.balance - data.amount).toFixed(2));
     target.balance = parseFloat((target.balance + data.amount).toFixed(2));
     sender.history.push({ type: 'TRANSFER_SEND', amount: -data.amount });
     target.history.push({ type: 'TRANSFER_RECEIVE', amount: data.amount });
     await sender.save(); await target.save();
     transferCooldowns.set(data.senderId, Date.now());
-
     const confirmMsg = await message.channel.messages.fetch(data.msgId).catch(() => null);
     if (confirmMsg) {
       await confirmMsg.edit({ content: `-# **تم تحويل ${data.amount} لـ <@${data.targetId}> رصيدك الآن ${sender.balance} <a:moneywith_:1470458218953179237>**`, components: [] }).catch(() => { });
@@ -492,7 +425,7 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // أوامر الإدارة
+  // 2️⃣ أوامر الإدارة
   if (command === 'تايم') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
     const member = message.mentions.members.first();
@@ -509,6 +442,7 @@ client.on('messageCreate', async (message) => {
     } catch (error) {
       message.channel.send(`-# **ما تقدر تسويها هو يدعس عليك <:emoji_43:1397804543789498428>**`);
     }
+    return;
   }
 
   if (command === 'تكلم') {
@@ -521,6 +455,7 @@ client.on('messageCreate', async (message) => {
     } catch (error) {
       message.channel.send(`-# **ما اقدر افك عنه التايم، تأكد من صلاحيات البوت <:emoji_43:1397804543789498428>**`);
     }
+    return;
   }
 
   if (command === 'طرد') {
@@ -535,6 +470,7 @@ client.on('messageCreate', async (message) => {
     } catch (error) {
       message.channel.send(`-# **ما اقدر اطرده، تأكد من صلاحيات البوت <:emoji_43:1397804543789498428>**`);
     }
+    return;
   }
 
   if (command === 'حذف') {
@@ -548,12 +484,15 @@ client.on('messageCreate', async (message) => {
     } catch (error) {
       message.channel.send(`-# **ما اقدر احذف الرسايل، تأكد من صلاحيات البوت <:emoji_43:1397804543789498428>**`);
     }
+    return;
   }
 
+  // 3️⃣ أوامر الاقتصاد
   if (command === 'دنانير') {
     const user = message.mentions.users.first() || message.author;
     const userData = await getUserData(user.id);
     message.channel.send(`-# **رصيد ${user} هو ${userData.balance} دينار <:money_with_wings:1388212679981666334>**`);
+    return;
   }
 
   if (command === 'تحويل') {
@@ -563,16 +502,15 @@ client.on('messageCreate', async (message) => {
     const senderData = await getUserData(message.author.id);
     if (senderData.balance < amount) return message.channel.send(`-# **رصيدك ما يكفي يا فقير <:emoji_464:1388211597197050029>**`);
     if (target.id === message.author.id) return message.channel.send(`-# **ما تقدر تحول لنفسك يا اهبل <:emoji_464:1388211597197050029>**`);
-
     const lastTransfer = transferCooldowns.get(message.author.id);
     if (lastTransfer && Date.now() - lastTransfer < 10000) {
       const remaining = Math.ceil((10000 - (Date.now() - lastTransfer)) / 1000);
       return message.channel.send(`-# **انتظر ${remaining} ثواني قبل التحويل مرة أخرى <:emoji_334:1388211595053760663>**`);
     }
-
     const confirmMsg = await message.channel.send({ content: `-# **اكتب "تأكيد" لو انت متأكد من عملية التحويل  **\n-# تجاهل الرسالة لو لم تكن متاكد` });
     pendingTransfers.set(confirmMsg.id, { senderId: message.author.id, targetId: target.id, amount, msgId: confirmMsg.id, channelId: message.channel.id });
     setTimeout(() => { if (pendingTransfers.has(confirmMsg.id)) { pendingTransfers.delete(confirmMsg.id); confirmMsg.delete().catch(() => { }); } }, 10000);
+    return;
   }
 
   if (command === 'اغنياء') {
@@ -580,6 +518,7 @@ client.on('messageCreate', async (message) => {
     const topMsg = topUsers.map((u, idx) => `-# **\u200F${idx + 1}. \u202B<@${u.userId}>\u202C - ${u.balance} دينار**`).join('\n');
     const embed = new EmbedBuilder().setTitle('الطبقة الارستقراطية <:y_coroa:1404576666105417871>').setDescription(topMsg).setColor(0x2b2d31);
     message.channel.send({ embeds: [embed] });
+    return;
   }
 
   if (command === 'السجل') {
@@ -587,174 +526,95 @@ client.on('messageCreate', async (message) => {
     const userData = await getUserData(user.id);
     const history = userData.history.slice(-5).reverse().map(h => `-# **${h.type}: ${h.amount} (${h.date.toLocaleDateString()})**`).join('\n') || 'لا يوجد سجل.';
     message.channel.send({ embeds: [new EmbedBuilder().setTitle(`سجل ${user.username}`).setDescription(history).setColor(0x2b2d31)] });
+    return;
   }
 
-  // ==================== 🎮 أمر ارقام النصي ====================
+  // 4️⃣ أوامر لعبة الأرقام
   if (command === 'ارقام') {
-    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-      return;
-    }
-
-    // ✅ منع تكرار اللعبة في نفس الروم
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
     for (const [id, game] of activeNumberGames.entries()) {
       const msg = await message.channel.messages.fetch(id).catch(() => null);
       if (msg && !game.started) {
         return message.channel.send(`-# **في لعبة شغالة يـ عبد خلها تخلص <:emoji_38:1470920843398746215> **`);
       }
     }
-
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('join_number_game')
-        .setLabel('انضم للعبة')
-        .setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId('join_number_game').setLabel('انضم للعبة').setStyle(ButtonStyle.Secondary)
     );
-
-    const msg = await message.channel.send({
-      content: `-# **تم بدأ لعبة التخمين مهمتكم رح تكون تخمين الرقم الصحيح من 1 الى 100 <:new_emoji:1388436089584226387> **`,
-      components: [row]
-    }).catch(() => { });
-
+    const msg = await message.channel.send({ content: `-# **تم بدأ لعبة التخمين مهمتكم رح تكون تخمين الرقم الصحيح من 1 الى 100 <:new_emoji:1388436089584226387> **`, components: [row] }).catch(() => { });
     activeNumberGames.set(msg.id, {
-      hostId: message.author.id,
-      players: [],
-      attempts: new Map(),
-      guesses: [],
-      started: false,
-      winner: null,
-      secretNumber: null,
-      currentTurn: null,
-      currentTurnIndex: 0,
-      alivePlayers: [],
-      timer: null
+      hostId: message.author.id, players: [], attempts: new Map(), guesses: [], started: false,
+      winner: null, secretNumber: null, currentTurn: null, currentTurnIndex: 0, alivePlayers: [], timer: null
     });
-
     startNumberGameAfterDelay(msg, activeNumberGames.get(msg.id));
+    return;
   }
 
-  // ==================== 🛑 أمر ايقاف اللعبة ====================
   if (command === 'ايقاف') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
-
     let found = false;
     for (const [id, game] of activeNumberGames.entries()) {
       if (!game.started) {
         const msg = await message.channel.messages.fetch(id).catch(() => null);
-        if (msg) {
-          await msg.edit({
-            content: `-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **`,
-            components: []
-          }).catch(() => { });
-        }
+        if (msg) { await msg.edit({ content: `-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **`, components: [] }).catch(() => { }); }
         activeNumberGames.delete(id);
         found = true;
       }
     }
-
-    if (found) {
-      message.channel.send(`-# **تم ايقاف جميع الالعاب المعلقة <:s7_discord:1388214117365453062> **`);
-    }
+    if (found) { message.channel.send(`-# **تم ايقاف جميع الالعاب المعلقة <:s7_discord:1388214117365453062> **`); }
+    return;
   }
-});
 
-// ==================== معالجة التخمينات ====================
-client.on('messageCreate', async (message) => {
-  if (message.author.bot) return;
-
+  // 5️⃣ معالجة التخمينات
   let activeGame = null;
   let gameId = null;
-
   for (const [id, game] of activeNumberGames.entries()) {
-    if (game.started &&
-      game.alivePlayers &&
-      game.alivePlayers.includes(message.author.id) &&
-      game.currentTurn === message.author.id) {
-      activeGame = game;
-      gameId = id;
-      break;
+    if (game.started && game.alivePlayers && game.alivePlayers.includes(message.author.id) && game.currentTurn === message.author.id) {
+      activeGame = game; gameId = id; break;
     }
   }
-
-  if (!activeGame) return;
-
-  const game = activeGame;
-  const guess = parseInt(message.content);
-
-  if (isNaN(guess) || guess < 1 || guess > 100) {
-    return;
-  }
-
-  if (game.timer) {
-    clearTimeout(game.timer);
-    game.timer = null;
-  }
-
-  game.guesses.push({
-    userId: message.author.id,
-    guess: guess
-  });
-
-  if (guess === game.secretNumber) {
-    game.winner = message.author.id;
-
+  if (activeGame) {
+    const game = activeGame;
+    const guess = parseInt(message.content);
+    if (isNaN(guess) || guess < 1 || guess > 100) return;
+    if (game.timer) { clearTimeout(game.timer); game.timer = null; }
+    game.guesses.push({ userId: message.author.id, guess: guess });
+    if (guess === game.secretNumber) {
+      game.winner = message.author.id;
+      if (game.players.length === 1) {
+        await message.channel.send(`-# **مبروك جبت الرقم الصح و هو ${game.secretNumber} هذا ذكاء ولا حظ يا ترى …. <:1_81:1467286889877999843> **`).catch(() => { });
+      } else {
+        await message.channel.send(`-# **مبروك المشارك ${getUserTag(message.author.id)} جاب الرقم الصح و هو ${game.secretNumber} حظا اوفر للمشاركين الآخرين فالمرات القادمة <:1_81:1467286889877999843> **`).catch(() => { });
+      }
+      activeNumberGames.delete(gameId);
+      return;
+    }
+    const attempts = game.attempts.get(message.author.id) || 0;
+    game.attempts.set(message.author.id, attempts + 1);
+    const maxAttempts = game.players.length === 1 ? 5 : 3;
     if (game.players.length === 1) {
-      await message.channel.send(
-        `-# **مبروك جبت الرقم الصح و هو ${game.secretNumber} هذا ذكاء ولا حظ يا ترى …. <:1_81:1467286889877999843> **`
-      ).catch(() => { });
+      if (guess < game.secretNumber) { await message.channel.send(`-# **تخمينك غلط و الرقم اكبر من ${guess} <:1_12:1467286888489422984> **`).catch(() => { }); }
+      else { await message.channel.send(`-# **تخمينك غلط و الرقم اصغر من ${guess} <:1_12:1467286888489422984> **`).catch(() => { }); }
     } else {
-      await message.channel.send(
-        `-# **مبروك المشارك ${getUserTag(message.author.id)} جاب الرقم الصح و هو ${game.secretNumber} حظا اوفر للمشاركين الآخرين فالمرات القادمة <:1_81:1467286889877999843> **`
-      ).catch(() => { });
+      if (guess < game.secretNumber) { await message.channel.send(`-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم أكبر من الرقم ${guess} **`).catch(() => { }); }
+      else { await message.channel.send(`-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم أصغر من الرقم ${guess} **`).catch(() => { }); }
     }
-
-    activeNumberGames.delete(gameId);
-    return;
-  }
-
-  const attempts = game.attempts.get(message.author.id) || 0;
-  game.attempts.set(message.author.id, attempts + 1);
-  const maxAttempts = game.players.length === 1 ? 5 : 3;
-
-  if (game.players.length === 1) {
-    if (guess < game.secretNumber) {
-      await message.channel.send(
-        `-# **تخمينك غلط و الرقم اكبر من ${guess} <:1_12:1467286888489422984> **`
-      ).catch(() => { });
-    } else {
-      await message.channel.send(
-        `-# **تخمينك غلط و الرقم اصغر من ${guess} <:1_12:1467286888489422984> **`
-      ).catch(() => { });
+    if (attempts + 1 >= maxAttempts) {
+      await message.channel.send(`-# **المشارك ${getUserTag(message.author.id)} انطرد عشان خلصت محاولاته ${maxAttempts} <:s7_discord:1388214117365453062> **`).catch(() => { });
+      game.currentTurnIndex++;
+      setTimeout(() => { startNextTurn(message.channel, gameId); }, 8000);
+      return;
     }
-  } else {
-    if (guess < game.secretNumber) {
-      await message.channel.send(
-        `-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم أكبر من الرقم ${guess} **`
-      ).catch(() => { });
-    } else {
-      await message.channel.send(
-        `-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم أصغر من الرقم ${guess} **`
-      ).catch(() => { });
-    }
-  }
-
-  if (attempts + 1 >= maxAttempts) {
-    await message.channel.send(
-      `-# **المشارك ${getUserTag(message.author.id)} انطرد عشان خلصت محاولاته ${maxAttempts} <:s7_discord:1388214117365453062> **`
-    ).catch(() => { });
-
     game.currentTurnIndex++;
-
-    setTimeout(() => {
-      startNextTurn(message.channel, gameId);
-    }, 8000);
+    setTimeout(() => { startNextTurn(message.channel, gameId); }, 8000);
     return;
   }
 
-  game.currentTurnIndex++;
-
-  setTimeout(() => {
-    startNextTurn(message.channel, gameId);
-  }, 8000);
+  // 6️⃣ نظام الحذف التلقائي
+  const autoDeleteSettings = await getAutoDeleteSettings(message.guild.id);
+  if (autoDeleteSettings.channelId && message.channel.id === autoDeleteSettings.channelId && !autoDeleteSettings.exceptUsers.includes(message.author.id)) {
+    setTimeout(async () => { try { await message.delete(); console.log(`🗑️ تم حذف رسالة من ${message.author.tag} في ${message.channel.name}`); } catch (e) { } }, 30000);
+  }
 });
 
 // ==================== 🎮 تفاعلات الأزرار ====================
@@ -790,10 +650,10 @@ client.on('interactionCreate', async (i) => {
         const amount = options.getInteger('amount');
         if (userData.balance < amount) return i.reply({ content: 'رصيدك لا يكفي.', ephemeral: true });
         if (target.id === user.id) return i.reply({ content: 'ما تقدر تحول لنفسك.', ephemeral: true });
-
         const confirmMsg = await i.reply({ content: `-# **اكتب "تأكيد" لو انت متأكد من عملية التحويل  **\n-# تجاهل الرسالة لو لم تكن متاكد`, fetchReply: true });
         pendingTransfers.set(confirmMsg.id, { senderId: user.id, targetId: target.id, amount, msgId: confirmMsg.id, channelId: i.channel.id });
         setTimeout(() => { if (pendingTransfers.has(confirmMsg.id)) { pendingTransfers.delete(confirmMsg.id); i.deleteReply().catch(() => { }); } }, 10000);
+        return;
       }
       if (sub === 'top') {
         const topUsers = await User.find().sort({ balance: -1 }).limit(5);
@@ -821,6 +681,7 @@ client.on('interactionCreate', async (i) => {
         await sendWelcome(member, settings);
         i.reply({ content: '✅ تم إرسال تجربة الترحيب.', ephemeral: true });
       }
+      return;
     }
 
     if (commandName === 'giveaway') {
@@ -831,57 +692,34 @@ client.on('interactionCreate', async (i) => {
         const winnersCount = options.getInteger('winners');
         const condition = options.getString('condition') || 'لا توجد شروط';
         const image = options.getString('image');
-
         const timeMatch = durationStr.match(/^(\d+)([mhd])$/);
         if (!timeMatch) return i.reply({ content: 'صيغة الوقت غلط! (مثال: 10m, 1h, 1d)', ephemeral: true });
         const timeValue = parseInt(timeMatch[1]);
         const timeUnit = timeMatch[2];
         const durationMs = timeValue * (timeUnit === 'm' ? 60 : timeUnit === 'h' ? 3600 : 86400) * 1000;
         const endTime = Math.floor((Date.now() + durationMs) / 1000);
-
         const embed = new EmbedBuilder()
           .setDescription(`-# **سحب عشوائي على ${prize} ينتهي في <t:${endTime}:R> <:emoji_45:1397804598110195863> **\n-# **الي سوا السحب العشوائي ${user} <:y_coroa:1404576666105417871> **\n-# **الشروط ${condition} <:new_emoji:1388436089584226387> **`)
           .setColor(0x2b2d31);
         if (image) embed.setImage(image);
-
         const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_giveaway').setLabel('ادخل').setStyle(ButtonStyle.Secondary));
         const msg = await i.reply({ embeds: [embed], components: [row], fetchReply: true });
-
         const participants = new Set();
         const collector = msg.createMessageComponentCollector({ time: durationMs });
-
         collector.on('collect', async (btn) => {
           if (btn.customId === 'join_giveaway') {
             if (participants.has(btn.user.id)) {
-              const exitRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                  .setCustomId('exit_giveaway')
-                  .setLabel('خروج')
-                  .setStyle(ButtonStyle.Secondary)
-              );
-              return btn.reply({
-                content: `-# **انت داخل السحب اصلا تبي تطلع ؟ <:__:1467633552408576192> **`,
-                components: [exitRow],
-                ephemeral: true
-              }).catch(() => { });
+              const exitRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('exit_giveaway').setLabel('خروج').setStyle(ButtonStyle.Secondary));
+              return btn.reply({ content: `-# **انت داخل السحب اصلا تبي تطلع ؟ <:__:1467633552408576192> **`, components: [exitRow], ephemeral: true }).catch(() => { });
             }
             participants.add(btn.user.id);
-            btn.reply({
-              content: `-# **تم دخولك فالسحب يا رب تفوز <:2thumbup:1467287897429512396> **`,
-              ephemeral: true
-            }).catch(() => { });
+            btn.reply({ content: `-# **تم دخولك فالسحب يا رب تفوز <:2thumbup:1467287897429512396> **`, ephemeral: true }).catch(() => { });
           }
-
           if (btn.customId === 'exit_giveaway') {
             participants.delete(btn.user.id);
-            btn.update({
-              content: `-# **تم خروجك من السحب <:s7_discord:1388214117365453062> **`,
-              components: [],
-              ephemeral: true
-            }).catch(() => { });
+            btn.update({ content: `-# **تم خروجك من السحب <:s7_discord:1388214117365453062> **`, components: [], ephemeral: true }).catch(() => { });
           }
         });
-
         collector.on('end', async () => {
           const list = Array.from(participants);
           if (list.length === 0) return msg.edit({ content: '❌ انتهى القيف أوي بدون مشاركين.', embeds: [], components: [] }).catch(() => { });
@@ -895,144 +733,71 @@ client.on('interactionCreate', async (i) => {
           msg.channel.send(`-# **مبروك فزتم بـ ${prize} افتحوا تكت عشان تستلموها <:emoji_33:1401771703306027008> **\n-# **${winners.join(', ')}**`).catch(() => { });
         });
       }
+      return;
     }
 
     if (commandName === 'ticket') {
       const sub = options.getSubcommand();
       const ticketSettings = await getTicketSettings(i.guild.id);
-
       if (sub === 'panel') {
         const embed = new EmbedBuilder()
           .setTitle(ticketSettings.embedTitle)
           .setDescription(ticketSettings.embedDescription)
           .setColor(parseInt(ticketSettings.embedColor, 16) || 0x2b2d31);
         if (ticketSettings.embedImage) embed.setImage(ticketSettings.embedImage);
-
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('open_ticket').setLabel('فتح تذكرة').setStyle(ButtonStyle.Secondary)
-        );
+        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('open_ticket').setLabel('فتح تذكرة').setStyle(ButtonStyle.Secondary));
         i.reply({ embeds: [embed], components: [row] });
       }
-
       if (sub === 'setup') {
         let updated = false;
-        if (options.getChannel('category')) {
-          ticketSettings.categoryId = options.getChannel('category').id;
-          updated = true;
-        }
-        if (options.getString('title')) {
-          ticketSettings.embedTitle = options.getString('title');
-          updated = true;
-        }
-        if (options.getString('description')) {
-          ticketSettings.embedDescription = options.getString('description');
-          updated = true;
-        }
-        if (options.getString('color')) {
-          ticketSettings.embedColor = options.getString('color').replace('#', '');
-          updated = true;
-        }
-        if (options.getString('image')) {
-          ticketSettings.embedImage = options.getString('image');
-          updated = true;
-        }
-
-        if (updated) {
-          await ticketSettings.save();
-          i.reply({ content: '✅ تم تحديث إعدادات التذاكر بنجاح.', ephemeral: true });
-        } else {
-          i.reply({ content: '⚠️ ما حددت أي خيار للتحديث.', ephemeral: true });
-        }
+        if (options.getChannel('category')) { ticketSettings.categoryId = options.getChannel('category').id; updated = true; }
+        if (options.getString('title')) { ticketSettings.embedTitle = options.getString('title'); updated = true; }
+        if (options.getString('description')) { ticketSettings.embedDescription = options.getString('description'); updated = true; }
+        if (options.getString('color')) { ticketSettings.embedColor = options.getString('color').replace('#', ''); updated = true; }
+        if (options.getString('image')) { ticketSettings.embedImage = options.getString('image'); updated = true; }
+        if (updated) { await ticketSettings.save(); i.reply({ content: '✅ تم تحديث إعدادات التذاكر بنجاح.', ephemeral: true }); }
+        else { i.reply({ content: '⚠️ ما حددت أي خيار للتحديث.', ephemeral: true }); }
       }
+      return;
     }
 
     if (commandName === 'resetall') {
-      if (user.id !== OWNER_ID) {
-        return i.reply({ content: '❌ هذا الأمر فقط لمالك البوت.', ephemeral: true });
-      }
-      await User.updateMany({}, {
-        balance: 5,
-        history: [{ type: 'RESET_ALL', amount: 5, date: new Date() }]
-      });
+      if (user.id !== OWNER_ID) { return i.reply({ content: '❌ هذا الأمر فقط لمالك البوت.', ephemeral: true }); }
+      await User.updateMany({}, { balance: 5, history: [{ type: 'RESET_ALL', amount: 5, date: new Date() }] });
       return i.reply('✅ تم إعادة تعيين رصيد الجميع إلى **5 دنانير**.');
     }
 
     if (commandName === 'numbers') {
-      if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-        return i.reply({ content: '❌ هذا الأمر للأدمن فقط.', ephemeral: true });
-      }
-
-      // ✅ منع تكرار اللعبة في نفس الروم
+      if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) { return i.reply({ content: '❌ هذا الأمر للأدمن فقط.', ephemeral: true }); }
       for (const [id, game] of activeNumberGames.entries()) {
         const msg = await i.channel.messages.fetch(id).catch(() => null);
-        if (msg && !game.started) {
-          return i.reply({
-            content: `-# **في لعبة شغالة يـ عبد خلها تخلص <:emoji_38:1470920843398746215> **`,
-            ephemeral: true
-          });
-        }
+        if (msg && !game.started) { return i.reply({ content: `-# **في لعبة شغالة يـ عبد خلها تخلص <:emoji_38:1470920843398746215> **`, ephemeral: true }); }
       }
-
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId('join_number_game')
-          .setLabel('انضم للعبة')
-          .setStyle(ButtonStyle.Secondary)
-      );
-
-      await i.reply({
-        content: `-# **تم بدأ لعبة التخمين مهمتكم رح تكون تخمين الرقم الصحيح من 1 الى 100 <:new_emoji:1388436089584226387> **`,
-        components: [row]
-      });
-
+      const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_number_game').setLabel('انضم للعبة').setStyle(ButtonStyle.Secondary));
+      await i.reply({ content: `-# **تم بدأ لعبة التخمين مهمتكم رح تكون تخمين الرقم الصحيح من 1 الى 100 <:new_emoji:1388436089584226387> **`, components: [row] });
       const msg = await i.fetchReply();
-
       activeNumberGames.set(msg.id, {
-        hostId: i.user.id,
-        players: [],
-        attempts: new Map(),
-        guesses: [],
-        started: false,
-        winner: null,
-        secretNumber: null,
-        currentTurn: null,
-        currentTurnIndex: 0,
-        alivePlayers: [],
-        timer: null
+        hostId: i.user.id, players: [], attempts: new Map(), guesses: [], started: false,
+        winner: null, secretNumber: null, currentTurn: null, currentTurnIndex: 0, alivePlayers: [], timer: null
       });
-
       startNumberGameAfterDelay(msg, activeNumberGames.get(msg.id));
+      return;
     }
 
-    // ==================== 🛡️ أمر autodelete ====================
     if (commandName === 'autodelete') {
-      if (user.id !== OWNER_ID) {
-        return i.reply({ content: '❌ هذا الأمر فقط لمالك البوت.', ephemeral: true });
-      }
-
+      if (user.id !== OWNER_ID) { return i.reply({ content: '❌ هذا الأمر فقط لمالك البوت.', ephemeral: true }); }
       const sub = options.getSubcommand();
-
       if (sub === 'set') {
         const channel = options.getChannel('channel');
         const excepts = [];
-
-        for (let x = 1; x <= 5; x++) {
-          const id = options.getString(`except${x}`);
-          if (id) excepts.push(id);
-        }
-
+        for (let x = 1; x <= 5; x++) { const id = options.getString(`except${x}`); if (id) excepts.push(id); }
         const autoDeleteSettings = await getAutoDeleteSettings(i.guild.id);
         autoDeleteSettings.channelId = channel.id;
         autoDeleteSettings.exceptUsers = excepts;
         await autoDeleteSettings.save();
-
         const exceptList = excepts.length > 0 ? excepts.map(id => `<@${id}>`).join(', ') : 'لا يوجد';
-        return i.reply({
-          content: `✅ **تم تفعيل الحذف التلقائي**\n📌 الروم: <#${channel.id}>\n🙅 المستثنيين: ${exceptList}`,
-          ephemeral: true
-        });
+        return i.reply({ content: `✅ **تم تفعيل الحذف التلقائي**\n📌 الروم: <#${channel.id}>\n🙅 المستثنيين: ${exceptList}`, ephemeral: true });
       }
-
       if (sub === 'disable') {
         const autoDeleteSettings = await getAutoDeleteSettings(i.guild.id);
         autoDeleteSettings.channelId = null;
@@ -1040,230 +805,69 @@ client.on('interactionCreate', async (i) => {
         await autoDeleteSettings.save();
         return i.reply({ content: '✅ **تم إيقاف الحذف التلقائي**', ephemeral: true });
       }
-
       if (sub === 'status') {
         const autoDeleteSettings = await getAutoDeleteSettings(i.guild.id);
-        if (!autoDeleteSettings.channelId) {
-          return i.reply({ content: '⚠️ **الحذف التلقائي معطل**', ephemeral: true });
-        }
-        const exceptList = autoDeleteSettings.exceptUsers.length > 0
-          ? autoDeleteSettings.exceptUsers.map(id => `<@${id}>`).join(', ')
-          : 'لا يوجد';
-        return i.reply({
-          content: `📊 **حالة الحذف التلقائي**\n📌 الروم: <#${autoDeleteSettings.channelId}>\n🙅 المستثنيين: ${exceptList}`,
-          ephemeral: true
-        });
+        if (!autoDeleteSettings.channelId) { return i.reply({ content: '⚠️ **الحذف التلقائي معطل**', ephemeral: true }); }
+        const exceptList = autoDeleteSettings.exceptUsers.length > 0 ? autoDeleteSettings.exceptUsers.map(id => `<@${id}>`).join(', ') : 'لا يوجد';
+        return i.reply({ content: `📊 **حالة الحذف التلقائي**\n📌 الروم: <#${autoDeleteSettings.channelId}>\n🙅 المستثنيين: ${exceptList}`, ephemeral: true });
       }
     }
   }
 
-  // ==================== 🎫 معالجة الأزرار ====================
   if (i.isButton()) {
-    // ✅ زر فتح التذكرة
     if (i.customId === 'open_ticket') {
       const ticketSettings = await getTicketSettings(i.guild.id);
       const category = i.guild.channels.cache.get(ticketSettings.categoryId);
-
       const ch = await i.guild.channels.create({
-        name: `ticket-${i.user.username}`,
-        type: ChannelType.GuildText,
-        parent: category?.id || null,
+        name: `ticket-${i.user.username}`, type: ChannelType.GuildText, parent: category?.id || null,
         permissionOverwrites: [
           { id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
           { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
           { id: client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
         ]
       });
-
       const embed = new EmbedBuilder()
         .setTitle(ticketSettings.embedTitle)
         .setDescription(ticketSettings.embedDescription)
         .setColor(parseInt(ticketSettings.embedColor, 16) || 0x2b2d31);
       if (ticketSettings.embedImage) embed.setImage(ticketSettings.embedImage);
-
-      ch.send({
-        content: `${i.user}`,
-        embeds: [embed],
-        components: [new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق').setStyle(ButtonStyle.Danger)
-        )]
-      });
+      ch.send({ content: `${i.user}`, embeds: [embed], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق').setStyle(ButtonStyle.Danger))] });
       i.reply({ content: `✅ تم فتح التذكرة: ${ch}`, ephemeral: true });
     }
 
-    // ✅ زر إغلاق التذكرة - النسخة الأصلية
     if (i.customId === 'close_ticket') {
-      await i.reply({
-        content: `🔒 سيتم إغلاق التذكرة خلال 3 ثواني...`,
-        ephemeral: true
-      });
-
-      setTimeout(() => {
-        i.channel.delete().catch(() => { });
-      }, 3000);
+      await i.reply({ content: `🔒 سيتم إغلاق التذكرة خلال 3 ثواني...`, ephemeral: true });
+      setTimeout(() => { i.channel.delete().catch(() => { }); }, 3000);
     }
 
-    // ✅ زر الانضمام للعبة الأرقام
     if (i.customId === 'join_number_game') {
       const game = activeNumberGames.get(i.message.id);
-      if (!game || game.started) {
-        return i.reply({
-          content: `-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> ** مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **`,
-          ephemeral: true
-        }).catch(() => { });
-      }
-
-      if (game.players.length >= 6) {
-        return i.reply({
-          content: `-# **اللعبة ممتلئة للأسف ليش ما`,
-          ephemeral: true
-        }).catch(() => { });
-      }
-
-      if (game.players.length >= 6) {
-        return i.reply({
-          content: `-# **اللعبة ممتلئة للأسف ليش ما جيت بسرعه <:emoji_84:1389404919672340592> **`,
-          ephemeral: true
-        }).catch(() => { });
-      }
-
-      if (game.players.includes(i.user.id)) جيت بسرعه <:emoji_84:1389404919672340592> **`,
-          ephemeral: true
-        }).catch(() => { });
-      }
-
+      if (!game || game.started) { return i.reply({ content: `-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **`, ephemeral: true }).catch(() => { }); }
+      if (game.players.length >= 6) { return i.reply({ content: `-# **اللعبة ممتلئة للأسف ليش ما جيت بسرعه <:emoji_84:1389404919672340592> **`, ephemeral: true }).catch(() => { }); }
       if (game.players.includes(i.user.id)) {
-        const exitRow = new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`exit_number_game_${i.message {
-        const exitRow = new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`exit_number_game_${i.message.id}`)
-            .setLabel('خروج')
-            .setStyle(ButtonStyle.Secondary)
-.id}`)
-            .setLabel('خروج')
-            .setStyle(ButtonStyle.Secondary)
-        );
-        return i.reply({
-          content: `-# **انت داخل اللعبة اصلا تبي تطلع ؟ <:__:        );
-        return i.reply({
-          content: `-# **انت داخل اللعبة اصلا تبي تطلع ؟ <:__:1467633552408576192> **`,
-          components: [exitRow],
-          ephemeral: true1467633552408576192> **`,
-          components: [exitRow],
-          ephemeral: true
-        }).catch(() => { });
+        const exitRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`exit_number_game_${i.message.id}`).setLabel('خروج').setStyle(ButtonStyle.Secondary));
+        return i.reply({ content: `-# **انت داخل اللعبة اصلا تبي تطلع ؟ <:__:1467633552408576192> **`, components: [exitRow], ephemeral: true }).catch(() => { });
       }
-
-      game.players.push(i
-        }).catch(() => { });
-      }
-
       game.players.push(i.user.id);
       game.attempts.set(i.user.id, 0);
-
-      await i.reply({
-.user.id);
-      game.attempts.set(i.user.id, 0);
-
-      await i.reply({
-        content: `-# **تم انت الحين مشارك فاللعبة <:2        content: `-# **تم انت الحين مشارك فاللعبة <:2thumbup:1467287897429512396> **`,
-        ephemeral: true
-      }).catchthumbup:1467287897429512396> **`,
-        ephemeral: true
-      }).catch(() => { });
+      await i.reply({ content: `-# **تم انت الحين مشارك فاللعبة <:2thumbup:1467287897429512396> **`, ephemeral: true }).catch(() => { });
     }
 
-    // ✅ زر الخروج من لعبة الأرقام
-   (() => { });
-    }
-
-    // ✅ زر الخروج من لعبة الأرقام
     if (i.customId.startsWith('exit_number_game_')) {
-      const gameId = i.customId if (i.customId.startsWith('exit_number_game_')) {
-      const gameId = i.replace('exit_number_game_', '');
+      const gameId = i.customId.replace('exit_number_game_', '');
       const game = activeNumberGames.get(gameId);
-
-      if (game && !game.started) {
-        const index = game.players.customId.replace('exit_number_game_', '');
-      const game = activeNumberGames.get(gameId);
-
       if (game && !game.started) {
         const index = game.players.indexOf(i.user.id);
         if (index > -1) {
-          game.players.splice.indexOf(i.user.id);
-        if (index > -1) {
           game.players.splice(index, 1);
           game.attempts.delete(i.user.id);
-          await i(index, 1);
-          game.attempts.delete(i.user.id);
-          await i.update({
-            content: `-# **تم خروجك من اللعبة <:s7_discord:.update({
-            content: `-# **تم خروجك من اللعبة <:s7_discord:1388214117365453062> **`,
-            components: []
-          }).catch(() => {1388214117365453062> **`,
-            components: []
-          }).catch(() => { });
-        });
+          await i.update({ content: `-# **تم خروجك من اللعبة <:s7_discord:1388214117365453062> **`, components: [] }).catch(() => { });
         }
       }
     }
   }
 });
 
-// ==================== 🛡️ معالج الحذف التلقائي للرسائل ====================
- }
-      }
-    }
-  }
-});
-
-// ==================== 🛡️ معالج الحذف التلقائي للرسائل ====================
-client.on('messageCreate', async (message) => {
-  ifclient.on('messageCreate', async (message) => {
-  if (message.author.bot || !message.guild) return;
-
-  const autoDeleteSettings = await getAutoDeleteSettings(message (message.author.bot || !message.guild) return;
-
-  const autoDeleteSettings = await getAutoDeleteSettings(message.guild.id);
-
-  // التحقق: فيه روم مفعل + الروم مطابق + المستثنيين
-  if (autoDelete.guild.id);
-
-  // التحقق: فيه روم مفعل + الروم مطابق + المستثنيين
-  if (autoDeleteSettings.channelId &&
-    message.channel.id === autoSettings.channelId &&
-    message.channel.id === autoDeleteSettings.channelId &&
-    !autoDeleteSettings.exceptUsers.includes(message.author.id)) {
-
-   DeleteSettings.channelId &&
-    !autoDeleteSettings.exceptUsers.includes(message.author.id)) {
-
-    setTimeout(async () => {
-      try {
-        await message.delete();
-        console.log(`🗑️ تم حذف رسالة setTimeout(async () => {
-      try {
-        await message.delete();
-        console.log(`🗑️ تم حذف رسالة من ${message.author من ${message.author.tag} في ${message.channel.name}`);
-      } catch (e) {
-        // ما فيه صلاحية أو انمسحت قبل
-      }
-    }, 300.tag} في ${message.channel.name}`);
-      } catch (e) {
-        // ما فيه صلاحية أو انمسحت قبل
-      }
-    }, 30000); // 30 ثانية
-  }
-});
-
-// ==================== 🚀 تشغيل البوت ===================00); // 30 ثانية
-  }
-});
-
 // ==================== 🚀 تشغيل البوت ====================
-app.get('/', (req, res) => res.send('Bot is Live!'));
-app.listen(300=
 app.get('/', (req, res) => res.send('Bot is Live!'));
 app.listen(3000, () => client.login(process.env.TOKEN));
