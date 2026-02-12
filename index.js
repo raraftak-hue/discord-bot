@@ -26,7 +26,7 @@ mongoose.connect(MONGO_URI)
 
 const UserSchema = new mongoose.Schema({
   userId: String,
-  balance: { type: Number, default: 10 },
+  balance: { type: Number, default: 5 },
   history: [{ type: { type: String }, amount: Number, date: { type: Date, default: Date.now } }]
 });
 
@@ -39,9 +39,19 @@ const GlobalSettingsSchema = new mongoose.Schema({
   allowedGuilds: { type: [String], default: ['1387902577496297523'] }
 });
 
+const TicketSettingsSchema = new mongoose.Schema({
+  guildId: String,
+  categoryId: { type: String, default: '1387909837693915148' },
+  embedTitle: { type: String, default: 'نظام التذاكر' },
+  embedDescription: { type: String, default: 'اضغط على الزر لفتح تذكرة جديدة.' },
+  embedColor: { type: String, default: '2b2d31' },
+  embedImage: { type: String, default: null }
+});
+
 const User = mongoose.model('User', UserSchema);
 const Settings = mongoose.model('Settings', SettingsSchema);
 const GlobalSettings = mongoose.model('GlobalSettings', GlobalSettingsSchema);
+const TicketSettings = mongoose.model('TicketSettings', TicketSettingsSchema);
 
 async function getGlobalSettings() {
   let settings = await GlobalSettings.findOne();
@@ -55,7 +65,7 @@ async function getGlobalSettings() {
 async function getUserData(userId) {
   let user = await User.findOne({ userId });
   if (!user) {
-    user = new User({ userId, balance: 10, history: [{ type: 'STARTING_GIFT', amount: 10 }] });
+    user = new User({ userId, balance: 5, history: [{ type: 'STARTING_GIFT', amount: 5 }] });
     await user.save();
   }
   return user;
@@ -65,6 +75,15 @@ async function getSettings(guildId) {
   let settings = await Settings.findOne({ guildId });
   if (!settings) {
     settings = new Settings({ guildId, welcomeSettings: { color: '2b2d31' } });
+    await settings.save();
+  }
+  return settings;
+}
+
+async function getTicketSettings(guildId) {
+  let settings = await TicketSettings.findOne({ guildId });
+  if (!settings) {
+    settings = new TicketSettings({ guildId });
     await settings.save();
   }
   return settings;
@@ -97,6 +116,11 @@ const slashCommands = [
         ]
       }
     ]
+  },
+  {
+    name: 'resetall',
+    description: 'إعادة تعيين رصيد الجميع إلى 5 دنانير',
+    default_member_permissions: "0"
   }
 ];
 
@@ -104,7 +128,21 @@ const adminSlashCommands = [
   { 
     name: 'ticket', 
     description: 'إدارة نظام التذاكر', 
-    options: [{ name: 'panel', description: 'عرض لوحة التذاكر', type: 1 }],
+    options: [
+      { name: 'panel', description: 'عرض لوحة التذاكر', type: 1 },
+      { 
+        name: 'setup', 
+        description: 'تعديل إعدادات التذاكر', 
+        type: 1,
+        options: [
+          { name: 'category', description: 'تعيين الكاتيجوري', type: 7, required: false, channel_types: [4] },
+          { name: 'title', description: 'عنوان الإيمبيد', type: 3, required: false },
+          { name: 'description', description: 'وصف الإيمبيد', type: 3, required: false },
+          { name: 'color', description: 'لون الإيمبيد (كود هيكس)', type: 3, required: false },
+          { name: 'image', description: 'رابط صورة الإيمبيد', type: 3, required: false }
+        ]
+      }
+    ],
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString()
   }, 
   { 
@@ -195,7 +233,6 @@ client.on('messageCreate', async (message) => {
   const args = message.content.trim().split(/\s+/);
   const command = args[0];
 
-  // معالجة كلمة "تأكيد" للتحويل
   const pending = Array.from(pendingTransfers.values()).find(p => p.senderId === message.author.id && p.channelId === message.channel.id);
   if (message.content === 'تأكيد' && pending) {
     const data = pending;
@@ -222,7 +259,6 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // أوامر الإدارة النصية
   if (command === 'تايم') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
     const member = message.mentions.members.first();
@@ -325,14 +361,14 @@ client.on('interactionCreate', async (i) => {
   if (i.guild && !globalSettings.allowedGuilds.includes(i.guild.id)) return;
 
   if (i.isChatInputCommand()) {
-    const { commandName, options, user, member } = i;
+    const { commandName, options, user, member, guild } = i;
     const userData = await getUserData(user.id);
 
     if (commandName === 'bothelp') {
       const embed = new EmbedBuilder()
         .setTitle('قائمة الأوامر')
         .setColor(0x2b2d31)
-        .setDescription(`-# **/economy balance - عرض الرصيد**\n-# **/economy transfer - تحويل أموال**\n-# **/economy top - قائمة الأغنياء**\n-# **/welcome test - تجربة الترحيب**\n-# **/giveaway start - بدء قيف أوي**\n-# **أوامر نصية: دنانير، تحويل، اغنياء، السجل، تايم، طرد، حذف**`);
+        .setDescription(`-# **/economy balance - عرض الرصيد**\n-# **/economy transfer - تحويل أموال**\n-# **/economy top - قائمة الأغنياء**\n-# **/welcome test - تجربة الترحيب**\n-# **/giveaway start - بدء قيف أوي**\n-# **/ticket panel - لوحة التذاكر**\n-# **/ticket setup - تعديل إعدادات التذاكر**\n-# **أوامر نصية: دنانير، تحويل، اغنياء، السجل، تايم، طرد، حذف**`);
       return i.reply({ embeds: [embed] });
     }
 
@@ -423,7 +459,7 @@ client.on('interactionCreate', async (i) => {
           }
           if (btn.customId === 'exit_giveaway') {
             participants.delete(btn.user.id);
-            btn.update({ content: '❌ تم خروجك من السحب.', components: [], ephemeral: true }).catch(() => {});
+            btn.reply({ content: '❌ تم خروجك من السحب.', ephemeral: true }).catch(() => {});
           }
         });
 
@@ -443,21 +479,101 @@ client.on('interactionCreate', async (i) => {
     }
 
     if (commandName === 'ticket') {
-      if (options.getSubcommand() === 'panel') {
-        const embed = new EmbedBuilder().setTitle('نظام التذاكر').setDescription('اضغط على الزر لفتح تذكرة جديدة.').setColor(0x2b2d31);
-        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('open_ticket').setLabel('فتح تذكرة').setStyle(ButtonStyle.Primary));
+      const sub = options.getSubcommand();
+      const ticketSettings = await getTicketSettings(i.guild.id);
+      
+      if (sub === 'panel') {
+        const embed = new EmbedBuilder()
+          .setTitle(ticketSettings.embedTitle)
+          .setDescription(ticketSettings.embedDescription)
+          .setColor(parseInt(ticketSettings.embedColor, 16) || 0x2b2d31);
+        if (ticketSettings.embedImage) embed.setImage(ticketSettings.embedImage);
+        
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('open_ticket').setLabel('فتح تذكرة').setStyle(ButtonStyle.Secondary)
+        );
         i.reply({ embeds: [embed], components: [row] });
       }
+
+      if (sub === 'setup') {
+        let updated = false;
+        if (options.getChannel('category')) {
+          ticketSettings.categoryId = options.getChannel('category').id;
+          updated = true;
+        }
+        if (options.getString('title')) {
+          ticketSettings.embedTitle = options.getString('title');
+          updated = true;
+        }
+        if (options.getString('description')) {
+          ticketSettings.embedDescription = options.getString('description');
+          updated = true;
+        }
+        if (options.getString('color')) {
+          ticketSettings.embedColor = options.getString('color').replace('#', '');
+          updated = true;
+        }
+        if (options.getString('image')) {
+          ticketSettings.embedImage = options.getString('image');
+          updated = true;
+        }
+
+        if (updated) {
+          await ticketSettings.save();
+          i.reply({ content: '✅ تم تحديث إعدادات التذاكر بنجاح.', ephemeral: true });
+        } else {
+          i.reply({ content: '⚠️ ما حددت أي خيار للتحديث.', ephemeral: true });
+        }
+      }
+    }
+
+    if (commandName === 'resetall') {
+      if (user.id !== OWNER_ID) {
+        return i.reply({ content: '❌ هذا الأمر فقط لمالك البوت.', ephemeral: true });
+      }
+      await User.updateMany({}, {
+        balance: 5,
+        history: [{ type: 'RESET_ALL', amount: 5, date: new Date() }]
+      });
+      return i.reply('✅ تم إعادة تعيين رصيد الجميع إلى **5 دنانير**.');
     }
   }
 
   if (i.isButton()) {
     if (i.customId === 'open_ticket') {
-      const ch = await i.guild.channels.create({ name: `ticket-${i.user.username}`, type: ChannelType.GuildText, permissionOverwrites: [{ id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] }, { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }] });
-      ch.send({ content: `${i.user}`, components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق').setStyle(ButtonStyle.Danger))] });
-      i.reply({ content: `تم فتح التذكرة ${ch}`, ephemeral: true });
+      const ticketSettings = await getTicketSettings(i.guild.id);
+      const category = i.guild.channels.cache.get(ticketSettings.categoryId);
+      
+      const ch = await i.guild.channels.create({ 
+        name: `ticket-${i.user.username}`, 
+        type: ChannelType.GuildText,
+        parent: category?.id || null,
+        permissionOverwrites: [ 
+          { id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] }, 
+          { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+          { id: client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+        ] 
+      });
+
+      const embed = new EmbedBuilder()
+        .setTitle(ticketSettings.embedTitle)
+        .setDescription(ticketSettings.embedDescription)
+        .setColor(parseInt(ticketSettings.embedColor, 16) || 0x2b2d31);
+      if (ticketSettings.embedImage) embed.setImage(ticketSettings.embedImage);
+
+      ch.send({ 
+        content: `${i.user}`,
+        embeds: [embed], 
+        components: [new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق').setStyle(ButtonStyle.Danger)
+        )] 
+      });
+      i.reply({ content: `✅ تم فتح التذكرة: ${ch}`, ephemeral: true });
     }
-    if (i.customId === 'close_ticket') { await i.reply('سيتم الإغلاق...'); setTimeout(() => i.channel.delete(), 3000); }
+    if (i.customId === 'close_ticket') { 
+      await i.reply('🔒 سيتم إغلاق التذكرة خلال 3 ثواني...'); 
+      setTimeout(() => i.channel.delete().catch(() => {}), 3000); 
+    }
   }
 });
 
