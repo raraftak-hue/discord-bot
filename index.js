@@ -378,23 +378,16 @@ async function startNextTurn(channel, gameId) {
     return;
   }
   
-  // ✅ في الوضع الفردي: لا نبدأ دور جديد إذا فيه دور نشط
-  if (game.players.length === 1 && game.currentTurn) {
-    return;
-  }
-  
-  // ✅ تعطيل التخمين للكل أولاً
-  if (!game.canGuess) game.canGuess = new Map();
-  game.players.forEach(p => game.canGuess.set(p, false));
-  
   if (game.currentTurnIndex >= game.alivePlayers.length) game.currentTurnIndex = 0;
   
   const currentPlayer = game.alivePlayers[game.currentTurnIndex];
   game.currentTurn = currentPlayer;
   
+  if (!game.canGuess) game.canGuess = new Map();
+  game.players.forEach(p => game.canGuess.set(p, false));
+  
   await channel.send(`-# **دور المشارك ${getUserTag(currentPlayer)} للتخمين **`).catch(() => { });
   
-  // ✅ تفعيل التخمين لهذا اللاعب فقط
   game.canGuess.set(currentPlayer, true);
   
   if (game.timer) { clearTimeout(game.timer); game.timer = null; }
@@ -404,8 +397,7 @@ async function startNextTurn(channel, gameId) {
     if (!game || !game.started || game.winner) return;
     if (game.currentTurn === currentPlayer) {
       
-      // ✅ تعطيل التخمين قبل الطرد
-      if (game.canGuess) game.canGuess.set(currentPlayer, false);
+      game.canGuess?.set(currentPlayer, false);
       
       await channel.send(`-# **المشارك ${getUserTag(currentPlayer)} انطرد عشان ما خمن قبل انتهاء الوقت <:s7_discord:1388214117365453062> **`).catch(() => { });
       
@@ -415,9 +407,6 @@ async function startNextTurn(channel, gameId) {
       
       game.currentTurnIndex++;
       game.currentTurn = null;
-      
-      // ✅ الوضع الفردي: لا نبدأ دور تلقائي
-      if (game.players.length === 1) return;
       
       setTimeout(() => { startNextTurn(channel, gameId); }, 8000);
     }
@@ -579,28 +568,37 @@ client.on('messageCreate', async (message) => {
     const msg = await message.channel.send({ content: `-# **تم بدأ لعبة التخمين مهمتكم رح تكون تخمين الرقم الصحيح من 1 الى 100 <:new_emoji:1388436089584226387> **`, components: [row] }).catch(() => { });
     activeNumberGames.set(msg.id, {
       hostId: message.author.id, players: [], attempts: new Map(), guesses: [], started: false,
-      winner: null, secretNumber: null, currentTurn: null, currentTurnIndex: 0, alivePlayers: [], timer: null
+      winner: null, secretNumber: null, currentTurn: null, currentTurnIndex: 0, alivePlayers: [], timer: null, canGuess: new Map()
     });
     startNumberGameAfterDelay(msg, activeNumberGames.get(msg.id));
     return;
   }
 
+  // ✅ أمر ايقاف اللعبة - مضبوط 100%
   if (command === 'ايقاف') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
+    
     let found = false;
     for (const [id, game] of activeNumberGames.entries()) {
-      if (!game.started) {
-        const msg = await message.channel.messages.fetch(id).catch(() => null);
-        if (msg) { await msg.edit({ content: `-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **`, components: [] }).catch(() => { }); }
-        activeNumberGames.delete(id);
-        found = true;
+      const msg = await message.channel.messages.fetch(id).catch(() => null);
+      if (msg) {
+        await msg.edit({ 
+          content: `-# ** تم ايقاف اللعبة <:new_emoji:1388436095842385931> **`, 
+          components: [] 
+        }).catch(() => { });
       }
+      if (game.timer) clearTimeout(game.timer);
+      activeNumberGames.delete(id);
+      found = true;
     }
-    if (found) { message.channel.send(`-# **تم ايقاف جميع الالعاب المعلقة <:s7_discord:1388214117365453062> **`); }
+    
+    if (found) {
+      message.channel.send(`-# ** تم ايقاف اللعبة <:new_emoji:1388436095842385931> **`);
+    }
     return;
   }
 
-  // 5️⃣ معالجة التخمينات - مع شرط canGuess ✅
+  // 5️⃣ معالجة التخمينات
   let activeGame = null;
   let gameId = null;
   for (const [id, game] of activeNumberGames.entries()) {
@@ -608,7 +606,7 @@ client.on('messageCreate', async (message) => {
         game.alivePlayers && 
         game.alivePlayers.includes(message.author.id) && 
         game.currentTurn === message.author.id &&
-        game.canGuess?.get(message.author.id) === true) {  // ✅ شرط canGuess
+        game.canGuess?.get(message.author.id) === true) {
       activeGame = game;
       gameId = id;
       break;
@@ -622,8 +620,7 @@ client.on('messageCreate', async (message) => {
     
     if (game.timer) { clearTimeout(game.timer); game.timer = null; }
     
-    // ✅ تعطيل التخمين فوراً بعد الاستلام
-    if (game.canGuess) game.canGuess.set(message.author.id, false);
+    game.canGuess?.set(message.author.id, false);
     
     game.guesses.push({ userId: message.author.id, guess: guess });
     
@@ -655,18 +652,12 @@ client.on('messageCreate', async (message) => {
       game.currentTurnIndex++;
       game.currentTurn = null;
       
-      // ✅ الوضع الفردي: لا نبدأ دور تلقائي
-      if (game.players.length === 1) return;
-      
       setTimeout(() => { startNextTurn(message.channel, gameId); }, 8000);
       return;
     }
     
     game.currentTurnIndex++;
     game.currentTurn = null;
-    
-    // ✅ الوضع الفردي: لا نبدأ دور تلقائي
-    if (game.players.length === 1) return;
     
     setTimeout(() => { startNextTurn(message.channel, gameId); }, 8000);
     return;
@@ -840,7 +831,7 @@ client.on('interactionCreate', async (i) => {
       const msg = await i.fetchReply();
       activeNumberGames.set(msg.id, {
         hostId: i.user.id, players: [], attempts: new Map(), guesses: [], started: false,
-        winner: null, secretNumber: null, currentTurn: null, currentTurnIndex: 0, alivePlayers: [], timer: null
+        winner: null, secretNumber: null, currentTurn: null, currentTurnIndex: 0, alivePlayers: [], timer: null, canGuess: new Map()
       });
       startNumberGameAfterDelay(msg, activeNumberGames.get(msg.id));
       return;
@@ -912,6 +903,8 @@ client.on('interactionCreate', async (i) => {
       }
       game.players.push(i.user.id);
       game.attempts.set(i.user.id, 0);
+      if (!game.canGuess) game.canGuess = new Map();
+      game.canGuess.set(i.user.id, false);
       await i.reply({ content: `-# **تم انت الحين مشارك فاللعبة <:2thumbup:1467287897429512396> **`, ephemeral: true }).catch(() => { });
     }
 
@@ -923,6 +916,7 @@ client.on('interactionCreate', async (i) => {
         if (index > -1) {
           game.players.splice(index, 1);
           game.attempts.delete(i.user.id);
+          game.canGuess?.delete(i.user.id);
           await i.update({ content: `-# **تم خروجك من اللعبة <:s7_discord:1388214117365453062> **`, components: [] }).catch(() => { });
         }
       }
