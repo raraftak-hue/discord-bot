@@ -524,7 +524,7 @@ client.on('messageCreate', async (message) => {
     const user = message.mentions.users.first() || message.author;
     const userData = await getUserData(user.id);
     const lastIn = userData.history.filter(h => h.type === 'TRANSFER_RECEIVE').pop() || { amount: 0 };
-    message.channel.send(`-# **رصيدك الحالي ${userData.balance} و اخر عملية تحويل تلقيتها كانت بـ ${lastIn.amount}**`);
+    message.channel.send(`-# **رصيدك الحالي ${userData.balance} و اخر عملية تحويل تلقيتها كانت بـ ${lastIn.amount} دينار <:emoji_41:1471619709936996406> **`);
     return;
   }
 
