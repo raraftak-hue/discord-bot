@@ -43,7 +43,6 @@ const GlobalSettingsSchema = new mongoose.Schema({
 const TicketSettingsSchema = new mongoose.Schema({
   guildId: String,
   categoryId: { type: String, default: '1387909837693915148' },
-  embedTitle: { type: String, default: '' },
   embedDescription: { type: String, default: 'اضغط على الزر لفتح تذكرة جديدة.' },
   embedColor: { type: String, default: '2b2d31' },
   embedImage: { type: String, default: null }
@@ -239,7 +238,6 @@ const adminSlashCommands = [
         type: 1,
         options: [
           { name: 'category', description: 'تعيين الكاتيجوري', type: 7, required: false, channel_types: [4] },
-          { name: 'title', description: 'عنوان الإيمبيد', type: 3, required: false },
           { name: 'description', description: 'وصف الإيمبيد', type: 3, required: false },
           { name: 'color', description: 'لون الإيمبيد (كود هيكس)', type: 3, required: false },
           { name: 'image', description: 'رابط صورة الإيمبيد', type: 3, required: false }
@@ -955,7 +953,7 @@ client.on('interactionCreate', async (i) => {
         const embed = new EmbedBuilder()
           .setColor(parseInt(ticketSettings.embedColor, 16) || 0x2b2d31);
         
-        if (ticketSettings.embedTitle) embed.setTitle(ticketSettings.embedTitle);
+        
         if (ticketSettings.embedDescription) embed.setDescription(ticketSettings.embedDescription);
         if (ticketSettings.embedImage) embed.setImage(ticketSettings.embedImage);
         
@@ -965,7 +963,6 @@ client.on('interactionCreate', async (i) => {
       if (sub === 'setup') {
         let updated = false;
         if (options.getChannel('category')) { ticketSettings.categoryId = options.getChannel('category').id; updated = true; }
-        if (options.getString('title')) { ticketSettings.embedTitle = options.getString('title'); updated = true; }
         if (options.getString('description')) { ticketSettings.embedDescription = options.getString('description'); updated = true; }
         if (options.getString('color')) { ticketSettings.embedColor = options.getString('color').replace('#', ''); updated = true; }
         if (options.getString('image')) { ticketSettings.embedImage = options.getString('image'); updated = true; }
@@ -1043,7 +1040,6 @@ client.on('interactionCreate', async (i) => {
       const embed = new EmbedBuilder()
         .setColor(parseInt(ticketSettings.embedColor, 16) || 0x2b2d31);
       
-      if (ticketSettings.embedTitle) embed.setTitle(ticketSettings.embedTitle);
       if (ticketSettings.embedDescription) embed.setDescription(ticketSettings.embedDescription);
       if (ticketSettings.embedImage) embed.setImage(ticketSettings.embedImage);
       
