@@ -43,7 +43,7 @@ const GlobalSettingsSchema = new mongoose.Schema({
 const TicketSettingsSchema = new mongoose.Schema({
   guildId: String,
   categoryId: { type: String, default: '1387909837693915148' },
-  embedTitle: { type: String, default: 'نظام التذاكر' },
+  embedTitle: { type: String, default: '' },
   embedDescription: { type: String, default: 'اضغط على الزر لفتح تذكرة جديدة.' },
   embedColor: { type: String, default: '2b2d31' },
   embedImage: { type: String, default: null }
