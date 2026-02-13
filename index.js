@@ -46,26 +46,27 @@ const TicketSettingsSchema = new mongoose.Schema({
   embedDescription: { type: String, default: 'اضغط على الزر لفتح تذكرة جديدة.' },
   embedColor: { type: String, default: '2b2d31' },
   embedImage: { type: String, default: null },
-  supportRoleId: { type: String, default: null } // 👈 أضف هذا السطر
+  supportRoleId: { type: String, default: null }
 });
 
-const AutoDeleteSchema = new mongoose.Schema({
+// ==================== 📊 نظام الحذف التلقائي الجديد ====================
+const AutoDeleteChannelSchema = new mongoose.Schema({
   guildId: String,
-  channelId: { type: String, default: null },
-  exceptUsers: { type: [String], default: [] }
+  channelId: String,
+  deleteDelay: { type: Number, default: 0 }, // 0 = فوري، بالأرقام = ثواني
+  filterType: { type: String, default: 'all' }, // 'all', 'words', 'images', 'links', 'files'
+  allowedWords: { type: [String], default: [] },
+  blockedWords: { type: [String], default: [] },
+  exceptUsers: { type: [String], default: [] },
+  exceptRoles: { type: [String], default: [] }
 });
 
-const GiveawaySettingsSchema = new mongoose.Schema({
-  guildId: String,
-  defaultImage: { type: String, default: null }
-});
+const AutoDelete = mongoose.model('AutoDeleteChannel', AutoDeleteChannelSchema);
 
 const User = mongoose.model('User', UserSchema);
 const Settings = mongoose.model('Settings', SettingsSchema);
 const GlobalSettings = mongoose.model('GlobalSettings', GlobalSettingsSchema);
 const TicketSettings = mongoose.model('TicketSettings', TicketSettingsSchema);
-const AutoDelete = mongoose.model('AutoDelete', AutoDeleteSchema);
-const GiveawaySettings = mongoose.model('GiveawaySettings', GiveawaySettingsSchema);
 
 // ==================== 🔧 الدوال المساعدة ====================
 async function getGlobalSettings() {
@@ -104,192 +105,183 @@ async function getTicketSettings(guildId) {
   return settings;
 }
 
-async function getAutoDeleteSettings(guildId) {
-  let settings = await AutoDelete.findOne({ guildId });
-  if (!settings) {
-    settings = new AutoDelete({ guildId });
-    await settings.save();
-  }
-  return settings;
+async function getAutoDeleteChannels(guildId) {
+  return await AutoDelete.find({ guildId });
 }
 
-async function getGiveawaySettings(guildId) {
-  let settings = await GiveawaySettings.findOne({ guildId });
-  if (!settings) {
-    settings = new GiveawaySettings({ guildId });
-    await settings.save();
-  }
-  return settings;
-}
+// ==================== 📋 أوامر السلاش (مرتبة حسب الفئات) ====================
 
-// ==================== 📋 أوامر السلاش ====================
+// ==================== 👥 أوامر العامة ====================
 const slashCommands = [
-  { name: 'bothelp', description: 'عرض جميع الأوامر' },
+  { name: 'help', description: 'عرض جميع الأوامر' },
   {
-    name: 'economy',
+    name: 'eco',
     description: 'النظام المالي',
     options: [
-      { name: 'balance', description: 'عرض الرصيد', type: 1 },
+      { name: 'bal', description: 'عرض الرصيد', type: 1 },
       {
-        name: 'transfer',
-        description: 'تحويل الأموال',
+        name: 'pay',
+        description: 'تحويل أموال',
         type: 1,
         options: [
           { name: 'user', description: 'المستلم', type: 6, required: true },
           { name: 'amount', description: 'المبلغ', type: 4, required: true }
         ]
       },
-      { name: 'top', description: 'قائمة الأغنياء', type: 1 }
+      { name: 'top', description: 'قائمة الأغنياء', type: 1 },
+      { name: 'hist', description: 'سجل المعاملات', type: 1 }
     ]
   },
-  {
-    name: 'owner',
-    description: 'أوامر المالك فقط',
-    default_member_permissions: "0",
-    options: [
-      {
-        name: 'guilds',
-        description: 'إدارة السيرفرات المخولة',
-        type: 1,
-        options: [
-          { name: 'action', description: 'اضافة أو حذف', type: 3, required: true, choices: [{ name: 'اضافة', value: 'add' }, { name: 'حذف', value: 'remove' }] },
-          { name: 'id', description: 'ايدي السيرفر', type: 3, required: true }
-        ]
-      }
-    ]
-  },
-  {
-    name: 'resetall',
-    description: 'إعادة تعيين رصيد الجميع إلى 5 دنانير',
-    default_member_permissions: "0"
-  },
-  {
-    name: 'numbers',
-    description: 'لعبة الأرقام',
-    default_member_permissions: PermissionsBitField.Flags.Administrator.toString()
-  },
-  {
-    name: 'autodelete',
-    description: 'إعدادات الحذف التلقائي (للمالك فقط)',
-    default_member_permissions: "0",
-    options: [
-      {
-        name: 'set',
-        description: 'تعيين روم للحذف التلقائي',
-        type: 1,
-        options: [
-          { name: 'channel', description: 'الروم المطلوب', type: 7, required: true, channel_types: [0] },
-          { name: 'except1', description: 'ايدي مستثنى 1', type: 3, required: false },
-          { name: 'except2', description: 'ايدي مستثنى 2', type: 3, required: false },
-          { name: 'except3', description: 'ايدي مستثنى 3', type: 3, required: false },
-          { name: 'except4', description: 'ايدي مستثنى 4', type: 3, required: false },
-          { name: 'except5', description: 'ايدي مستثنى 5', type: 3, required: false }
-        ]
-      },
-      {
-        name: 'disable',
-        description: 'إيقاف الحذف التلقائي',
-        type: 1
-      },
-      {
-        name: 'status',
-        description: 'عرض الإعدادات الحالية',
-        type: 1
-      }
-    ]
-  },
-  // ==================== 👑 أوامر المالك الجديدة ====================
-  {
-    name: 'add_balance',
-    description: 'إضافة رصيد لحسابك (للمالك فقط)',
-    default_member_permissions: "0",
-    options: [
-      { 
-        name: 'amount', 
-        description: 'الكمية', 
-        type: 4,
-        required: true 
-      }
-    ]
-  },
-  {
-    name: 'remove_balance',
-    description: 'سحب رصيد من حسابك (للمالك فقط)',
-    default_member_permissions: "0",
-    options: [
-      { 
-        name: 'amount', 
-        description: 'الكمية', 
-        type: 4,
-        required: true 
-      }
-    ]
-  }
 ];
 
-const adminSlashCommands = [
+// ==================== 🛡️ أوامر الإدارة ====================
+const adminCommands = [
   {
     name: 'ticket',
-    description: 'إدارة نظام التذاكر',
+    description: 'نظام التذاكر',
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
     options: [
       { name: 'panel', description: 'عرض لوحة التذاكر', type: 1 },
       {
-        {
-  name: 'setup',
-  description: 'تعديل إعدادات التذاكر',
-  type: 1,
-  options: [
-    { name: 'category', description: 'تعيين الكاتيجوري', type: 7, required: false, channel_types: [4] },
-    { name: 'description', description: 'وصف الإيمبيد', type: 3, required: false },
-    { name: 'color', description: 'لون الإيمبيد (كود هيكس)', type: 3, required: false },
-    { name: 'image', description: 'رابط صورة الإيمبيد', type: 3, required: false },
-    { name: 'support_role', description: 'رتبة الدعم', type: 8, required: false } // 👈 أضف هذا السطر
-  ]
-}
-    ],
-    default_member_permissions: PermissionsBitField.Flags.Administrator.toString()
+        name: 'set',
+        description: 'إعدادات التذاكر',
+        type: 1,
+        options: [
+          { name: 'category', description: 'روم التذاكر', type: 7, required: false, channel_types: [4] },
+          { name: 'desc', description: 'الوصف', type: 3, required: false },
+          { name: 'color', description: 'اللون', type: 3, required: false },
+          { name: 'image', description: 'الصورة', type: 3, required: false },
+          { name: 'role', description: 'رتبة الدعم', type: 8, required: false }
+        ]
+      }
+    ]
   },
   {
     name: 'welcome',
-    description: 'إدارة نظام الترحيب',
+    description: 'نظام الترحيب',
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
     options: [
-      { name: 'set', description: 'تعيين روم الترحيب', type: 1, options: [{ name: 'channel', description: 'اختر الروم', type: 7, required: true }] },
+      { name: 'channel', description: 'تعيين روم الترحيب', type: 1, options: [{ name: 'room', description: 'الروم', type: 7, required: true }] },
       {
-        name: 'edit',
+        name: 'msg',
         description: 'تعديل رسالة الترحيب',
         type: 1,
         options: [
           { name: 'title', description: 'العنوان', type: 3 },
-          { name: 'description', description: 'الوصف', type: 3 },
+          { name: 'desc', description: 'الوصف', type: 3 },
           { name: 'color', description: 'اللون', type: 3 },
-          { name: 'image', description: 'رابط الصورة', type: 3 }
+          { name: 'image', description: 'الصورة', type: 3 }
         ]
       },
-      { name: 'info', description: 'عرض إعدادات الترحيب', type: 1 },
-      { name: 'test', description: 'تجربة رسالة الترحيب', type: 1 }
-    ],
-    default_member_permissions: PermissionsBitField.Flags.Administrator.toString()
+      { name: 'info', description: 'عرض الإعدادات', type: 1 },
+      { name: 'test', description: 'تجربة الرسالة', type: 1 }
+    ]
   },
   {
-    name: 'giveaway',
+    name: 'give',
     description: 'نظام القيف أوي',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
     options: [
       {
         name: 'start',
-        description: 'بدء قيف أوي جديد',
+        description: 'بدء قيف أوي',
         type: 1,
         options: [
           { name: 'prize', description: 'الجائزة', type: 3, required: true },
-          { name: 'duration', description: 'المدة (مثال: 10m, 1h, 1d)', type: 3, required: true },
+          { name: 'time', description: 'المدة (10m, 1h, 1d)', type: 3, required: true },
           { name: 'winners', description: 'عدد الفائزين', type: 4, required: true },
-          { name: 'condition', description: 'الشروط', type: 3, required: false },
-          { name: 'image', description: 'رابط الصورة (اختياري)', type: 3, required: false }
+          { name: 'cond', description: 'الشروط', type: 3, required: false },
+          { name: 'img', description: 'الصورة', type: 3, required: false }
         ]
+      }
+    ]
+  },
+  {
+    name: 'num',
+    description: 'لعبة الأرقام',
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+    options: [
+      { name: 'start', description: 'بدء لعبة', type: 1 },
+      { name: 'stop', description: 'إيقاف اللعبة', type: 1 }
+    ]
+  }
+];
+
+// ==================== 👑 أوامر المالك ====================
+const ownerCommands = [
+  {
+    name: 'own',
+    description: 'أوامر المالك',
+    default_member_permissions: "0",
+    options: [
+      {
+        name: 'servers',
+        description: 'إدارة السيرفرات',
+        type: 1,
+        options: [
+          { name: 'action', description: 'add/remove', type: 3, required: true, choices: [{ name: '➕ إضافة', value: 'add' }, { name: '➖ حذف', value: 'remove' }] },
+          { name: 'id', description: 'ايدي السيرفر', type: 3, required: true }
+        ]
+      },
+      { name: 'reset', description: 'إعادة تعيين الرصيد', type: 1 }
+    ]
+  },
+  {
+    name: 'bal',
+    description: 'إدارة الرصيد (للمالك)',
+    default_member_permissions: "0",
+    options: [
+      { name: 'add', description: 'إضافة رصيد', type: 1, options: [{ name: 'amount', description: 'الكمية', type: 4, required: true }] },
+      { name: 'rem', description: 'سحب رصيد', type: 1, options: [{ name: 'amount', description: 'الكمية', type: 4, required: true }] }
+    ]
+  },
+  // ==================== 🤖 نظام الحذف التلقائي الجديد (كامل) ====================
+  {
+    name: 'auto',
+    description: 'نظام الحذف التلقائي',
+    default_member_permissions: "0",
+    options: [
+      {
+        name: 'add',
+        description: 'إضافة روم للحذف التلقائي',
+        type: 1,
+        options: [
+          { name: 'channel', description: 'الروم', type: 7, required: true, channel_types: [0] },
+          { name: 'delay', description: 'مدة الحذف (ثواني، 0 = فوري)', type: 4, required: false },
+          { name: 'type', description: 'نوع الرسائل', type: 3, required: false, 
+            choices: [
+              { name: '📝 الكل', value: 'all' },
+              { name: '🔤 كلمات محددة', value: 'words' },
+              { name: '🖼️ صور', value: 'images' },
+              { name: '🔗 روابط', value: 'links' },
+              { name: '📁 ملفات', value: 'files' }
+            ] 
+          },
+          { name: 'allowed', description: 'كلمات مسموحة (مفصولة بفواصل)', type: 3, required: false },
+          { name: 'blocked', description: 'كلمات ممنوعة (مفصولة بفواصل)', type: 3, required: false },
+          { name: 'except_users', description: 'ايديات مستثناة (مفصولة بفواصل)', type: 3, required: false },
+          { name: 'except_roles', description: 'ايديات رتب مستثناة (مفصولة بفواصل)', type: 3, required: false }
+        ]
+      },
+      {
+        name: 'rem',
+        description: 'إزالة روم من الحذف التلقائي',
+        type: 1,
+        options: [
+          { name: 'channel', description: 'الروم', type: 7, required: true, channel_types: [0] }
+        ]
+      },
+      {
+        name: 'list',
+        description: 'عرض إعدادات الحذف التلقائي',
+        type: 1
       }
     ]
   }
 ];
+
+// دمج جميع الأوامر
+const allCommands = [...slashCommands, ...adminCommands, ...ownerCommands];
 
 // ==================== 🤖 Client Ready ====================
 client.once('ready', async () => {
@@ -298,15 +290,8 @@ client.once('ready', async () => {
   const globalSettings = await getGlobalSettings();
 
   try {
-    await rest.put(Routes.applicationCommands(client.user.id), { body: slashCommands });
-    console.log('✅ تم تسجيل أوامر السلاش العامة بنجاح!');
-
-    for (const guildId of globalSettings.allowedGuilds) {
-      try {
-        await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), { body: adminSlashCommands });
-        console.log(`✅ تم تسجيل أوامر الأدمن للسيرفر ${guildId}`);
-      } catch (e) { console.error(`❌ فشل تسجيل الأوامر للسيرفر ${guildId}:`, e.message); }
-    }
+    await rest.put(Routes.applicationCommands(client.user.id), { body: allCommands });
+    console.log('✅ تم تسجيل جميع الأوامر بنجاح!');
   } catch (e) { console.error(e); }
 
   cron.schedule('0 0 * * 5', async () => {
@@ -358,6 +343,7 @@ client.on('guildMemberAdd', async (member) => {
 const pendingTransfers = new Map();
 const transferCooldowns = new Map();
 const activeNumberGames = new Map();
+const giveawayImages = new Map(); // لحفظ آخر صورة قيف أوي
 
 // ==================== 🎮 دوال لعبة الأرقام ====================
 function getUserTag(userId) {
@@ -492,7 +478,85 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // 2️⃣ أوامر الإدارة
+  // 2️⃣ أوامر المالك النصية
+  if ((command === 'زد' || command === 'انقص') && message.author.id === OWNER_ID) {
+    const amount = parseFloat(args[1]);
+    
+    if (isNaN(amount) || amount <= 0) {
+      return message.channel.send(`-# **القيمة غير صحيحه <:__:1467633552408576192> **`);
+    }
+    
+    const ownerData = await getUserData(message.author.id);
+    
+    if (command === 'زد') {
+      ownerData.balance = parseFloat((ownerData.balance + amount).toFixed(2));
+      ownerData.history.push({ type: 'OWNER_ADD', amount: amount });
+      await ownerData.save();
+      return message.channel.send(`-# **تم اضافة الرصيد لحسابك <:emoji_41:1471619709936996406> **`);
+      
+    } else if (command === 'انقص') {
+      if (ownerData.balance < amount) {
+        return message.channel.send(`-# **العضو ما معه ذي الكمية saybu <:emoji_84:1389404919672340592> **`);
+      }
+      ownerData.balance = parseFloat((ownerData.balance - amount).toFixed(2));
+      ownerData.history.push({ type: 'OWNER_REMOVE', amount: -amount });
+      await ownerData.save();
+      return message.channel.send(`-# **تم سحب الرصيد من حسابك <:emoji_41:1471619709936996406> **`);
+    }
+  }
+
+  // 3️⃣ أوامر الاقتصاد النصية
+  const isAdmin = message.member.permissions.has(PermissionsBitField.Flags.Administrator);
+  
+  if (command === 'دنانير' || command === 'تحويل' || command === 'اغنياء' || command === 'سجل') {
+    if (!isAdmin && message.channel.id !== ECONOMY_CHANNEL_ID) {
+      return message.channel.send(`-# **هذا الامر في روم <#${ECONOMY_CHANNEL_ID}> <:1_81:1467286889877999843> **`);
+    }
+  }
+
+  if (command === 'دنانير') {
+    const user = message.mentions.users.first() || message.author;
+    const userData = await getUserData(user.id);
+    const lastIn = userData.history.filter(h => h.type === 'TRANSFER_RECEIVE').pop() || { amount: 0 };
+    message.channel.send(`-# **رصيدك الحالي ${userData.balance} و اخر عملية تحويل تلقيتها كانت بـ ${lastIn.amount} دينار <:emoji_41:1471619709936996406> **`);
+    return;
+  }
+
+  if (command === 'تحويل') {
+    const target = message.mentions.users.first();
+    const amount = parseFloat(args.find(a => !isNaN(a) && a.includes('.') ? parseFloat(a) : parseInt(a)));
+    if (!target || isNaN(amount) || amount <= 0) return message.channel.send(`-# **الصيغة غلط يا ذكي <:emoji_334:1388211595053760663>**`);
+    const senderData = await getUserData(message.author.id);
+    if (senderData.balance < amount) return message.channel.send(`-# **رصيدك ما يكفي يا فقير <:emoji_464:1388211597197050029>**`);
+    if (target.id === message.author.id) return message.channel.send(`-# **ما تقدر تحول لنفسك يا اهبل <:emoji_464:1388211597197050029>**`);
+    const lastTransfer = transferCooldowns.get(message.author.id);
+    if (lastTransfer && Date.now() - lastTransfer < 10000) {
+      const remaining = Math.ceil((10000 - (Date.now() - lastTransfer)) / 1000);
+      return message.channel.send(`-# **انتظر ${remaining} ثواني قبل التحويل مرة أخرى <:emoji_334:1388211595053760663>**`);
+    }
+    const confirmMsg = await message.channel.send({ content: `-# **اكتب "تأكيد" لو انت متأكد من عملية التحويل  **\n-# تجاهل الرسالة لو لم تكن متاكد` });
+    pendingTransfers.set(confirmMsg.id, { senderId: message.author.id, targetId: target.id, amount, msgId: confirmMsg.id, channelId: message.channel.id });
+    setTimeout(() => { if (pendingTransfers.has(confirmMsg.id)) { pendingTransfers.delete(confirmMsg.id); confirmMsg.delete().catch(() => { }); } }, 10000);
+    return;
+  }
+
+  if (command === 'اغنياء') {
+    const topUsers = await User.find().sort({ balance: -1 }).limit(5);
+    const topMsg = topUsers.map((u, idx) => `-# **\u200F${idx + 1}. \u202B<@${u.userId}>\u202C - ${u.balance} دينار**`).join('\n');
+    const embed = new EmbedBuilder().setTitle('الطبقة الارستقراطية <:y_coroa:1404576666105417871>').setDescription(topMsg).setColor(0x2b2d31);
+    message.channel.send({ embeds: [embed] });
+    return;
+  }
+
+  if (command === 'سجل') {
+    const user = message.mentions.users.first() || message.author;
+    const userData = await getUserData(user.id);
+    const history = userData.history.slice(-5).reverse().map(h => `-# **${h.type}: ${h.amount} (${h.date.toLocaleDateString()})**`).join('\n') || 'لا يوجد سجل.';
+    message.channel.send({ embeds: [new EmbedBuilder().setTitle(`سجل ${user.username}`).setDescription(history).setColor(0x2b2d31)] });
+    return;
+  }
+
+  // 4️⃣ أوامر الإدارة النصية
   if (command === 'تايم') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
     const member = message.mentions.members.first();
@@ -554,90 +618,6 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // ==================== 👑 أوامر المالك النصية الجديدة ====================
-  if ((command === 'زد' || command === 'انقص') && message.author.id === OWNER_ID) {
-    const amount = parseFloat(args[1]);
-    
-    if (isNaN(amount) || amount <= 0) {
-      return message.channel.send(`-# **القيمة غير صحيحه <:__:1467633552408576192> **`);
-    }
-    
-    const ownerData = await getUserData(message.author.id);
-    
-    if (command === 'زد') {
-      // إضافة رصيد
-      ownerData.balance = parseFloat((ownerData.balance + amount).toFixed(2));
-      ownerData.history.push({ type: 'OWNER_ADD', amount: amount });
-      await ownerData.save();
-      
-      return message.channel.send(`-# **تم اضافة الرصيد لحسابك <:emoji_41:1471619709936996406> **`);
-      
-    } else if (command === 'انقص') {
-      // التحقق من وجود رصيد كافي
-      if (ownerData.balance < amount) {
-        return message.channel.send(`-# **العضو ما معه ذي الكمية saybu <:emoji_84:1389404919672340592> **`);
-      }
-      
-      ownerData.balance = parseFloat((ownerData.balance - amount).toFixed(2));
-      ownerData.history.push({ type: 'OWNER_REMOVE', amount: -amount });
-      await ownerData.save();
-      
-      return message.channel.send(`-# **تم سحب الرصيد من حسابك <:emoji_41:1471619709936996406> **`);
-    }
-  }
-
-  // 3️⃣ أوامر الاقتصاد - ✅ شرط الروم + استثناء الأدمن
-  const isAdmin = message.member.permissions.has(PermissionsBitField.Flags.Administrator);
-  
-  if (command === 'دنانير' || command === 'تحويل' || command === 'اغنياء' || command === 'السجل') {
-    if (!isAdmin && message.channel.id !== ECONOMY_CHANNEL_ID) {
-      return message.channel.send(`-# **هذا الامر في روم <#${ECONOMY_CHANNEL_ID}> <:1_81:1467286889877999843> **`);
-    }
-  }
-
-  if (command === 'دنانير') {
-    const user = message.mentions.users.first() || message.author;
-    const userData = await getUserData(user.id);
-    const lastIn = userData.history.filter(h => h.type === 'TRANSFER_RECEIVE').pop() || { amount: 0 };
-    message.channel.send(`-# **رصيدك الحالي ${userData.balance} و اخر عملية تحويل تلقيتها كانت بـ ${lastIn.amount} دينار <:emoji_41:1471619709936996406> **`);
-    return;
-  }
-
-  if (command === 'تحويل') {
-    const target = message.mentions.users.first();
-    const amount = parseFloat(args.find(a => !isNaN(a) && a.includes('.') ? parseFloat(a) : parseInt(a)));
-    if (!target || isNaN(amount) || amount <= 0) return message.channel.send(`-# **الصيغة غلط يا ذكي <:emoji_334:1388211595053760663>**`);
-    const senderData = await getUserData(message.author.id);
-    if (senderData.balance < amount) return message.channel.send(`-# **رصيدك ما يكفي يا فقير <:emoji_464:1388211597197050029>**`);
-    if (target.id === message.author.id) return message.channel.send(`-# **ما تقدر تحول لنفسك يا اهبل <:emoji_464:1388211597197050029>**`);
-    const lastTransfer = transferCooldowns.get(message.author.id);
-    if (lastTransfer && Date.now() - lastTransfer < 10000) {
-      const remaining = Math.ceil((10000 - (Date.now() - lastTransfer)) / 1000);
-      return message.channel.send(`-# **انتظر ${remaining} ثواني قبل التحويل مرة أخرى <:emoji_334:1388211595053760663>**`);
-    }
-    const confirmMsg = await message.channel.send({ content: `-# **اكتب "تأكيد" لو انت متأكد من عملية التحويل  **\n-# تجاهل الرسالة لو لم تكن متاكد` });
-    pendingTransfers.set(confirmMsg.id, { senderId: message.author.id, targetId: target.id, amount, msgId: confirmMsg.id, channelId: message.channel.id });
-    setTimeout(() => { if (pendingTransfers.has(confirmMsg.id)) { pendingTransfers.delete(confirmMsg.id); confirmMsg.delete().catch(() => { }); } }, 10000);
-    return;
-  }
-
-  if (command === 'اغنياء') {
-    const topUsers = await User.find().sort({ balance: -1 }).limit(5);
-    const topMsg = topUsers.map((u, idx) => `-# **\u200F${idx + 1}. \u202B<@${u.userId}>\u202C - ${u.balance} دينار**`).join('\n');
-    const embed = new EmbedBuilder().setTitle('الطبقة الارستقراطية <:y_coroa:1404576666105417871>').setDescription(topMsg).setColor(0x2b2d31);
-    message.channel.send({ embeds: [embed] });
-    return;
-  }
-
-  if (command === 'السجل') {
-    const user = message.mentions.users.first() || message.author;
-    const userData = await getUserData(user.id);
-    const history = userData.history.slice(-5).reverse().map(h => `-# **${h.type}: ${h.amount} (${h.date.toLocaleDateString()})**`).join('\n') || 'لا يوجد سجل.';
-    message.channel.send({ embeds: [new EmbedBuilder().setTitle(`سجل ${user.username}`).setDescription(history).setColor(0x2b2d31)] });
-    return;
-  }
-
-  // 4️⃣ أوامر لعبة الأرقام
   if (command === 'ارقام') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
     for (const [id, game] of activeNumberGames.entries()) {
@@ -746,10 +726,72 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // 6️⃣ نظام الحذف التلقائي
-  const autoDeleteSettings = await getAutoDeleteSettings(message.guild.id);
-  if (autoDeleteSettings.channelId && message.channel.id === autoDeleteSettings.channelId && !autoDeleteSettings.exceptUsers.includes(message.author.id)) {
-    setTimeout(async () => { try { await message.delete(); console.log(`🗑️ تم حذف رسالة من ${message.author.tag} في ${message.channel.name}`); } catch (e) { } }, 30000);
+  // ==================== 🤖 نظام الحذف التلقائي الجديد ====================
+  const autoDeleteChannels = await getAutoDeleteChannels(message.guild.id);
+  
+  for (const settings of autoDeleteChannels) {
+    if (message.channel.id !== settings.channelId) continue;
+    
+    // تحقق من الاستثناءات
+    if (settings.exceptUsers.includes(message.author.id)) continue;
+    
+    let memberRoles = message.member?.roles.cache.map(r => r.id) || [];
+    if (settings.exceptRoles.some(roleId => memberRoles.includes(roleId))) continue;
+    
+    // تحقق من نوع الفلتر
+    let shouldDelete = false;
+    let filterTypeText = '';
+    
+    switch (settings.filterType) {
+      case 'all':
+        shouldDelete = true;
+        filterTypeText = 'جميع الرسائل';
+        break;
+      case 'images':
+        shouldDelete = message.attachments.size > 0 && message.attachments.some(a => a.contentType?.startsWith('image/'));
+        filterTypeText = 'الصور';
+        break;
+      case 'links':
+        shouldDelete = message.content.match(/https?:\/\/[^\s]+/g) !== null;
+        filterTypeText = 'الروابط';
+        break;
+      case 'files':
+        shouldDelete = message.attachments.size > 0;
+        filterTypeText = 'الملفات';
+        break;
+      case 'words':
+        // كلمات ممنوعة
+        if (settings.blockedWords.length > 0) {
+          const content = message.content.toLowerCase();
+          shouldDelete = settings.blockedWords.some(word => content.includes(word.toLowerCase()));
+        }
+        // كلمات مسموحة (إذا كانت الكل ممنوع عدا المسموح)
+        if (settings.allowedWords.length > 0 && !shouldDelete) {
+          const content = message.content.toLowerCase();
+          shouldDelete = !settings.allowedWords.some(word => content.includes(word.toLowerCase()));
+        }
+        filterTypeText = 'كلمات محددة';
+        break;
+    }
+    
+    if (shouldDelete) {
+      try {
+        await message.delete();
+        
+        // إرسال رسالة تحذير (تنحذف بعد 10 ثواني)
+        const warningMsg = await message.channel.send(
+          `-# ** هذا الروم مخصص بس للـ ${filterTypeText} يـ ذكي <:emoji_38:1401773302619439147> **\n` +
+          `-# ** الروم ${message.channel} **`
+        );
+        
+        setTimeout(() => warningMsg.delete().catch(() => {}), 10000);
+        
+      } catch (e) {
+        // رسالة خطأ إذا ماقدر يحذف
+      }
+    }
+    
+    break;
   }
 });
 
@@ -762,16 +804,30 @@ client.on('interactionCreate', async (i) => {
     const { commandName, options, user, member } = i;
     const userData = await getUserData(user.id);
 
-    if (commandName === 'bothelp') {
+    // ==================== 👥 أوامر العامة ====================
+    if (commandName === 'help') {
       const embed = new EmbedBuilder()
         .setTitle('قائمة الأوامر')
         .setColor(0x2b2d31)
-        .setDescription(`-# **/economy balance - عرض الرصيد**\n-# **/economy transfer - تحويل أموال**\n-# **/economy top - قائمة الأغنياء**\n-# **/welcome test - تجربة الترحيب**\n-# **/giveaway start - بدء قيف أوي**\n-# **/ticket panel - لوحة التذاكر**\n-# **/ticket setup - تعديل إعدادات التذاكر**\n-# **/numbers - لعبة الأرقام**\n-# **/autodelete - نظام الحذف التلقائي**\n-# **أوامر نصية: دنانير، تحويل، اغنياء، السجل، تايم، طرد، حذف، ارقام، ايقاف**`);
+        .setDescription(
+          `**👥 أوامر العامة**\n` +
+          `-# /help - عرض الأوامر\n` +
+          `-# /eco bal - عرض الرصيد\n` +
+          `-# /eco pay - تحويل أموال\n` +
+          `-# /eco top - قائمة الأغنياء\n` +
+          `-# /eco hist - سجل المعاملات\n\n` +
+          `**📝 أوامر نصية**\n` +
+          `-# دنانير، تحويل، اغنياء، سجل\n` +
+          `-# تايم، طرد، حذف\n\n` +
+          `**🛡️ أوامر الإدارة**\n` +
+          `-# /welcome, /ticket, /give, /num\n\n` +
+          `**👑 أوامر المالك**\n` +
+          `-# /own, /bal, /auto`
+        );
       return i.reply({ embeds: [embed] });
     }
 
-    if (commandName === 'economy') {
-      // ✅ شرط الروم + استثناء الأدمن
+    if (commandName === 'eco') {
       const isAdmin = member.permissions.has(PermissionsBitField.Flags.Administrator);
       if (!isAdmin && i.channel.id !== ECONOMY_CHANNEL_ID) {
         return i.reply({ 
@@ -781,11 +837,11 @@ client.on('interactionCreate', async (i) => {
       }
 
       const sub = options.getSubcommand();
-      if (sub === 'balance') {
+      if (sub === 'bal') {
         const lastIn = userData.history.filter(h => h.type === 'TRANSFER_RECEIVE').pop() || { amount: 0 };
         return i.reply({ content: `-# **رصيدك الحالي ${userData.balance} و اخر عملية تحويل تلقيتها كانت بـ ${lastIn.amount}**`, ephemeral: false });
       }
-      if (sub === 'transfer') {
+      if (sub === 'pay') {
         const lastTransfer = transferCooldowns.get(user.id);
         if (lastTransfer && Date.now() - lastTransfer < 10000) {
           const remaining = Math.ceil((10000 - (Date.now() - lastTransfer)) / 1000);
@@ -806,73 +862,68 @@ client.on('interactionCreate', async (i) => {
         const embed = new EmbedBuilder().setTitle('الطبقة الارستقراطية <:y_coroa:1404576666105417871>').setDescription(topMsg).setColor(0x2b2d31);
         return i.reply({ embeds: [embed] });
       }
+      if (sub === 'hist') {
+        const history = userData.history.slice(-5).reverse().map(h => `-# **${h.type}: ${h.amount} (${h.date.toLocaleDateString()})**`).join('\n') || 'لا يوجد سجل.';
+        return i.reply({ embeds: [new EmbedBuilder().setTitle(`سجل ${user.username}`).setDescription(history).setColor(0x2b2d31)] });
+      }
     }
 
-    // ==================== 👑 أوامر المالك السلاش الجديدة ====================
-    if (commandName === 'add_balance' && user.id === OWNER_ID) {
-      const amount = options.getInteger('amount');
+    // ==================== 🛡️ أوامر الإدارة ====================
+    if (commandName === 'ticket') {
+      const sub = options.getSubcommand();
+      const ticketSettings = await getTicketSettings(i.guild.id);
       
-      if (amount <= 0) {
-        return i.reply({ 
-          content: `-# **القيمة غير صحيحه <:__:1467633552408576192> **`, 
-          ephemeral: true 
-        });
+      if (sub === 'panel') {
+        const embed = new EmbedBuilder()
+          .setColor(parseInt(ticketSettings.embedColor, 16) || 0x2b2d31);
+        
+        if (ticketSettings.embedDescription) embed.setDescription(ticketSettings.embedDescription);
+        if (ticketSettings.embedImage) embed.setImage(ticketSettings.embedImage);
+        
+        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('open_ticket').setLabel('فتح تذكرة').setStyle(ButtonStyle.Secondary));
+        
+        await i.deferReply({ ephemeral: true });
+        await i.channel.send({ embeds: [embed], components: [row] });
+        await i.deleteReply();
       }
       
-      const ownerData = await getUserData(user.id);
-      ownerData.balance = parseFloat((ownerData.balance + amount).toFixed(2));
-      ownerData.history.push({ type: 'OWNER_ADD', amount: amount });
-      await ownerData.save();
-      
-      return i.reply({ 
-        content: `-# **تم اضافة الرصيد لحسابك <:emoji_41:1471619709936996406> **`,
-        ephemeral: true 
-      });
-    }
-
-    if (commandName === 'remove_balance' && user.id === OWNER_ID) {
-      const amount = options.getInteger('amount');
-      
-      if (amount <= 0) {
-        return i.reply({ 
-          content: `-# **القيمة غير صحيحه <:__:1467633552408576192> **`, 
-          ephemeral: true 
-        });
+      if (sub === 'set') {
+        let updated = false;
+        if (options.getChannel('category')) { ticketSettings.categoryId = options.getChannel('category').id; updated = true; }
+        if (options.getString('desc')) { ticketSettings.embedDescription = options.getString('desc'); updated = true; }
+        if (options.getString('color')) { ticketSettings.embedColor = options.getString('color').replace('#', ''); updated = true; }
+        if (options.getString('image')) { ticketSettings.embedImage = options.getString('image'); updated = true; }
+        if (options.getRole('role')) { ticketSettings.supportRoleId = options.getRole('role').id; updated = true; }
+        
+        if (updated) { await ticketSettings.save(); i.reply({ content: '✅ تم تحديث إعدادات التذاكر بنجاح.', ephemeral: true }); }
+        else { i.reply({ content: '⚠️ ما حددت أي خيار للتحديث.', ephemeral: true }); }
       }
-      
-      const ownerData = await getUserData(user.id);
-      
-      if (ownerData.balance < amount) {
-        return i.reply({ 
-          content: `-# **العضو ما معه ذي الكمية saybu <:emoji_84:1389404919672340592> **`, 
-          ephemeral: true 
-        });
-      }
-      
-      ownerData.balance = parseFloat((ownerData.balance - amount).toFixed(2));
-      ownerData.history.push({ type: 'OWNER_REMOVE', amount: -amount });
-      await ownerData.save();
-      
-      return i.reply({ 
-        content: `-# **تم سحب الرصيد من حسابك <:emoji_41:1471619709936996406> **`,
-        ephemeral: true 
-      });
+      return;
     }
 
     if (commandName === 'welcome') {
       const sub = options.getSubcommand();
       const settings = await getSettings(i.guild.id);
-      if (sub === 'set') { settings.welcomeSettings.channelId = options.getChannel('channel').id; await settings.save(); i.reply('✅ تم تعيين الروم.'); }
-      if (sub === 'edit') {
+      
+      if (sub === 'channel') { 
+        settings.welcomeSettings.channelId = options.getChannel('room').id; 
+        await settings.save(); 
+        i.reply('✅ تم تعيين الروم.'); 
+      }
+      
+      if (sub === 'msg') {
         if (options.getString('title')) settings.welcomeSettings.title = options.getString('title');
-        if (options.getString('description')) settings.welcomeSettings.description = options.getString('description');
+        if (options.getString('desc')) settings.welcomeSettings.description = options.getString('desc');
         if (options.getString('color')) settings.welcomeSettings.color = options.getString('color').replace('#', '');
         if (options.getString('image')) settings.welcomeSettings.image = options.getString('image');
-        await settings.save(); i.reply('✅ تم التعديل.');
+        await settings.save(); 
+        i.reply('✅ تم التعديل.');
       }
+      
       if (sub === 'info') {
         i.reply({ embeds: [new EmbedBuilder().setTitle('إعدادات الترحيب').setColor(0x2b2d31).setDescription(`-# **الروم:** <#${settings.welcomeSettings.channelId || 'غير محدد'}>\n-# **اللون:** #${settings.welcomeSettings.color}\n-# **العنوان:** ${settings.welcomeSettings.title || 'غير محدد'}\n-# **الوصف:** ${settings.welcomeSettings.description || 'غير محدد'}`)] });
       }
+      
       if (sub === 'test') {
         await sendWelcome(member, settings);
         i.reply({ content: '✅ تم إرسال تجربة الترحيب.', ephemeral: true });
@@ -880,16 +931,15 @@ client.on('interactionCreate', async (i) => {
       return;
     }
 
-    // ✅ نظام القيف أوي - مع حفظ آخر صورة تلقائيًا
-    if (commandName === 'giveaway') {
+    if (commandName === 'give') {
       const sub = options.getSubcommand();
       
       if (sub === 'start') {
         const prize = options.getString('prize');
-        const durationStr = options.getString('duration');
+        const durationStr = options.getString('time');
         const winnersCount = options.getInteger('winners');
-        const condition = options.getString('condition') || 'لا توجد شروط';
-        const imageOption = options.getString('image');
+        const condition = options.getString('cond') || 'لا توجد شروط';
+        const imageOption = options.getString('img');
         const timeMatch = durationStr.match(/^(\d+)([mhd])$/);
         if (!timeMatch) return i.reply({ content: 'صيغة الوقت غلط! (مثال: 10m, 1h, 1d)', ephemeral: true });
         const timeValue = parseInt(timeMatch[1]);
@@ -897,14 +947,11 @@ client.on('interactionCreate', async (i) => {
         const durationMs = timeValue * (timeUnit === 'm' ? 60 : timeUnit === 'h' ? 3600 : 86400) * 1000;
         const endTime = Math.floor((Date.now() + durationMs) / 1000);
         
-        const giveawaySettings = await getGiveawaySettings(i.guild.id);
-        
-        // إذا حط المستخدم صورة جديدة، نخزنها
-        let image = giveawaySettings.defaultImage;
+        // حفظ آخر صورة
+        let image = giveawayImages.get(i.guild.id);
         if (imageOption) {
           image = imageOption;
-          giveawaySettings.defaultImage = imageOption;
-          await giveawaySettings.save();
+          giveawayImages.set(i.guild.id, imageOption);
         }
         
         const embed = new EmbedBuilder()
@@ -920,16 +967,10 @@ client.on('interactionCreate', async (i) => {
         collector.on('collect', async (btn) => {
           if (btn.customId === 'join_giveaway') {
             if (participants.has(btn.user.id)) {
-              return btn.reply({ 
-                content: `-# **انت داخل القيف اصلا <:__:1467633552408576192> **`, 
-                ephemeral: true 
-              }).catch(() => { });
+              return btn.reply({ content: `-# **انت داخل القيف اصلا <:__:1467633552408576192> **`, ephemeral: true }).catch(() => { });
             }
             participants.add(btn.user.id);
-            await btn.reply({ 
-              content: `-# **تم دخولك فالسحب يا رب تفوز <:2thumbup:1467287897429512396> **`, 
-              ephemeral: true 
-            }).catch(() => { });
+            await btn.reply({ content: `-# **تم دخولك فالسحب يا رب تفوز <:2thumbup:1467287897429512396> **`, ephemeral: true }).catch(() => { });
           }
         });
 
@@ -949,161 +990,258 @@ client.on('interactionCreate', async (i) => {
       return;
     }
 
-    if (commandName === 'ticket') {
+    if (commandName === 'num') {
       const sub = options.getSubcommand();
-      const ticketSettings = await getTicketSettings(i.guild.id);
-      if (sub === 'panel') {
-  const embed = new EmbedBuilder()
-    .setColor(parseInt(ticketSettings.embedColor, 16) || 0x2b2d31);
-  
-  if (ticketSettings.embedDescription) embed.setDescription(ticketSettings.embedDescription);
-  if (ticketSettings.embedImage) embed.setImage(ticketSettings.embedImage);
-  
-  const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('open_ticket').setLabel('فتح تذكرة').setStyle(ButtonStyle.Secondary));
-  
-  // 👇 التعديل: استخدم defer عشان تختفي الرسالة
-  await i.deferReply({ ephemeral: true });
-  await i.channel.send({ embeds: [embed], components: [row] });
-  await i.deleteReply();
-}
-      if (sub === 'setup') {
-  let updated = false;
-  
-  if (options.getChannel('category')) { 
-    ticketSettings.categoryId = options.getChannel('category').id; 
-    updated = true; 
-  }
-  
-  if (options.getString('description')) { 
-    ticketSettings.embedDescription = options.getString('description'); 
-    updated = true; 
-  }
-  
-  if (options.getString('color')) { 
-    ticketSettings.embedColor = options.getString('color').replace('#', ''); 
-    updated = true; 
-  }
-  
-  if (options.getString('image')) { 
-    ticketSettings.embedImage = options.getString('image'); 
-    updated = true; 
-  }
-  
-  // 👈 أضف هالجزء الجديد
-  if (options.getRole('support_role')) { 
-    ticketSettings.supportRoleId = options.getRole('support_role').id; 
-    updated = true; 
-  }
-  
-  if (updated) { 
-    await ticketSettings.save(); 
-    i.reply({ content: '✅ تم تحديث إعدادات التذاكر بنجاح.', ephemeral: true }); 
-  } else { 
-    i.reply({ content: '⚠️ ما حددت أي خيار للتحديث.', ephemeral: true }); 
-  }
-}
-      return;
-    }
-
-    if (commandName === 'resetall') {
-      if (user.id !== OWNER_ID) { return i.reply({ content: '❌ هذا الأمر فقط لمالك البوت.', ephemeral: true }); }
-      await User.updateMany({}, { balance: 5, history: [{ type: 'RESET_ALL', amount: 5, date: new Date() }] });
-      return i.reply('✅ تم إعادة تعيين رصيد الجميع إلى **5 دنانير**.');
-    }
-
-    if (commandName === 'numbers') {
-      if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) { return i.reply({ content: '❌ هذا الأمر للأدمن فقط.', ephemeral: true }); }
-      for (const [id, game] of activeNumberGames.entries()) {
-        const msg = await i.channel.messages.fetch(id).catch(() => null);
-        if (msg && !game.started) { return i.reply({ content: `-# **في لعبة شغالة يـ عبد خلها تخلص <:emoji_38:1470920843398746215> **`, ephemeral: true }); }
+      
+      if (sub === 'start') {
+        if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) { return i.reply({ content: '❌ هذا الأمر للأدمن فقط.', ephemeral: true }); }
+        for (const [id, game] of activeNumberGames.entries()) {
+          const msg = await i.channel.messages.fetch(id).catch(() => null);
+          if (msg && !game.started) { return i.reply({ content: `-# **في لعبة شغالة يـ عبد خلها تخلص <:emoji_38:1470920843398746215> **`, ephemeral: true }); }
+        }
+        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_number_game').setLabel('انضم للعبة').setStyle(ButtonStyle.Secondary));
+        await i.reply({ content: `-# **تم بدأ لعبة التخمين مهمتكم رح تكون تخمين الرقم الصحيح من 1 الى 100 <:new_emoji:1388436089584226387> **`, components: [row] });
+        const msg = await i.fetchReply();
+        activeNumberGames.set(msg.id, {
+          hostId: i.user.id, players: [], attempts: new Map(), guesses: [], started: false,
+          winner: null, secretNumber: null, currentTurn: null, currentTurnIndex: 0, alivePlayers: [], timer: null, canGuess: new Map()
+        });
+        startNumberGameAfterDelay(msg, activeNumberGames.get(msg.id));
+        return;
       }
-      const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_number_game').setLabel('انضم للعبة').setStyle(ButtonStyle.Secondary));
-      await i.reply({ content: `-# **تم بدأ لعبة التخمين مهمتكم رح تكون تخمين الرقم الصحيح من 1 الى 100 <:new_emoji:1388436089584226387> **`, components: [row] });
-      const msg = await i.fetchReply();
-      activeNumberGames.set(msg.id, {
-        hostId: i.user.id, players: [], attempts: new Map(), guesses: [], started: false,
-        winner: null, secretNumber: null, currentTurn: null, currentTurnIndex: 0, alivePlayers: [], timer: null, canGuess: new Map()
-      });
-      startNumberGameAfterDelay(msg, activeNumberGames.get(msg.id));
-      return;
+      
+      if (sub === 'stop') {
+        if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
+        
+        let found = false;
+        for (const [id, game] of activeNumberGames.entries()) {
+          const msg = await i.channel.messages.fetch(id).catch(() => null);
+          if (msg) {
+            await msg.edit({ content: `-# ** تم ايقاف اللعبة <:new_emoji:1388436095842385931> **`, components: [] }).catch(() => { });
+          }
+          if (game.timer) clearTimeout(game.timer);
+          activeNumberGames.delete(id);
+          found = true;
+        }
+        
+        if (found) {
+          i.reply({ content: `-# ** تم ايقاف اللعبة <:new_emoji:1388436095842385931> **`, ephemeral: true });
+        }
+        return;
+      }
     }
 
-    if (commandName === 'autodelete') {
-      if (user.id !== OWNER_ID) { return i.reply({ content: '❌ هذا الأمر فقط لمالك البوت.', ephemeral: true }); }
+    // ==================== 👑 أوامر المالك ====================
+    if (commandName === 'own' && user.id === OWNER_ID) {
       const sub = options.getSubcommand();
-      if (sub === 'set') {
+      
+      if (sub === 'servers') {
+        const action = options.getString('action');
+        const id = options.getString('id');
+        const settings = await getGlobalSettings();
+        
+        if (action === 'add') {
+          if (!settings.allowedGuilds.includes(id)) {
+            settings.allowedGuilds.push(id);
+            await settings.save();
+            i.reply({ content: `✅ تم إضافة السيرفر ${id}`, ephemeral: true });
+          } else {
+            i.reply({ content: `⚠️ السيرفر موجود بالفعل`, ephemeral: true });
+          }
+        } else {
+          settings.allowedGuilds = settings.allowedGuilds.filter(g => g !== id);
+          await settings.save();
+          i.reply({ content: `✅ تم حذف السيرفر ${id}`, ephemeral: true });
+        }
+      }
+      
+      if (sub === 'reset') {
+        await User.updateMany({}, { balance: 5, history: [{ type: 'RESET_ALL', amount: 5, date: new Date() }] });
+        i.reply('✅ تم إعادة تعيين رصيد الجميع إلى **5 دنانير**.');
+      }
+    }
+
+    if (commandName === 'bal' && user.id === OWNER_ID) {
+      const sub = options.getSubcommand();
+      const amount = options.getInteger('amount');
+      
+      if (amount <= 0) {
+        return i.reply({ content: `-# **القيمة غير صحيحه <:__:1467633552408576192> **`, ephemeral: true });
+      }
+      
+      const ownerData = await getUserData(user.id);
+      
+      if (sub === 'add') {
+        ownerData.balance = parseFloat((ownerData.balance + amount).toFixed(2));
+        ownerData.history.push({ type: 'OWNER_ADD', amount: amount });
+        await ownerData.save();
+        return i.reply({ content: `-# **تم اضافة الرصيد لحسابك <:emoji_41:1471619709936996406> **`, ephemeral: true });
+      }
+      
+      if (sub === 'rem') {
+        if (ownerData.balance < amount) {
+          return i.reply({ content: `-# **العضو ما معه ذي الكمية saybu <:emoji_84:1389404919672340592> **`, ephemeral: true });
+        }
+        ownerData.balance = parseFloat((ownerData.balance - amount).toFixed(2));
+        ownerData.history.push({ type: 'OWNER_REMOVE', amount: -amount });
+        await ownerData.save();
+        return i.reply({ content: `-# **تم سحب الرصيد من حسابك <:emoji_41:1471619709936996406> **`, ephemeral: true });
+      }
+    }
+
+    // ==================== 🤖 نظام الحذف التلقائي الجديد ====================
+    if (commandName === 'auto' && user.id === OWNER_ID) {
+      const sub = options.getSubcommand();
+      
+      if (sub === 'add') {
         const channel = options.getChannel('channel');
-        const excepts = [];
-        for (let x = 1; x <= 5; x++) { const id = options.getString(`except${x}`); if (id) excepts.push(id); }
-        const autoDeleteSettings = await getAutoDeleteSettings(i.guild.id);
-        autoDeleteSettings.channelId = channel.id;
-        autoDeleteSettings.exceptUsers = excepts;
-        await autoDeleteSettings.save();
-        const exceptList = excepts.length > 0 ? excepts.map(id => `<@${id}>`).join(', ') : 'لا يوجد';
-        return i.reply({ content: `✅ **تم تفعيل الحذف التلقائي**\n📌 الروم: <#${channel.id}>\n🙅 المستثنيين: ${exceptList}`, ephemeral: true });
+        const delay = options.getInteger('delay') ?? 0;
+        const filterType = options.getString('type') ?? 'all';
+        const allowedStr = options.getString('allowed') || '';
+        const blockedStr = options.getString('blocked') || '';
+        const exceptUsersStr = options.getString('except_users') || '';
+        const exceptRolesStr = options.getString('except_roles') || '';
+        
+        // تحويل النصوص إلى مصفوفات
+        const allowedWords = allowedStr.split(',').map(s => s.trim()).filter(s => s);
+        const blockedWords = blockedStr.split(',').map(s => s.trim()).filter(s => s);
+        const exceptUsers = exceptUsersStr.split(',').map(s => s.trim()).filter(s => s);
+        const exceptRoles = exceptRolesStr.split(',').map(s => s.trim()).filter(s => s);
+        
+        // حذف الإعدادات القديمة لهذا الروم إن وجدت
+        await AutoDelete.deleteMany({ guildId: i.guild.id, channelId: channel.id });
+        
+        // إنشاء إعدادات جديدة
+        const newSettings = new AutoDelete({
+          guildId: i.guild.id,
+          channelId: channel.id,
+          deleteDelay: delay,
+          filterType,
+          allowedWords,
+          blockedWords,
+          exceptUsers,
+          exceptRoles
+        });
+        
+        await newSettings.save();
+        
+        return i.reply({ 
+          content: `-# ** تم تعيين هذا الروم للحذف التلقائي <:new_emoji:1388436089584226387> **`, 
+          ephemeral: true 
+        });
       }
-      if (sub === 'disable') {
-        const autoDeleteSettings = await getAutoDeleteSettings(i.guild.id);
-        autoDeleteSettings.channelId = null;
-        autoDeleteSettings.exceptUsers = [];
-        await autoDeleteSettings.save();
-        return i.reply({ content: '✅ **تم إيقاف الحذف التلقائي**', ephemeral: true });
+      
+      if (sub === 'rem') {
+        const channel = options.getChannel('channel');
+        await AutoDelete.deleteMany({ guildId: i.guild.id, channelId: channel.id });
+        
+        return i.reply({ 
+          content: `-# ** تم حذف هذا الروم من الحذف التلقائي <:new_emoji:1388436095842385931> **`, 
+          ephemeral: true 
+        });
       }
-      if (sub === 'status') {
-        const autoDeleteSettings = await getAutoDeleteSettings(i.guild.id);
-        if (!autoDeleteSettings.channelId) { return i.reply({ content: '⚠️ **الحذف التلقائي معطل**', ephemeral: true }); }
-        const exceptList = autoDeleteSettings.exceptUsers.length > 0 ? autoDeleteSettings.exceptUsers.map(id => `<@${id}>`).join(', ') : 'لا يوجد';
-        return i.reply({ content: `📊 **حالة الحذف التلقائي**\n📌 الروم: <#${autoDeleteSettings.channelId}>\n🙅 المستثنيين: ${exceptList}`, ephemeral: true });
+      
+      if (sub === 'list') {
+        const channels = await getAutoDeleteChannels(i.guild.id);
+        
+        if (channels.length === 0) {
+          return i.reply({ content: '⚠️ لا يوجد رومات مفعلة للحذف التلقائي.', ephemeral: true });
+        }
+        
+        let message = `**رومات الحذف التلقائي و معلوماتها <:new_emoji:1388436089584226387> **\n\n`;
+        
+        for (const ch of channels) {
+          const filterTypes = {
+            'all': 'جميع الرسائل',
+            'words': 'كلمات محددة',
+            'images': 'الصور',
+            'links': 'الروابط',
+            'files': 'الملفات'
+          };
+          
+          const delayText = ch.deleteDelay === 0 ? 'فوري' : `${ch.deleteDelay} ثانية`;
+          const allowedText = ch.allowedWords.length > 0 ? ch.allowedWords.join('، ') : 'لا يوجد';
+          const blockedText = ch.blockedWords.length > 0 ? ch.blockedWords.join('، ') : 'لا يوجد';
+          const exceptUsersText = ch.exceptUsers.length > 0 ? ch.exceptUsers.map(id => `<@${id}>`).join(' ') : 'لا يوجد';
+          const exceptRolesText = ch.exceptRoles.length > 0 ? ch.exceptRoles.map(id => `<@&${id}>`).join(' ') : 'لا يوجد';
+          
+          message += `-# **الروم <#${ch.channelId}>**\n`;
+          message += `-# **المستثنين هم ${exceptUsersText}**\n`;
+          message += `-# **الرتب المستثناة ${exceptRolesText}**\n`;
+          message += `-# **الرسائل فيه تنحذف ${delayText}**\n`;
+          message += `-# **نوع الرسائل الي تحذف هي ${filterTypes[ch.filterType] || ch.filterType}**\n`;
+          
+          if (ch.filterType === 'words') {
+            if (ch.blockedWords.length > 0) message += `-# **الكلمات الممنوعة: ${blockedText}**\n`;
+            if (ch.allowedWords.length > 0) message += `-# **الكلمات المسموحة فقط: ${allowedText}**\n`;
+          }
+          
+          message += `\n`;
+        }
+        
+        // تقسيم الرسالة إذا كانت طويلة
+        if (message.length > 2000) {
+          const chunks = message.match(/[\s\S]{1,1900}/g) || [];
+          await i.reply({ content: chunks[0], ephemeral: true });
+          for (let j = 1; j < chunks.length; j++) {
+            await i.followUp({ content: chunks[j], ephemeral: true });
+          }
+        } else {
+          await i.reply({ content: message, ephemeral: true });
+        }
       }
     }
   }
 
+  // ==================== 🎮 تفاعلات الأزرار ====================
   if (i.isButton()) {
     if (i.customId === 'open_ticket') {
-  const ticketSettings = await getTicketSettings(i.guild.id);
-  const category = i.guild.channels.cache.get(ticketSettings.categoryId);
-  
-  const ch = await i.guild.channels.create({
-    name: `ticket-${i.user.username}`, 
-    type: ChannelType.GuildText, 
-    parent: category?.id || null,
-    permissionOverwrites: [
-      { id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-      { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-      { id: client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
-    ]
-  });
-  
-  // 👈 بناء الرسالة حسب الرتبة
-  let ticketMessage = `${i.user}`;
-  
-  if (ticketSettings.supportRoleId) {
-    ticketMessage = `<@&${ticketSettings.supportRoleId}> ` + ticketMessage;
-  }
-  
-  ticketMessage += ` -# ** اكتب سبب فتحك للتكت و فريق الدعم بيتواصل معك قريب <:emoji_32:1471962578895769611> **`;
-  
-  // 👈 إرسال الرسالة مع زر الإغلاق
-  await ch.send({ 
-    content: ticketMessage,
-    components: [
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق').setStyle(ButtonStyle.Danger)
-      )
-    ]
-  });
-  
-  i.reply({ content: `✅ تم فتح التذكرة: ${ch}`, ephemeral: true });
-}
+      const ticketSettings = await getTicketSettings(i.guild.id);
+      const category = i.guild.channels.cache.get(ticketSettings.categoryId);
+      
+      const ch = await i.guild.channels.create({
+        name: `ticket-${i.user.username}`, 
+        type: ChannelType.GuildText, 
+        parent: category?.id || null,
+        permissionOverwrites: [
+          { id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+          { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+          { id: client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+        ]
+      });
+      
+      // بناء الرسالة مع الرتبة إذا موجودة
+      let ticketMessage = `${i.user}`;
+      
+      if (ticketSettings.supportRoleId) {
+        ticketMessage = `<@&${ticketSettings.supportRoleId}> ` + ticketMessage;
+      }
+      
+      ticketMessage += ` -# ** اكتب سبب فتحك للتكت و فريق الدعم بيتواصل معك قريب <:emoji_32:1471962578895769611> **`;
+      
+      await ch.send({ 
+        content: ticketMessage,
+        components: [
+          new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق').setStyle(ButtonStyle.Danger)
+          )
+        ]
+      });
+      
+      i.reply({ content: `✅ تم فتح التذكرة: ${ch}`, ephemeral: true });
+    }
+
+    if (i.customId === 'close_ticket') {
+      await i.reply({ content: `🔒 سيتم إغلاق التذكرة خلال 3 ثواني...`, ephemeral: true });
+      setTimeout(() => { i.channel.delete().catch(() => { }); }, 3000);
+    }
+
     if (i.customId === 'join_number_game') {
       const game = activeNumberGames.get(i.message.id);
       if (!game || game.started) { return i.reply({ content: `-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **`, ephemeral: true }).catch(() => { }); }
       if (game.players.length >= 6) { return i.reply({ content: `-# **اللعبة ممتلئة للأسف ليش ما جيت بسرعه <:emoji_84:1389404919672340592> **`, ephemeral: true }).catch(() => { }); }
       if (game.players.includes(i.user.id)) {
-        return i.reply({ 
-          content: `-# **انت داخل اللعبة اصلا <:__:1467633552408576192> **`, 
-          ephemeral: true 
-        }).catch(() => { });
+        return i.reply({ content: `-# **انت داخل اللعبة اصلا <:__:1467633552408576192> **`, ephemeral: true }).catch(() => { });
       }
       game.players.push(i.user.id);
       game.attempts.set(i.user.id, 0);
@@ -1112,18 +1250,8 @@ client.on('interactionCreate', async (i) => {
       await i.reply({ content: `-# **تم انت الحين مشارك فاللعبة <:2thumbup:1467287897429512396> **`, ephemeral: true }).catch(() => { });
     }
 
-    if (i.customId.startsWith('exit_number_game_')) {
-      const gameId = i.customId.replace('exit_number_game_', '');
-      const game = activeNumberGames.get(gameId);
-      if (game && !game.started) {
-        const index = game.players.indexOf(i.user.id);
-        if (index > -1) {
-          game.players.splice(index, 1);
-          game.attempts.delete(i.user.id);
-          game.canGuess?.delete(i.user.id);
-          await i.update({ content: `-# **تم خروجك من اللعبة <:s7_discord:1388214117365453062> **`, components: [] }).catch(() => { });
-        }
-      }
+    if (i.customId === 'join_giveaway') {
+      // معالج القيف أوي موجود في الـ collector
     }
   }
 });
