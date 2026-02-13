@@ -45,7 +45,8 @@ const TicketSettingsSchema = new mongoose.Schema({
   categoryId: { type: String, default: '1387909837693915148' },
   embedDescription: { type: String, default: 'اضغط على الزر لفتح تذكرة جديدة.' },
   embedColor: { type: String, default: '2b2d31' },
-  embedImage: { type: String, default: null }
+  embedImage: { type: String, default: null },
+  supportRoleId: { type: String, default: null } // 👈 أضف هذا السطر
 });
 
 const AutoDeleteSchema = new mongoose.Schema({
@@ -233,16 +234,18 @@ const adminSlashCommands = [
     options: [
       { name: 'panel', description: 'عرض لوحة التذاكر', type: 1 },
       {
-        name: 'setup',
-        description: 'تعديل إعدادات التذاكر',
-        type: 1,
-        options: [
-          { name: 'category', description: 'تعيين الكاتيجوري', type: 7, required: false, channel_types: [4] },
-          { name: 'description', description: 'وصف الإيمبيد', type: 3, required: false },
-          { name: 'color', description: 'لون الإيمبيد (كود هيكس)', type: 3, required: false },
-          { name: 'image', description: 'رابط صورة الإيمبيد', type: 3, required: false }
-        ]
-      }
+        {
+  name: 'setup',
+  description: 'تعديل إعدادات التذاكر',
+  type: 1,
+  options: [
+    { name: 'category', description: 'تعيين الكاتيجوري', type: 7, required: false, channel_types: [4] },
+    { name: 'description', description: 'وصف الإيمبيد', type: 3, required: false },
+    { name: 'color', description: 'لون الإيمبيد (كود هيكس)', type: 3, required: false },
+    { name: 'image', description: 'رابط صورة الإيمبيد', type: 3, required: false },
+    { name: 'support_role', description: 'رتبة الدعم', type: 8, required: false } // 👈 أضف هذا السطر
+  ]
+}
     ],
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString()
   },
@@ -964,14 +967,41 @@ client.on('interactionCreate', async (i) => {
   await i.deleteReply();
 }
       if (sub === 'setup') {
-        let updated = false;
-        if (options.getChannel('category')) { ticketSettings.categoryId = options.getChannel('category').id; updated = true; }
-        if (options.getString('description')) { ticketSettings.embedDescription = options.getString('description'); updated = true; }
-        if (options.getString('color')) { ticketSettings.embedColor = options.getString('color').replace('#', ''); updated = true; }
-        if (options.getString('image')) { ticketSettings.embedImage = options.getString('image'); updated = true; }
-        if (updated) { await ticketSettings.save(); i.reply({ content: '✅ تم تحديث إعدادات التذاكر بنجاح.', ephemeral: true }); }
-        else { i.reply({ content: '⚠️ ما حددت أي خيار للتحديث.', ephemeral: true }); }
-      }
+  let updated = false;
+  
+  if (options.getChannel('category')) { 
+    ticketSettings.categoryId = options.getChannel('category').id; 
+    updated = true; 
+  }
+  
+  if (options.getString('description')) { 
+    ticketSettings.embedDescription = options.getString('description'); 
+    updated = true; 
+  }
+  
+  if (options.getString('color')) { 
+    ticketSettings.embedColor = options.getString('color').replace('#', ''); 
+    updated = true; 
+  }
+  
+  if (options.getString('image')) { 
+    ticketSettings.embedImage = options.getString('image'); 
+    updated = true; 
+  }
+  
+  // 👈 أضف هالجزء الجديد
+  if (options.getRole('support_role')) { 
+    ticketSettings.supportRoleId = options.getRole('support_role').id; 
+    updated = true; 
+  }
+  
+  if (updated) { 
+    await ticketSettings.save(); 
+    i.reply({ content: '✅ تم تحديث إعدادات التذاكر بنجاح.', ephemeral: true }); 
+  } else { 
+    i.reply({ content: '⚠️ ما حددت أي خيار للتحديث.', ephemeral: true }); 
+  }
+}
       return;
     }
 
@@ -1030,31 +1060,41 @@ client.on('interactionCreate', async (i) => {
 
   if (i.isButton()) {
     if (i.customId === 'open_ticket') {
-      const ticketSettings = await getTicketSettings(i.guild.id);
-      const category = i.guild.channels.cache.get(ticketSettings.categoryId);
-      const ch = await i.guild.channels.create({
-        name: `ticket-${i.user.username}`, type: ChannelType.GuildText, parent: category?.id || null,
-        permissionOverwrites: [
-          { id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-          { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-          { id: client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
-        ]
-      });
-      const embed = new EmbedBuilder()
-        .setColor(parseInt(ticketSettings.embedColor, 16) || 0x2b2d31);
-      
-      if (ticketSettings.embedDescription) embed.setDescription(ticketSettings.embedDescription);
-      if (ticketSettings.embedImage) embed.setImage(ticketSettings.embedImage);
-      
-      ch.send({ content: `${i.user}`, embeds: [embed], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق').setStyle(ButtonStyle.Danger))] });
-      i.reply({ content: `✅ تم فتح التذكرة: ${ch}`, ephemeral: true });
-    }
-
-    if (i.customId === 'close_ticket') {
-      await i.reply({ content: `🔒 سيتم إغلاق التذكرة خلال 3 ثواني...`, ephemeral: true });
-      setTimeout(() => { i.channel.delete().catch(() => { }); }, 3000);
-    }
-
+  const ticketSettings = await getTicketSettings(i.guild.id);
+  const category = i.guild.channels.cache.get(ticketSettings.categoryId);
+  
+  const ch = await i.guild.channels.create({
+    name: `ticket-${i.user.username}`, 
+    type: ChannelType.GuildText, 
+    parent: category?.id || null,
+    permissionOverwrites: [
+      { id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+      { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+      { id: client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+    ]
+  });
+  
+  // 👈 بناء الرسالة حسب الرتبة
+  let ticketMessage = `${i.user}`;
+  
+  if (ticketSettings.supportRoleId) {
+    ticketMessage = `<@&${ticketSettings.supportRoleId}> ` + ticketMessage;
+  }
+  
+  ticketMessage += ` -# ** اكتب سبب فتحك للتكت و فريق الدعم بيتواصل معك قريب <:emoji_32:1471962578895769611> **`;
+  
+  // 👈 إرسال الرسالة مع زر الإغلاق
+  await ch.send({ 
+    content: ticketMessage,
+    components: [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق').setStyle(ButtonStyle.Danger)
+      )
+    ]
+  });
+  
+  i.reply({ content: `✅ تم فتح التذكرة: ${ch}`, ephemeral: true });
+}
     if (i.customId === 'join_number_game') {
       const game = activeNumberGames.get(i.message.id);
       if (!game || game.started) { return i.reply({ content: `-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **`, ephemeral: true }).catch(() => { }); }
