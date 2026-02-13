@@ -49,7 +49,7 @@ const TicketSettingsSchema = new mongoose.Schema({
   supportRoleId: { type: String, default: null }
 });
 
-// ==================== 📊 نظام الحذف التلقائي الجديد ====================
+// ==================== 📊 نظام الحذف التلقائي الجديد مع رسالة مخصصة ====================
 const AutoDeleteChannelSchema = new mongoose.Schema({
   guildId: String,
   channelId: String,
@@ -58,7 +58,8 @@ const AutoDeleteChannelSchema = new mongoose.Schema({
   allowedWords: { type: [String], default: [] },
   blockedWords: { type: [String], default: [] },
   exceptUsers: { type: [String], default: [] },
-  exceptRoles: { type: [String], default: [] }
+  exceptRoles: { type: [String], default: [] },
+  customMessage: { type: String, default: null } // 👈 رسالة مخصصة جديدة
 });
 
 const AutoDelete = mongoose.model('AutoDeleteChannel', AutoDeleteChannelSchema);
@@ -235,7 +236,7 @@ const ownerCommands = [
       { name: 'rem', description: 'سحب رصيد', type: 1, options: [{ name: 'amount', description: 'الكمية', type: 4, required: true }] }
     ]
   },
-  // ==================== 🤖 نظام الحذف التلقائي الجديد (كامل) ====================
+  // ==================== 🤖 نظام الحذف التلقائي الجديد مع رسالة مخصصة ====================
   {
     name: 'auto',
     description: 'نظام الحذف التلقائي',
@@ -260,7 +261,8 @@ const ownerCommands = [
           { name: 'allowed', description: 'كلمات مسموحة (مفصولة بفواصل)', type: 3, required: false },
           { name: 'blocked', description: 'كلمات ممنوعة (مفصولة بفواصل)', type: 3, required: false },
           { name: 'except_users', description: 'ايديات مستثناة (مفصولة بفواصل)', type: 3, required: false },
-          { name: 'except_roles', description: 'ايديات رتب مستثناة (مفصولة بفواصل)', type: 3, required: false }
+          { name: 'except_roles', description: 'ايديات رتب مستثناة (مفصولة بفواصل)', type: 3, required: false },
+          { name: 'message', description: 'رسالة مخصصة عند الحذف', type: 3, required: false } // 👈 رسالة مخصصة
         ]
       },
       {
@@ -726,7 +728,7 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // ==================== 🤖 نظام الحذف التلقائي الجديد ====================
+  // ==================== 🤖 نظام الحذف التلقائي الجديد مع رسالة مخصصة ====================
   const autoDeleteChannels = await getAutoDeleteChannels(message.guild.id);
   
   for (const settings of autoDeleteChannels) {
@@ -778,11 +780,15 @@ client.on('messageCreate', async (message) => {
       try {
         await message.delete();
         
-        // إرسال رسالة تحذير (تنحذف بعد 10 ثواني)
-        const warningMsg = await message.channel.send(
-          `-# ** هذا الروم مخصص بس للـ ${filterTypeText} يـ ذكي <:emoji_38:1401773302619439147> **\n` +
-          `-# ** الروم ${message.channel} **`
-        );
+        // إرسال رسالة تحذير مخصصة (تنحذف بعد 10 ثواني)
+        let warningText = settings.customMessage || `-# ** هذا الروم مخصص بس للـ ${filterTypeText} يـ ذكي <:emoji_38:1401773302619439147> **`;
+        
+        // استبدال المتغيرات
+        warningText = warningText.replace(/{user}/g, message.author.toString())
+                                .replace(/{channel}/g, message.channel.toString())
+                                .replace(/{type}/g, filterTypeText);
+        
+        const warningMsg = await message.channel.send(warningText);
         
         setTimeout(() => warningMsg.delete().catch(() => {}), 10000);
         
@@ -1089,7 +1095,7 @@ client.on('interactionCreate', async (i) => {
       }
     }
 
-    // ==================== 🤖 نظام الحذف التلقائي الجديد ====================
+    // ==================== 🤖 نظام الحذف التلقائي الجديد مع رسالة مخصصة ====================
     if (commandName === 'auto' && user.id === OWNER_ID) {
       const sub = options.getSubcommand();
       
@@ -1101,6 +1107,7 @@ client.on('interactionCreate', async (i) => {
         const blockedStr = options.getString('blocked') || '';
         const exceptUsersStr = options.getString('except_users') || '';
         const exceptRolesStr = options.getString('except_roles') || '';
+        const customMessage = options.getString('message') || null; // 👈 رسالة مخصصة
         
         // تحويل النصوص إلى مصفوفات
         const allowedWords = allowedStr.split(',').map(s => s.trim()).filter(s => s);
@@ -1120,7 +1127,8 @@ client.on('interactionCreate', async (i) => {
           allowedWords,
           blockedWords,
           exceptUsers,
-          exceptRoles
+          exceptRoles,
+          customMessage // 👈 حفظ الرسالة المخصصة
         });
         
         await newSettings.save();
@@ -1164,12 +1172,14 @@ client.on('interactionCreate', async (i) => {
           const blockedText = ch.blockedWords.length > 0 ? ch.blockedWords.join('، ') : 'لا يوجد';
           const exceptUsersText = ch.exceptUsers.length > 0 ? ch.exceptUsers.map(id => `<@${id}>`).join(' ') : 'لا يوجد';
           const exceptRolesText = ch.exceptRoles.length > 0 ? ch.exceptRoles.map(id => `<@&${id}>`).join(' ') : 'لا يوجد';
+          const customMessageText = ch.customMessage || 'الرسالة الافتراضية'; // 👈 عرض الرسالة المخصصة
           
           message += `-# **الروم <#${ch.channelId}>**\n`;
           message += `-# **المستثنين هم ${exceptUsersText}**\n`;
           message += `-# **الرتب المستثناة ${exceptRolesText}**\n`;
           message += `-# **الرسائل فيه تنحذف ${delayText}**\n`;
           message += `-# **نوع الرسائل الي تحذف هي ${filterTypes[ch.filterType] || ch.filterType}**\n`;
+          message += `-# **الرسالة المخصصة:** ${customMessageText}\n`; // 👈 عرض الرسالة
           
           if (ch.filterType === 'words') {
             if (ch.blockedWords.length > 0) message += `-# **الكلمات الممنوعة: ${blockedText}**\n`;
