@@ -1227,7 +1227,7 @@ client.on('interactionCreate', async (i) => {
         ticketMessage = `<@&${ticketSettings.supportRoleId}> ` + ticketMessage;
       }
       
-      ticketMessage += ` -# ** اكتب سبب فتحك للتكت و فريق الدعم بيتواصل معك قريب <:emoji_32:1471962578895769611> **`;
+      ticketMessage += `\n-# ** اكتب سبب فتحك للتكت و فريق الدعم بيتواصل معك قريب <:emoji_32:1471962578895769611> **`;
       
       await ch.send({ 
         content: ticketMessage,
