@@ -55,11 +55,17 @@ const AutoDeleteSchema = new mongoose.Schema({
   exceptUsers: { type: [String], default: [] }
 });
 
+const GiveawaySettingsSchema = new mongoose.Schema({
+  guildId: String,
+  defaultImage: { type: String, default: null }
+});
+
 const User = mongoose.model('User', UserSchema);
 const Settings = mongoose.model('Settings', SettingsSchema);
 const GlobalSettings = mongoose.model('GlobalSettings', GlobalSettingsSchema);
 const TicketSettings = mongoose.model('TicketSettings', TicketSettingsSchema);
 const AutoDelete = mongoose.model('AutoDelete', AutoDeleteSchema);
+const GiveawaySettings = mongoose.model('GiveawaySettings', GiveawaySettingsSchema);
 
 // ==================== 🔧 الدوال المساعدة ====================
 async function getGlobalSettings() {
@@ -102,6 +108,15 @@ async function getAutoDeleteSettings(guildId) {
   let settings = await AutoDelete.findOne({ guildId });
   if (!settings) {
     settings = new AutoDelete({ guildId });
+    await settings.save();
+  }
+  return settings;
+}
+
+async function getGiveawaySettings(guildId) {
+  let settings = await GiveawaySettings.findOne({ guildId });
+  if (!settings) {
+    settings = new GiveawaySettings({ guildId });
     await settings.save();
   }
   return settings;
@@ -182,6 +197,33 @@ const slashCommands = [
         type: 1
       }
     ]
+  },
+  // ==================== 👑 أوامر المالك الجديدة ====================
+  {
+    name: 'add_balance',
+    description: 'إضافة رصيد لحسابك (للمالك فقط)',
+    default_member_permissions: "0",
+    options: [
+      { 
+        name: 'amount', 
+        description: 'الكمية', 
+        type: 4,
+        required: true 
+      }
+    ]
+  },
+  {
+    name: 'remove_balance',
+    description: 'سحب رصيد من حسابك (للمالك فقط)',
+    default_member_permissions: "0",
+    options: [
+      { 
+        name: 'amount', 
+        description: 'الكمية', 
+        type: 4,
+        required: true 
+      }
+    ]
   }
 ];
 
@@ -241,7 +283,7 @@ const adminSlashCommands = [
           { name: 'duration', description: 'المدة (مثال: 10m, 1h, 1d)', type: 3, required: true },
           { name: 'winners', description: 'عدد الفائزين', type: 4, required: true },
           { name: 'condition', description: 'الشروط', type: 3, required: false },
-          { name: 'image', description: 'رابط الصورة', type: 3, required: false }
+          { name: 'image', description: 'رابط الصورة (اختياري)', type: 3, required: false }
         ]
       }
     ]
@@ -477,7 +519,7 @@ client.on('messageCreate', async (message) => {
       await member.timeout(null);
       message.channel.send(`-# **تمت مسامحتك ايها العبد ${member} <:2thumbup:1467287897429512396>**`);
     } catch (error) {
-      message.channel.send(`-# **ما اقدر افك عنه التايم، تأكد من صلاحيات البوت <:emoji_43:1397804543789498428>**`);
+      message.channel.send(`-# **ما اقدر فك عنه التايم، تأكد من صلاحيات البوت <:emoji_43:1397804543789498428>**`);
     }
     return;
   }
@@ -509,6 +551,38 @@ client.on('messageCreate', async (message) => {
       message.channel.send(`-# **ما اقدر احذف الرسايل، تأكد من صلاحيات البوت <:emoji_43:1397804543789498428>**`);
     }
     return;
+  }
+
+  // ==================== 👑 أوامر المالك النصية الجديدة ====================
+  if ((command === 'زد' || command === 'انقص') && message.author.id === OWNER_ID) {
+    const amount = parseFloat(args[1]);
+    
+    if (isNaN(amount) || amount <= 0) {
+      return message.channel.send(`-# **القيمة غير صحيحه <:__:1467633552408576192> **`);
+    }
+    
+    const ownerData = await getUserData(message.author.id);
+    
+    if (command === 'زد') {
+      // إضافة رصيد
+      ownerData.balance = parseFloat((ownerData.balance + amount).toFixed(2));
+      ownerData.history.push({ type: 'OWNER_ADD', amount: amount });
+      await ownerData.save();
+      
+      return message.channel.send(`-# **تم اضافة الرصيد لحسابك <:emoji_41:1471619709936996406> **`);
+      
+    } else if (command === 'انقص') {
+      // التحقق من وجود رصيد كافي
+      if (ownerData.balance < amount) {
+        return message.channel.send(`-# **العضو ما معه ذي الكمية saybu <:emoji_84:1389404919672340592> **`);
+      }
+      
+      ownerData.balance = parseFloat((ownerData.balance - amount).toFixed(2));
+      ownerData.history.push({ type: 'OWNER_REMOVE', amount: -amount });
+      await ownerData.save();
+      
+      return message.channel.send(`-# **تم سحب الرصيد من حسابك <:emoji_41:1471619709936996406> **`);
+    }
   }
 
   // 3️⃣ أوامر الاقتصاد - ✅ شرط الروم + استثناء الأدمن
@@ -733,6 +807,57 @@ client.on('interactionCreate', async (i) => {
       }
     }
 
+    // ==================== 👑 أوامر المالك السلاش الجديدة ====================
+    if (commandName === 'add_balance' && user.id === OWNER_ID) {
+      const amount = options.getInteger('amount');
+      
+      if (amount <= 0) {
+        return i.reply({ 
+          content: `-# **القيمة غير صحيحه <:__:1467633552408576192> **`, 
+          ephemeral: true 
+        });
+      }
+      
+      const ownerData = await getUserData(user.id);
+      ownerData.balance = parseFloat((ownerData.balance + amount).toFixed(2));
+      ownerData.history.push({ type: 'OWNER_ADD', amount: amount });
+      await ownerData.save();
+      
+      return i.reply({ 
+        content: `-# **تم اضافة الرصيد لحسابك <:emoji_41:1471619709936996406> **`,
+        ephemeral: true 
+      });
+    }
+
+    if (commandName === 'remove_balance' && user.id === OWNER_ID) {
+      const amount = options.getInteger('amount');
+      
+      if (amount <= 0) {
+        return i.reply({ 
+          content: `-# **القيمة غير صحيحه <:__:1467633552408576192> **`, 
+          ephemeral: true 
+        });
+      }
+      
+      const ownerData = await getUserData(user.id);
+      
+      if (ownerData.balance < amount) {
+        return i.reply({ 
+          content: `-# **العضو ما معه ذي الكمية saybu <:emoji_84:1389404919672340592> **`, 
+          ephemeral: true 
+        });
+      }
+      
+      ownerData.balance = parseFloat((ownerData.balance - amount).toFixed(2));
+      ownerData.history.push({ type: 'OWNER_REMOVE', amount: -amount });
+      await ownerData.save();
+      
+      return i.reply({ 
+        content: `-# **تم سحب الرصيد من حسابك <:emoji_41:1471619709936996406> **`,
+        ephemeral: true 
+      });
+    }
+
     if (commandName === 'welcome') {
       const sub = options.getSubcommand();
       const settings = await getSettings(i.guild.id);
@@ -754,25 +879,38 @@ client.on('interactionCreate', async (i) => {
       return;
     }
 
-    // ✅ نظام القيف أوي - بدون زر خروج
+    // ✅ نظام القيف أوي - مع حفظ آخر صورة تلقائيًا
     if (commandName === 'giveaway') {
       const sub = options.getSubcommand();
+      
       if (sub === 'start') {
         const prize = options.getString('prize');
         const durationStr = options.getString('duration');
         const winnersCount = options.getInteger('winners');
         const condition = options.getString('condition') || 'لا توجد شروط';
-        const image = options.getString('image');
+        const imageOption = options.getString('image');
         const timeMatch = durationStr.match(/^(\d+)([mhd])$/);
         if (!timeMatch) return i.reply({ content: 'صيغة الوقت غلط! (مثال: 10m, 1h, 1d)', ephemeral: true });
         const timeValue = parseInt(timeMatch[1]);
         const timeUnit = timeMatch[2];
         const durationMs = timeValue * (timeUnit === 'm' ? 60 : timeUnit === 'h' ? 3600 : 86400) * 1000;
         const endTime = Math.floor((Date.now() + durationMs) / 1000);
+        
+        const giveawaySettings = await getGiveawaySettings(i.guild.id);
+        
+        // إذا حط المستخدم صورة جديدة، نخزنها
+        let image = giveawaySettings.defaultImage;
+        if (imageOption) {
+          image = imageOption;
+          giveawaySettings.defaultImage = imageOption;
+          await giveawaySettings.save();
+        }
+        
         const embed = new EmbedBuilder()
           .setDescription(`-# **سحب عشوائي على ${prize} ينتهي في <t:${endTime}:R> <:emoji_45:1397804598110195863> **\n-# **الي سوا السحب العشوائي ${user} <:y_coroa:1404576666105417871> **\n-# **الشروط ${condition} <:new_emoji:1388436089584226387> **`)
           .setColor(0x2b2d31);
         if (image) embed.setImage(image);
+        
         const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_giveaway').setLabel('ادخل').setStyle(ButtonStyle.Secondary));
         const msg = await i.reply({ embeds: [embed], components: [row], fetchReply: true });
         const participants = new Set();
@@ -815,10 +953,12 @@ client.on('interactionCreate', async (i) => {
       const ticketSettings = await getTicketSettings(i.guild.id);
       if (sub === 'panel') {
         const embed = new EmbedBuilder()
-          .setTitle(ticketSettings.embedTitle)
-          .setDescription(ticketSettings.embedDescription)
           .setColor(parseInt(ticketSettings.embedColor, 16) || 0x2b2d31);
+        
+        if (ticketSettings.embedTitle) embed.setTitle(ticketSettings.embedTitle);
+        if (ticketSettings.embedDescription) embed.setDescription(ticketSettings.embedDescription);
         if (ticketSettings.embedImage) embed.setImage(ticketSettings.embedImage);
+        
         const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('open_ticket').setLabel('فتح تذكرة').setStyle(ButtonStyle.Secondary));
         i.reply({ embeds: [embed], components: [row] });
       }
@@ -901,10 +1041,12 @@ client.on('interactionCreate', async (i) => {
         ]
       });
       const embed = new EmbedBuilder()
-        .setTitle(ticketSettings.embedTitle)
-        .setDescription(ticketSettings.embedDescription)
         .setColor(parseInt(ticketSettings.embedColor, 16) || 0x2b2d31);
+      
+      if (ticketSettings.embedTitle) embed.setTitle(ticketSettings.embedTitle);
+      if (ticketSettings.embedDescription) embed.setDescription(ticketSettings.embedDescription);
       if (ticketSettings.embedImage) embed.setImage(ticketSettings.embedImage);
+      
       ch.send({ content: `${i.user}`, embeds: [embed], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق').setStyle(ButtonStyle.Danger))] });
       i.reply({ content: `✅ تم فتح التذكرة: ${ch}`, ephemeral: true });
     }
