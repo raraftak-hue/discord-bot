@@ -950,16 +950,19 @@ client.on('interactionCreate', async (i) => {
       const sub = options.getSubcommand();
       const ticketSettings = await getTicketSettings(i.guild.id);
       if (sub === 'panel') {
-        const embed = new EmbedBuilder()
-          .setColor(parseInt(ticketSettings.embedColor, 16) || 0x2b2d31);
-        
-        
-        if (ticketSettings.embedDescription) embed.setDescription(ticketSettings.embedDescription);
-        if (ticketSettings.embedImage) embed.setImage(ticketSettings.embedImage);
-        
-        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('open_ticket').setLabel('فتح تذكرة').setStyle(ButtonStyle.Secondary));
-        i.reply({ embeds: [embed], components: [row] });
-      }
+  const embed = new EmbedBuilder()
+    .setColor(parseInt(ticketSettings.embedColor, 16) || 0x2b2d31);
+  
+  if (ticketSettings.embedDescription) embed.setDescription(ticketSettings.embedDescription);
+  if (ticketSettings.embedImage) embed.setImage(ticketSettings.embedImage);
+  
+  const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('open_ticket').setLabel('فتح تذكرة').setStyle(ButtonStyle.Secondary));
+  
+  // 👇 التعديل: استخدم defer عشان تختفي الرسالة
+  await i.deferReply({ ephemeral: true });
+  await i.channel.send({ embeds: [embed], components: [row] });
+  await i.deleteReply();
+}
       if (sub === 'setup') {
         let updated = false;
         if (options.getChannel('category')) { ticketSettings.categoryId = options.getChannel('category').id; updated = true; }
