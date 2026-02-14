@@ -966,7 +966,9 @@ client.on('interactionCreate', async (i) => {
         if (image) embed.setImage(image);
         
         const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_giveaway').setLabel('ادخل').setStyle(ButtonStyle.Secondary));
-        const msg = await i.reply({ embeds: [embed], components: [row], fetchReply: true });
+        await i.deferReply({ ephemeral: true });
+const msg = await i.channel.send({ embeds: [embed], components: [row] });
+await i.deleteReply();
         const participants = new Set();
         const collector = msg.createMessageComponentCollector({ time: durationMs });
         
