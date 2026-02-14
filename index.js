@@ -237,50 +237,110 @@ const ownerCommands = [
     ]
   },
   // ==================== 🤖 نظام الحذف التلقائي الجديد مع رسالة مخصصة ====================
-  {
-    name: 'auto',
-    description: 'نظام الحذف التلقائي',
-    default_member_permissions: "0",
-    options: [
-      {
-        name: 'add',
-        description: 'إضافة روم للحذف التلقائي',
-        type: 1,
-        options: [
-          { name: 'channel', description: 'الروم', type: 7, required: true, channel_types: [0] },
-          { name: 'delay', description: 'مدة الحذف (ثواني، 0 = فوري)', type: 4, required: false },
-          { name: 'type', description: 'نوع الرسائل', type: 3, required: false, 
-            choices: [
-              { name: '📝 الكل', value: 'all' },
-              { name: '🔤 كلمات محددة', value: 'words' },
-              { name: '🖼️ صور', value: 'images' },
-              { name: '🔗 روابط', value: 'links' },
-              { name: '📁 ملفات', value: 'files' }
-            ] 
-          },
-          { name: 'allowed', description: 'كلمات مسموحة (مفصولة بفواصل)', type: 3, required: false },
-          { name: 'blocked', description: 'كلمات ممنوعة (مفصولة بفواصل)', type: 3, required: false },
-          { name: 'except_users', description: 'ايديات مستثناة (مفصولة بفواصل)', type: 3, required: false },
-          { name: 'except_roles', description: 'ايديات رتب مستثناة (مفصولة بفواصل)', type: 3, required: false },
-          { name: 'message', description: 'رسالة مخصصة عند الحذف', type: 3, required: false } // 👈 رسالة مخصصة
-        ]
-      },
-      {
-        name: 'rem',
-        description: 'إزالة روم من الحذف التلقائي',
-        type: 1,
-        options: [
-          { name: 'channel', description: 'الروم', type: 7, required: true, channel_types: [0] }
-        ]
-      },
-      {
-        name: 'list',
-        description: 'عرض إعدادات الحذف التلقائي',
-        type: 1
+  // ==================== 🤖 نظام الحذف التلقائي الجديد مع رسالة مخصصة ====================
+  const autoDeleteChannels = await getAutoDeleteChannels(message.guild.id);
+  
+  for (const settings of autoDeleteChannels) {
+    if (message.channel.id !== settings.channelId) continue;
+    
+    // تحقق من الاستثناءات
+    if (settings.exceptUsers.includes(message.author.id)) continue;
+    
+    let memberRoles = message.member?.roles.cache.map(r => r.id) || [];
+    if (settings.exceptRoles.some(roleId => memberRoles.includes(roleId))) continue;
+    
+    // تحقق من نوع الفلتر
+    let shouldDelete = false;
+    let filterTypeText = '';
+    
+    switch (settings.filterType) {
+      case 'all':
+        shouldDelete = true;
+        filterTypeText = 'جميع الرسائل';
+        break;
+      case 'images':
+        shouldDelete = message.attachments.size > 0 && message.attachments.some(a => a.contentType?.startsWith('image/'));
+        filterTypeText = 'الصور';
+        break;
+      case 'links':
+        shouldDelete = message.content.match(/https?:\/\/[^\s]+/g) !== null;
+        filterTypeText = 'الروابط';
+        break;
+      case 'files':
+        shouldDelete = message.attachments.size > 0;
+        filterTypeText = 'الملفات';
+        break;
+      case 'words':
+        // كلمات ممنوعة
+        if (settings.blockedWords.length > 0) {
+          const content = message.content.toLowerCase();
+          shouldDelete = settings.blockedWords.some(word => content.includes(word.toLowerCase()));
+        }
+        // كلمات مسموحة (إذا كانت الكل ممنوع عدا المسموح)
+        if (settings.allowedWords.length > 0 && !shouldDelete) {
+          const content = message.content.toLowerCase();
+          shouldDelete = !settings.allowedWords.some(word => content.includes(word.toLowerCase()));
+        }
+        filterTypeText = 'كلمات محددة';
+        break;
+    }
+    
+    if (shouldDelete) {
+      try {
+        // 👇 تطبيق التأخير الزمني هنا
+        if (settings.deleteDelay > 0) {
+          // تأخير الحذف
+          setTimeout(async () => {
+            try {
+              // التحقق أن الرسالة ما زالت موجودة
+              const fetchedMsg = await message.channel.messages.fetch(message.id).catch(() => null);
+              if (fetchedMsg) {
+                await message.delete();
+              }
+            } catch (e) {
+              // الرسالة ربما حذفت بالفعل
+            }
+          }, settings.deleteDelay * 1000);
+          
+          // إرسال رسالة تحذير فورية
+          let warningText = settings.customMessage || `-# ** سيتم حذف رسالتك بعد ${settings.deleteDelay} ثواني <:emoji_38:1401773302619439147> **`;
+          
+          // استبدال المتغيرات
+          warningText = warningText.replace(/{user}/g, message.author.toString())
+                                  .replace(/{channel}/g, message.channel.toString())
+                                  .replace(/{type}/g, filterTypeText)
+                                  .replace(/{delay}/g, settings.deleteDelay.toString());
+          
+          const warningMsg = await message.channel.send(warningText);
+          
+          setTimeout(() => warningMsg.delete().catch(() => {}), 10000);
+          
+        } else {
+          // حذف فوري
+          await message.delete();
+          
+          // إرسال رسالة تحذير (تنحذف بعد 10 ثواني)
+          let warningText = settings.customMessage || `-# ** هذا الروم مخصص بس للـ ${filterTypeText} يـ ذكي <:emoji_38:1401773302619439147> **`;
+          
+          // استبدال المتغيرات
+          warningText = warningText.replace(/{user}/g, message.author.toString())
+                                  .replace(/{channel}/g, message.channel.toString())
+                                  .replace(/{type}/g, filterTypeText)
+                                  .replace(/{delay}/g, '0');
+          
+          const warningMsg = await message.channel.send(warningText);
+          
+          setTimeout(() => warningMsg.delete().catch(() => {}), 10000);
+        }
+        
+      } catch (e) {
+        // رسالة خطأ إذا ماقدر يحذف
+        console.error('خطأ في الحذف التلقائي:', e);
       }
-    ]
+    }
+    
+    break;
   }
-];
 
 // دمج جميع الأوامر
 const allCommands = [...slashCommands, ...adminCommands, ...ownerCommands];
