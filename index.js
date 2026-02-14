@@ -938,65 +938,68 @@ client.on('interactionCreate', async (i) => {
     }
 
     if (commandName === 'give') {
-      const sub = options.getSubcommand();
-      
-      if (sub === 'start') {
-        const prize = options.getString('prize');
-        const durationStr = options.getString('time');
-        const winnersCount = options.getInteger('winners');
-        const condition = options.getString('cond') || 'لا توجد شروط';
-        const imageOption = options.getString('img');
-        const timeMatch = durationStr.match(/^(\d+)([mhd])$/);
-        if (!timeMatch) return i.reply({ content: 'صيغة الوقت غلط! (مثال: 10m, 1h, 1d)', ephemeral: true });
-        const timeValue = parseInt(timeMatch[1]);
-        const timeUnit = timeMatch[2];
-        const durationMs = timeValue * (timeUnit === 'm' ? 60 : timeUnit === 'h' ? 3600 : 86400) * 1000;
-        const endTime = Math.floor((Date.now() + durationMs) / 1000);
-        
-        // حفظ آخر صورة
-        let image = giveawayImages.get(i.guild.id);
-        if (imageOption) {
-          image = imageOption;
-          giveawayImages.set(i.guild.id, imageOption);
-        }
-        
-        const embed = new EmbedBuilder()
-          .setDescription(`-# **سحب عشوائي على ${prize} ينتهي في <t:${endTime}:R> <:emoji_45:1397804598110195863> **\n-# **الي سوا السحب العشوائي ${user} <:y_coroa:1404576666105417871> **\n-# **الشروط ${condition} <:new_emoji:1388436089584226387> **`)
-          .setColor(0x2b2d31);
-        if (image) embed.setImage(image);
-        
-        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_giveaway').setLabel('ادخل').setStyle(ButtonStyle.Secondary));
-        await i.deferReply({ ephemeral: true });
-const msg = await i.channel.send({ embeds: [embed], components: [row] });
-await i.deleteReply();
-        const participants = new Set();
-        const collector = msg.createMessageComponentCollector({ time: durationMs });
-        
-        collector.on('collect', async (btn) => {
-          if (btn.customId === 'join_giveaway') {
-            if (participants.has(btn.user.id)) {
-              return btn.reply({ content: `-# **انت داخل القيف اصلا <:__:1467633552408576192> **`, ephemeral: true }).catch(() => { });
-            }
-            participants.add(btn.user.id);
-            await btn.reply({ content: `-# **تم دخولك فالسحب يا رب تفوز <:2thumbup:1467287897429512396> **`, ephemeral: true }).catch(() => { });
-          }
-        });
-
-        collector.on('end', async () => {
-          const list = Array.from(participants);
-          if (list.length === 0) return msg.edit({ content: '❌ انتهى القيف أوي بدون مشاركين.', embeds: [], components: [] }).catch(() => { });
-          const winners = [];
-          for (let j = 0; j < Math.min(winnersCount, list.length); j++) {
-            const winnerIdx = Math.floor(Math.random() * list.length);
-            winners.push(`<@${list.splice(winnerIdx, 1)[0]}>`);
-          }
-          const endEmbed = EmbedBuilder.from(embed).setDescription(`-# **انتهى السحب على ${prize}**\n-# **الفائزين هم** ${winners.join(', ')}`);
-          await msg.edit({ embeds: [endEmbed], components: [] }).catch(() => { });
-          msg.channel.send(`-# **مبروك فزتم بـ ${prize} افتحوا تكت عشان تستلموها <:emoji_33:1401771703306027008> **\n-# **${winners.join(', ')}**`).catch(() => { });
-        });
-      }
-      return;
+  const sub = options.getSubcommand();
+  
+  if (sub === 'start') {
+    const prize = options.getString('prize');
+    const durationStr = options.getString('time');
+    const winnersCount = options.getInteger('winners');
+    const condition = options.getString('cond') || 'لا توجد شروط';
+    const imageOption = options.getString('img');
+    const timeMatch = durationStr.match(/^(\d+)([mhd])$/);
+    if (!timeMatch) return i.reply({ content: 'صيغة الوقت غلط! (مثال: 10m, 1h, 1d)', ephemeral: true });
+    const timeValue = parseInt(timeMatch[1]);
+    const timeUnit = timeMatch[2];
+    const durationMs = timeValue * (timeUnit === 'm' ? 60 : timeUnit === 'h' ? 3600 : 86400) * 1000;
+    const endTime = Math.floor((Date.now() + durationMs) / 1000);
+    
+    // حفظ آخر صورة
+    let image = giveawayImages.get(i.guild.id);
+    if (imageOption) {
+      image = imageOption;
+      giveawayImages.set(i.guild.id, imageOption);
     }
+    
+    const embed = new EmbedBuilder()
+      .setDescription(`-# **سحب عشوائي على ${prize} ينتهي في <t:${endTime}:R> <:emoji_45:1397804598110195863> **\n-# **الي سوا السحب العشوائي ${user} <:y_coroa:1404576666105417871> **\n-# **الشروط ${condition} <:new_emoji:1388436089584226387> **`)
+      .setColor(0x2b2d31);
+    if (image) embed.setImage(image);
+    
+    const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_giveaway').setLabel('ادخل').setStyle(ButtonStyle.Secondary));
+    
+    // 👇 التعديل هنا
+    await i.deferReply({ ephemeral: true });
+    const msg = await i.channel.send({ embeds: [embed], components: [row] });
+    await i.deleteReply();
+    
+    const participants = new Set();
+    const collector = msg.createMessageComponentCollector({ time: durationMs });
+    
+    collector.on('collect', async (btn) => {
+      if (btn.customId === 'join_giveaway') {
+        if (participants.has(btn.user.id)) {
+          return btn.reply({ content: `-# **انت داخل القيف اصلا <:__:1467633552408576192> **`, ephemeral: true }).catch(() => { });
+        }
+        participants.add(btn.user.id);
+        await btn.reply({ content: `-# **تم دخولك فالسحب يا رب تفوز <:2thumbup:1467287897429512396> **`, ephemeral: true }).catch(() => { });
+      }
+    });
+
+    collector.on('end', async () => {
+      const list = Array.from(participants);
+      if (list.length === 0) return msg.edit({ content: '❌ انتهى القيف أوي بدون مشاركين.', embeds: [], components: [] }).catch(() => { });
+      const winners = [];
+      for (let j = 0; j < Math.min(winnersCount, list.length); j++) {
+        const winnerIdx = Math.floor(Math.random() * list.length);
+        winners.push(`<@${list.splice(winnerIdx, 1)[0]}>`);
+      }
+      const endEmbed = EmbedBuilder.from(embed).setDescription(`-# **انتهى السحب على ${prize}**\n-# **الفائزين هم** ${winners.join(', ')}`);
+      await msg.edit({ embeds: [endEmbed], components: [] }).catch(() => { });
+      msg.channel.send(`-# **مبروك فزتم بـ ${prize} افتحوا تكت عشان تستلموها <:emoji_33:1401771703306027008> **\n-# **${winners.join(', ')}**`).catch(() => { });
+    });
+  }
+  return;
+}
 
     if (commandName === 'num') {
       const sub = options.getSubcommand();
