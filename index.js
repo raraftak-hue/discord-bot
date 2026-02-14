@@ -59,7 +59,7 @@ const AutoDeleteChannelSchema = new mongoose.Schema({
   blockedWords: { type: [String], default: [] },
   exceptUsers: { type: [String], default: [] },
   exceptRoles: { type: [String], default: [] },
-  customMessage: { type: String, default: null } // 👈 رسالة مخصصة جديدة
+  customMessage: { type: String, default: null } // رسالة مخصصة
 });
 
 const AutoDelete = mongoose.model('AutoDeleteChannel', AutoDeleteChannelSchema);
@@ -236,111 +236,51 @@ const ownerCommands = [
       { name: 'rem', description: 'سحب رصيد', type: 1, options: [{ name: 'amount', description: 'الكمية', type: 4, required: true }] }
     ]
   },
-  // ==================== 🤖 نظام الحذف التلقائي الجديد مع رسالة مخصصة ====================
-  // ==================== 🤖 نظام الحذف التلقائي الجديد مع رسالة مخصصة ====================
-  const autoDeleteChannels = await getAutoDeleteChannels(message.guild.id);
-  
-  for (const settings of autoDeleteChannels) {
-    if (message.channel.id !== settings.channelId) continue;
-    
-    // تحقق من الاستثناءات
-    if (settings.exceptUsers.includes(message.author.id)) continue;
-    
-    let memberRoles = message.member?.roles.cache.map(r => r.id) || [];
-    if (settings.exceptRoles.some(roleId => memberRoles.includes(roleId))) continue;
-    
-    // تحقق من نوع الفلتر
-    let shouldDelete = false;
-    let filterTypeText = '';
-    
-    switch (settings.filterType) {
-      case 'all':
-        shouldDelete = true;
-        filterTypeText = 'جميع الرسائل';
-        break;
-      case 'images':
-        shouldDelete = message.attachments.size > 0 && message.attachments.some(a => a.contentType?.startsWith('image/'));
-        filterTypeText = 'الصور';
-        break;
-      case 'links':
-        shouldDelete = message.content.match(/https?:\/\/[^\s]+/g) !== null;
-        filterTypeText = 'الروابط';
-        break;
-      case 'files':
-        shouldDelete = message.attachments.size > 0;
-        filterTypeText = 'الملفات';
-        break;
-      case 'words':
-        // كلمات ممنوعة
-        if (settings.blockedWords.length > 0) {
-          const content = message.content.toLowerCase();
-          shouldDelete = settings.blockedWords.some(word => content.includes(word.toLowerCase()));
-        }
-        // كلمات مسموحة (إذا كانت الكل ممنوع عدا المسموح)
-        if (settings.allowedWords.length > 0 && !shouldDelete) {
-          const content = message.content.toLowerCase();
-          shouldDelete = !settings.allowedWords.some(word => content.includes(word.toLowerCase()));
-        }
-        filterTypeText = 'كلمات محددة';
-        break;
-    }
-    
-    if (shouldDelete) {
-      try {
-        // 👇 تطبيق التأخير الزمني هنا
-        if (settings.deleteDelay > 0) {
-          // تأخير الحذف
-          setTimeout(async () => {
-            try {
-              // التحقق أن الرسالة ما زالت موجودة
-              const fetchedMsg = await message.channel.messages.fetch(message.id).catch(() => null);
-              if (fetchedMsg) {
-                await message.delete();
-              }
-            } catch (e) {
-              // الرسالة ربما حذفت بالفعل
-            }
-          }, settings.deleteDelay * 1000);
-          
-          // إرسال رسالة تحذير فورية
-          let warningText = settings.customMessage || `-# ** سيتم حذف رسالتك بعد ${settings.deleteDelay} ثواني <:emoji_38:1401773302619439147> **`;
-          
-          // استبدال المتغيرات
-          warningText = warningText.replace(/{user}/g, message.author.toString())
-                                  .replace(/{channel}/g, message.channel.toString())
-                                  .replace(/{type}/g, filterTypeText)
-                                  .replace(/{delay}/g, settings.deleteDelay.toString());
-          
-          const warningMsg = await message.channel.send(warningText);
-          
-          setTimeout(() => warningMsg.delete().catch(() => {}), 10000);
-          
-        } else {
-          // حذف فوري
-          await message.delete();
-          
-          // إرسال رسالة تحذير (تنحذف بعد 10 ثواني)
-          let warningText = settings.customMessage || `-# ** هذا الروم مخصص بس للـ ${filterTypeText} يـ ذكي <:emoji_38:1401773302619439147> **`;
-          
-          // استبدال المتغيرات
-          warningText = warningText.replace(/{user}/g, message.author.toString())
-                                  .replace(/{channel}/g, message.channel.toString())
-                                  .replace(/{type}/g, filterTypeText)
-                                  .replace(/{delay}/g, '0');
-          
-          const warningMsg = await message.channel.send(warningText);
-          
-          setTimeout(() => warningMsg.delete().catch(() => {}), 10000);
-        }
-        
-      } catch (e) {
-        // رسالة خطأ إذا ماقدر يحذف
-        console.error('خطأ في الحذف التلقائي:', e);
+  // ==================== 🤖 نظام الحذف التلقائي مع رسالة مخصصة ====================
+  {
+    name: 'auto',
+    description: 'نظام الحذف التلقائي',
+    default_member_permissions: "0",
+    options: [
+      {
+        name: 'add',
+        description: 'إضافة روم للحذف التلقائي',
+        type: 1,
+        options: [
+          { name: 'channel', description: 'الروم', type: 7, required: true, channel_types: [0] },
+          { name: 'delay', description: 'مدة الحذف (ثواني، 0 = فوري)', type: 4, required: false },
+          { name: 'type', description: 'نوع الرسائل', type: 3, required: false, 
+            choices: [
+              { name: '📝 الكل', value: 'all' },
+              { name: '🔤 كلمات محددة', value: 'words' },
+              { name: '🖼️ صور', value: 'images' },
+              { name: '🔗 روابط', value: 'links' },
+              { name: '📁 ملفات', value: 'files' }
+            ] 
+          },
+          { name: 'allowed', description: 'كلمات مسموحة (مفصولة بفواصل)', type: 3, required: false },
+          { name: 'blocked', description: 'كلمات ممنوعة (مفصولة بفواصل)', type: 3, required: false },
+          { name: 'except_users', description: 'ايديات مستثناة (مفصولة بفواصل)', type: 3, required: false },
+          { name: 'except_roles', description: 'ايديات رتب مستثناة (مفصولة بفواصل)', type: 3, required: false },
+          { name: 'message', description: 'رسالة مخصصة عند الحذف', type: 3, required: false }
+        ]
+      },
+      {
+        name: 'rem',
+        description: 'إزالة روم من الحذف التلقائي',
+        type: 1,
+        options: [
+          { name: 'channel', description: 'الروم', type: 7, required: true, channel_types: [0] }
+        ]
+      },
+      {
+        name: 'list',
+        description: 'عرض إعدادات الحذف التلقائي',
+        type: 1
       }
-    }
-    
-    break;
+    ]
   }
+];
 
 // دمج جميع الأوامر
 const allCommands = [...slashCommands, ...adminCommands, ...ownerCommands];
@@ -506,7 +446,7 @@ async function startNextTurn(channel, gameId) {
   game.timer = timer;
 }
 
-// ==================== 📝 معالج الرسائل الموحد ====================
+// ==================== 📝 معالج الرسائل الموحد (مع تعديل الحذف التلقائي) ====================
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
   const globalSettings = await getGlobalSettings();
@@ -788,7 +728,7 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // ==================== 🤖 نظام الحذف التلقائي الجديد مع رسالة مخصصة ====================
+  // ==================== 🤖 نظام الحذف التلقائي المعدل (مع التأخير الزمني) ====================
   const autoDeleteChannels = await getAutoDeleteChannels(message.guild.id);
   
   for (const settings of autoDeleteChannels) {
@@ -838,22 +778,55 @@ client.on('messageCreate', async (message) => {
     
     if (shouldDelete) {
       try {
-        await message.delete();
-        
-        // إرسال رسالة تحذير مخصصة (تنحذف بعد 10 ثواني)
-        let warningText = settings.customMessage || `-# ** هذا الروم مخصص بس للـ ${filterTypeText} يـ ذكي <:emoji_38:1401773302619439147> **`;
-        
-        // استبدال المتغيرات
-        warningText = warningText.replace(/{user}/g, message.author.toString())
-                                .replace(/{channel}/g, message.channel.toString())
-                                .replace(/{type}/g, filterTypeText);
-        
-        const warningMsg = await message.channel.send(warningText);
-        
-        setTimeout(() => warningMsg.delete().catch(() => {}), 10000);
+        // تطبيق التأخير الزمني
+        if (settings.deleteDelay > 0) {
+          // تأخير الحذف
+          setTimeout(async () => {
+            try {
+              // التحقق أن الرسالة ما زالت موجودة
+              const fetchedMsg = await message.channel.messages.fetch(message.id).catch(() => null);
+              if (fetchedMsg) {
+                await message.delete();
+              }
+            } catch (e) {
+              // الرسالة ربما حذفت بالفعل
+            }
+          }, settings.deleteDelay * 1000);
+          
+          // إرسال رسالة تحذير فورية
+          let warningText = settings.customMessage || `-# ** سيتم حذف رسالتك بعد ${settings.deleteDelay} ثواني <:emoji_38:1401773302619439147> **`;
+          
+          // استبدال المتغيرات
+          warningText = warningText.replace(/{user}/g, message.author.toString())
+                                  .replace(/{channel}/g, message.channel.toString())
+                                  .replace(/{type}/g, filterTypeText)
+                                  .replace(/{delay}/g, settings.deleteDelay.toString());
+          
+          const warningMsg = await message.channel.send(warningText);
+          
+          setTimeout(() => warningMsg.delete().catch(() => {}), 10000);
+          
+        } else {
+          // حذف فوري
+          await message.delete();
+          
+          // إرسال رسالة تحذير (تنحذف بعد 10 ثواني)
+          let warningText = settings.customMessage || `-# ** هذا الروم مخصص بس للـ ${filterTypeText} يـ ذكي <:emoji_38:1401773302619439147> **`;
+          
+          // استبدال المتغيرات
+          warningText = warningText.replace(/{user}/g, message.author.toString())
+                                  .replace(/{channel}/g, message.channel.toString())
+                                  .replace(/{type}/g, filterTypeText)
+                                  .replace(/{delay}/g, '0');
+          
+          const warningMsg = await message.channel.send(warningText);
+          
+          setTimeout(() => warningMsg.delete().catch(() => {}), 10000);
+        }
         
       } catch (e) {
         // رسالة خطأ إذا ماقدر يحذف
+        console.error('خطأ في الحذف التلقائي:', e);
       }
     }
     
@@ -998,68 +971,67 @@ client.on('interactionCreate', async (i) => {
     }
 
     if (commandName === 'give') {
-  const sub = options.getSubcommand();
-  
-  if (sub === 'start') {
-    const prize = options.getString('prize');
-    const durationStr = options.getString('time');
-    const winnersCount = options.getInteger('winners');
-    const condition = options.getString('cond') || 'لا توجد شروط';
-    const imageOption = options.getString('img');
-    const timeMatch = durationStr.match(/^(\d+)([mhd])$/);
-    if (!timeMatch) return i.reply({ content: 'صيغة الوقت غلط! (مثال: 10m, 1h, 1d)', ephemeral: true });
-    const timeValue = parseInt(timeMatch[1]);
-    const timeUnit = timeMatch[2];
-    const durationMs = timeValue * (timeUnit === 'm' ? 60 : timeUnit === 'h' ? 3600 : 86400) * 1000;
-    const endTime = Math.floor((Date.now() + durationMs) / 1000);
-    
-    // حفظ آخر صورة
-    let image = giveawayImages.get(i.guild.id);
-    if (imageOption) {
-      image = imageOption;
-      giveawayImages.set(i.guild.id, imageOption);
-    }
-    
-    const embed = new EmbedBuilder()
-      .setDescription(`-# **سحب عشوائي على ${prize} ينتهي في <t:${endTime}:R> <:emoji_45:1397804598110195863> **\n-# **الي سوا السحب العشوائي ${user} <:y_coroa:1404576666105417871> **\n-# **الشروط ${condition} <:new_emoji:1388436089584226387> **`)
-      .setColor(0x2b2d31);
-    if (image) embed.setImage(image);
-    
-    const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_giveaway').setLabel('ادخل').setStyle(ButtonStyle.Secondary));
-    
-    // 👇 التعديل هنا
-    await i.deferReply({ ephemeral: true });
-    const msg = await i.channel.send({ embeds: [embed], components: [row] });
-    await i.deleteReply();
-    
-    const participants = new Set();
-    const collector = msg.createMessageComponentCollector({ time: durationMs });
-    
-    collector.on('collect', async (btn) => {
-      if (btn.customId === 'join_giveaway') {
-        if (participants.has(btn.user.id)) {
-          return btn.reply({ content: `-# **انت داخل القيف اصلا <:__:1467633552408576192> **`, ephemeral: true }).catch(() => { });
+      const sub = options.getSubcommand();
+      
+      if (sub === 'start') {
+        const prize = options.getString('prize');
+        const durationStr = options.getString('time');
+        const winnersCount = options.getInteger('winners');
+        const condition = options.getString('cond') || 'لا توجد شروط';
+        const imageOption = options.getString('img');
+        const timeMatch = durationStr.match(/^(\d+)([mhd])$/);
+        if (!timeMatch) return i.reply({ content: 'صيغة الوقت غلط! (مثال: 10m, 1h, 1d)', ephemeral: true });
+        const timeValue = parseInt(timeMatch[1]);
+        const timeUnit = timeMatch[2];
+        const durationMs = timeValue * (timeUnit === 'm' ? 60 : timeUnit === 'h' ? 3600 : 86400) * 1000;
+        const endTime = Math.floor((Date.now() + durationMs) / 1000);
+        
+        // حفظ آخر صورة
+        let image = giveawayImages.get(i.guild.id);
+        if (imageOption) {
+          image = imageOption;
+          giveawayImages.set(i.guild.id, imageOption);
         }
-        participants.add(btn.user.id);
-        await btn.reply({ content: `-# **تم دخولك فالسحب يا رب تفوز <:2thumbup:1467287897429512396> **`, ephemeral: true }).catch(() => { });
-      }
-    });
+        
+        const embed = new EmbedBuilder()
+          .setDescription(`-# **سحب عشوائي على ${prize} ينتهي في <t:${endTime}:R> <:emoji_45:1397804598110195863> **\n-# **الي سوا السحب العشوائي ${user} <:y_coroa:1404576666105417871> **\n-# **الشروط ${condition} <:new_emoji:1388436089584226387> **`)
+          .setColor(0x2b2d31);
+        if (image) embed.setImage(image);
+        
+        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_giveaway').setLabel('ادخل').setStyle(ButtonStyle.Secondary));
+        
+        await i.deferReply({ ephemeral: true });
+        const msg = await i.channel.send({ embeds: [embed], components: [row] });
+        await i.deleteReply();
+        
+        const participants = new Set();
+        const collector = msg.createMessageComponentCollector({ time: durationMs });
+        
+        collector.on('collect', async (btn) => {
+          if (btn.customId === 'join_giveaway') {
+            if (participants.has(btn.user.id)) {
+              return btn.reply({ content: `-# **انت داخل القيف اصلا <:__:1467633552408576192> **`, ephemeral: true }).catch(() => { });
+            }
+            participants.add(btn.user.id);
+            await btn.reply({ content: `-# **تم دخولك فالسحب يا رب تفوز <:2thumbup:1467287897429512396> **`, ephemeral: true }).catch(() => { });
+          }
+        });
 
-    collector.on('end', async () => {
-      const list = Array.from(participants);
-      if (list.length === 0) return msg.edit({ content: '❌ انتهى القيف أوي بدون مشاركين.', embeds: [], components: [] }).catch(() => { });
-      const winners = [];
-      for (let j = 0; j < Math.min(winnersCount, list.length); j++) {
-        const winnerIdx = Math.floor(Math.random() * list.length);
-        winners.push(`<@${list.splice(winnerIdx, 1)[0]}>`);
+        collector.on('end', async () => {
+          const list = Array.from(participants);
+          if (list.length === 0) return msg.edit({ content: '❌ انتهى القيف أوي بدون مشاركين.', embeds: [], components: [] }).catch(() => { });
+          const winners = [];
+          for (let j = 0; j < Math.min(winnersCount, list.length); j++) {
+            const winnerIdx = Math.floor(Math.random() * list.length);
+            winners.push(`<@${list.splice(winnerIdx, 1)[0]}>`);
+          }
+          const endEmbed = EmbedBuilder.from(embed).setDescription(`-# **انتهى السحب على ${prize}**\n-# **الفائزين هم** ${winners.join(', ')}`);
+          await msg.edit({ embeds: [endEmbed], components: [] }).catch(() => { });
+          msg.channel.send(`-# **مبروك فزتم بـ ${prize} افتحوا تكت عشان تستلموها <:emoji_33:1401771703306027008> **\n-# **${winners.join(', ')}**`).catch(() => { });
+        });
       }
-      const endEmbed = EmbedBuilder.from(embed).setDescription(`-# **انتهى السحب على ${prize}**\n-# **الفائزين هم** ${winners.join(', ')}`);
-      await msg.edit({ embeds: [endEmbed], components: [] }).catch(() => { });
-      msg.channel.send(`-# **مبروك فزتم بـ ${prize} افتحوا تكت عشان تستلموها <:emoji_33:1401771703306027008> **\n-# **${winners.join(', ')}**`).catch(() => { });
-    });
-  }
-  return;
-}
+      return;
+    }
 
     if (commandName === 'num') {
       const sub = options.getSubcommand();
@@ -1160,7 +1132,7 @@ client.on('interactionCreate', async (i) => {
       }
     }
 
-    // ==================== 🤖 نظام الحذف التلقائي الجديد مع رسالة مخصصة ====================
+    // ==================== 🤖 نظام الحذف التلقائي (أوامر المالك) ====================
     if (commandName === 'auto' && user.id === OWNER_ID) {
       const sub = options.getSubcommand();
       
@@ -1172,7 +1144,7 @@ client.on('interactionCreate', async (i) => {
         const blockedStr = options.getString('blocked') || '';
         const exceptUsersStr = options.getString('except_users') || '';
         const exceptRolesStr = options.getString('except_roles') || '';
-        const customMessage = options.getString('message') || null; // 👈 رسالة مخصصة
+        const customMessage = options.getString('message') || null;
         
         // تحويل النصوص إلى مصفوفات
         const allowedWords = allowedStr.split(',').map(s => s.trim()).filter(s => s);
@@ -1193,7 +1165,7 @@ client.on('interactionCreate', async (i) => {
           blockedWords,
           exceptUsers,
           exceptRoles,
-          customMessage // 👈 حفظ الرسالة المخصصة
+          customMessage
         });
         
         await newSettings.save();
@@ -1237,14 +1209,14 @@ client.on('interactionCreate', async (i) => {
           const blockedText = ch.blockedWords.length > 0 ? ch.blockedWords.join('، ') : 'لا يوجد';
           const exceptUsersText = ch.exceptUsers.length > 0 ? ch.exceptUsers.map(id => `<@${id}>`).join(' ') : 'لا يوجد';
           const exceptRolesText = ch.exceptRoles.length > 0 ? ch.exceptRoles.map(id => `<@&${id}>`).join(' ') : 'لا يوجد';
-          const customMessageText = ch.customMessage || 'الرسالة الافتراضية'; // 👈 عرض الرسالة المخصصة
+          const customMessageText = ch.customMessage || 'الرسالة الافتراضية';
           
           message += `-# **الروم <#${ch.channelId}>**\n`;
           message += `-# **المستثنين هم ${exceptUsersText}**\n`;
           message += `-# **الرتب المستثناة ${exceptRolesText}**\n`;
           message += `-# **الرسائل فيه تنحذف ${delayText}**\n`;
           message += `-# **نوع الرسائل الي تحذف هي ${filterTypes[ch.filterType] || ch.filterType}**\n`;
-          message += `-# **الرسالة المخصصة:** ${customMessageText}\n`; // 👈 عرض الرسالة
+          message += `-# **الرسالة المخصصة:** ${customMessageText}\n`;
           
           if (ch.filterType === 'words') {
             if (ch.blockedWords.length > 0) message += `-# **الكلمات الممنوعة: ${blockedText}**\n`;
