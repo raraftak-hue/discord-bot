@@ -794,6 +794,9 @@ client.on('messageCreate', async (message) => {
       const date = new Date(h.date);
       const dateStr = `${date.getDate()}-${date.getMonth() + 1}`;
       
+      if (h.type === 'STARTING_GIFT') 
+        return `-# **هدية ابتدائية بقيمة ${h.amount} <:emoji_35:1471963080228474890>**`;
+      
       if (h.type === 'TRANSFER_SEND') 
         return `-# **تحويل الى <@${h.targetUser}> في ${dateStr} <:emoji_41:1471619709936996406>**`;
       
@@ -1048,6 +1051,9 @@ client.on('interactionCreate', async (i) => {
     .map(h => {
       const date = new Date(h.date);
       const dateStr = `${date.getDate()}-${date.getMonth() + 1}`;
+      
+      if (h.type === 'STARTING_GIFT') 
+        return `-# **هدية ابتدائية بقيمة ${h.amount} <:emoji_35:1471963080228474890>**`;
       
       if (h.type === 'TRANSFER_SEND') 
         return `-# **تحويل الى <@${h.targetUser}> في ${dateStr} <:emoji_41:1471619709936996406>**`;
