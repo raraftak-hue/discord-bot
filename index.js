@@ -795,10 +795,10 @@ client.on('messageCreate', async (message) => {
       const dateStr = `${date.getDate()}-${date.getMonth() + 1}`;
       
       if (h.type === 'TRANSFER_SEND') 
-        return `-# **تحويل الى ${h.targetName || 'مستخدم'} في ${dateStr} <:emoji_41:1471619709936996406>**`;
+        return `-# **تحويل الى <@${h.targetUser}> في ${dateStr} <:emoji_41:1471619709936996406>**`;
       
       if (h.type === 'TRANSFER_RECEIVE') 
-        return `-# **استلام من ${h.targetName || 'مستخدم'} في ${dateStr} <:emoji_41:1471619709936996406>**`;
+        return `-# **استلام من <@${h.targetUser}> في ${dateStr} <:emoji_41:1471983856440836109>**`;
       
       if (h.type === 'WEEKLY_TAX') 
         return `-# **خصم زكاة 2.5% = ${Math.abs(h.amount)} <:emoji_40:1471983905430311074>**`;
@@ -1050,10 +1050,10 @@ client.on('interactionCreate', async (i) => {
       const dateStr = `${date.getDate()}-${date.getMonth() + 1}`;
       
       if (h.type === 'TRANSFER_SEND') 
-        return `-# **تحويل الى ${h.targetName || 'مستخدم'} في ${dateStr} <:emoji_41:1471619709936996406>**`;
+        return `-# **تحويل الى <@${h.targetUser}> في ${dateStr} <:emoji_41:1471619709936996406>**`;
       
       if (h.type === 'TRANSFER_RECEIVE') 
-        return `-# **استلام من ${h.targetName || 'مستخدم'} في ${dateStr} <:emoji_41:1471619709936996406>**`;
+        return `-# **استلام من <@${h.targetUser}> في ${dateStr} <:emoji_41:1471983856440836109>**`;
       
       if (h.type === 'WEEKLY_TAX') 
         return `-# **خصم زكاة 2.5% = ${Math.abs(h.amount)} <:emoji_40:1471983905430311074>**`;
