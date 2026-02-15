@@ -505,7 +505,27 @@ async function endGiveaway(giveaway) {
 // ==================== 🤖 Client Ready ====================
 client.once('ready', async () => {
   console.log(`✅ ${client.user.tag} أونلاين!`);
+  client.once('ready', async () => {
+  console.log(`✅ ${client.user.tag} أونلاين!`);
   
+  // ==================== 🧹 كود التنظيف هنا ====================
+  console.log('🧹 بدأ تنظيف السجلات القديمة...');
+  const users = await User.find({});
+  let count = 0;
+  
+  for (const user of users) {
+    user.history = [];
+    await user.save();
+    count++;
+  }
+  
+  console.log(`✅ تم تنظيف سجلات ${count} مستخدم بنجاح!`);
+  // ==================== 🧹 انتهى ====================
+
+  // باقي الكود حق الـ ready...
+  const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+  // ... الخ
+});
   // تسجيل الأوامر
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   try {
