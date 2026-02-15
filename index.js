@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 const cron = require('node-cron');
 const app = express();
 
-‎// ==================== 🔒 الإعدادات والربط 🔒 ====================
+// ==================== 🔒 الإعدادات والربط 🔒 ====================
 const OWNER_ID = "1131951548772122625";
 const MONGO_URI = "mongodb+srv://raraftak_db_user:TzKcCxo9EvNDzBbj@cluster0.t4j2uux.mongodb.net/MyBot?retryWrites=true&w=majority";
 const ECONOMY_CHANNEL_ID = "1458435717200875671";
@@ -28,7 +28,7 @@ mongoose.connect(MONGO_URI)
 const UserSchema = new mongoose.Schema({
   userId: String,
   balance: { type: Number, default: 5 },
-  history: [{ type: { type: String }, amount: Number, date: { type: Date, default: Date.now } }]
+  history: [{ type: { type: String }, amount: Number, date: { type: Date, default: Date.now }, targetId: String, senderId: String }]
 });
 
 const SettingsSchema = new mongoose.Schema({
@@ -49,7 +49,7 @@ const TicketSettingsSchema = new mongoose.Schema({
   supportRoleId: { type: String, default: null }
 });
 
-‎// ==================== 📊 نظام الحذف التلقائي الجديد مع رسالة مخصصة ====================
+// ==================== 📊 نظام الحذف التلقائي الجديد مع رسالة مخصصة ====================
 const AutoDeleteChannelSchema = new mongoose.Schema({
   guildId: String,
   channelId: String,
@@ -59,8 +59,17 @@ const AutoDeleteChannelSchema = new mongoose.Schema({
   blockedWords: { type: [String], default: [] },
   exceptUsers: { type: [String], default: [] },
   exceptRoles: { type: [String], default: [] },
-  customMessage: { type: String, default: null } // رسالة مخصصة
+  customMessage: { type: String, default: null } // رسالة مخconst SubscriptionSchema = new mongoose.Schema({
+  guildId: { type: String, required: true, unique: true },
+  guildName: String,
+  ownerId: String,
+  duration: String,
+  durationValue: String,
+  expiresAt: Date,
+  status: { type: String, default: 'active' }
 });
+
+const Subscription = mongoose.model('Subscription', SubscriptionSchema);
 
 const AutoDelete = mongoose.model('AutoDeleteChannel', AutoDeleteChannelSchema);
 
@@ -68,8 +77,7 @@ const User = mongoose.model('User', UserSchema);
 const Settings = mongoose.model('Settings', SettingsSchema);
 const GlobalSettings = mongoose.model('GlobalSettings', GlobalSettingsSchema);
 const TicketSettings = mongoose.model('TicketSettings', TicketSettingsSchema);
-
-‎// ==================== 🔧 الدوال المساعدة ====================
+// ==================== 🔧 الدوال المساعدة ====================
 async function getGlobalSettings() {
   let settings = await GlobalSettings.findOne();
   if (!settings) {
@@ -110,9 +118,76 @@ async function getAutoDeleteChannels(guildId) {
   return await AutoDelete.find({ guildId });
 }
 
-‎// ==================== 📋 أوامر السلاش (مرتبة حسب الفئات) ====================
+async function getSubscription(guildId) {
+  return await Subscription.findOne({ guildId });
+}
 
-‎// ==================== 👥 أوامر العامة ====================
+async function getAllSubscriptions() {
+  return await Subscription.find({});
+}
+
+async function addSubscription(data) {
+  const newSub = new Subscription(data);
+  return await newSub.save();
+}
+
+async function removeSubscription(guildId) {
+  return await Subscription.deleteOne({ guildId });
+}
+
+async function updateSubscription(guildId, data) {
+  return await Subscription.findOneAndUpdate({ guildId }, data, { new: true });
+}
+
+async function isSubscribed(guildId) {
+  const sub = await getSubscription(guildId);
+  return sub && sub.status === 'active' && sub.expiresAt > new Date();
+}
+
+async function formatHistory(client, history) {
+  const filteredHistory = history.filter(h => h.type !== 'STARTING_GIFT');
+  const latestThree = filteredHistory.slice(-3).reverse();
+
+  if (latestThree.length === 0) {
+    return "-# **ما عندك اي تحويلات صارت في ذي السنة <:emoji_32:1471962578895769611> **";
+  }
+
+  const historyPromises = latestThree.map(async (h) => {
+    const date = new Date(h.date);
+    const dateStr = `${date.getDate()}-${date.getMonth() + 1}`;
+    let displayName = "";
+
+    if (h.type === 'TRANSFER_SEND' || h.type === 'TRANSFER_RECEIVE') {
+      try {
+        const user = await client.users.fetch(h.targetId || h.senderId);
+        displayName = user.displayName || user.username;
+      } catch (error) {
+        displayName = "مستخدم سابق";
+      }
+    }
+
+    switch (h.type) {
+      case 'TRANSFER_SEND':
+        return `-# ** تحويل الى ${displayName} في ${dateStr} <:emoji_41:1471619709936996406>**`;
+      case 'TRANSFER_RECEIVE':
+        return `-# ** استلام من ${displayName} في ${dateStr} <:emoji_41:1471983856440836109> **`;
+      case 'WEEKLY_TAX':
+        return `-# ** خصم زكاة 2.5% = ${Math.abs(h.amount)} في ${dateStr} <:emoji_40:1471983905430311074>**`;
+      case 'OWNER_ADD':
+        return `-# ** اضافة من المالك ${h.amount} في ${dateStr} <:emoji_41:1471619709936996406>**`;
+      case 'OWNER_REMOVE':
+        return `-# ** سحب من المالك ${Math.abs(h.amount)} في ${dateStr} <:emoji_41:1471619709936996406>**`;
+      default:
+        return `-# **${h.type}: ${h.amount} في ${dateStr}**`;
+    }
+  });
+
+  return (await Promise.all(historyPromises)).join('\n');
+}
+
+// ==================== 📋 أوامر السلاش (مرتبة حسب الفئات) ====================
+
+// ==================== 👥 أوامر العامة ====================
 const slashCommands = [
   { name: 'help', description: 'عرض جميع الأوامر' },
   {
@@ -135,7 +210,7 @@ const slashCommands = [
   },
 ];
 
-‎// ==================== 🛡️ أوامر الإدارة ====================
+// ==================== 🛡️ أوامر الإدارة ====================
 const adminCommands = [
   {
     name: 'ticket',
@@ -208,7 +283,7 @@ const adminCommands = [
   }
 ];
 
-‎// ==================== 👑 أوامر المالك ====================
+// ==================== 👑 أوامر المالك ====================
 const ownerCommands = [
   {
     name: 'own',
@@ -236,7 +311,38 @@ const ownerCommands = [
       { name: 'rem', description: 'سحب رصيد', type: 1, options: [{ name: 'amount', description: 'الكمية', type: 4, required: true }] }
     ]
   },
-‎  // ==================== 🤖 نظام الحذف التلقائي مع رسالة مخصصة ====================
+  {
+    name: 'sub',
+    description: 'إدارة الاشتراكات (للمالك)',
+    default_member_permissions: '0',
+    options: [
+      {
+        name: 'add',
+        description: 'إضافة اشتراك',
+        type: 1,
+        options: [
+          { name: 'id', description: 'ايدي السيرفر', type: 3, required: true },
+          { name: 'duration', description: 'المدة (تجريبي, 7d, 30d, 60d, 1y)', type: 3, required: true, choices: [
+            { name: 'تجريبي (3 أيام)', value: '3d' },
+            { name: 'اسبوع (7 أيام)', value: '7d' },
+            { name: 'شهر (30 يوم)', value: '30d' },
+            { name: 'شهرين (60 يوم)', value: '60d' },
+            { name: 'سنة (365 يوم)', value: '1y' }
+          ] }
+        ]
+      },
+      {
+        name: 'remove',
+        description: 'إزالة اشتراك',
+        type: 1,
+        options: [
+          { name: 'id', description: 'ايدي السيرفر', type: 3, required: true }
+        ]
+      },
+      { name: 'list', description: 'عرض الاشتراكات', type: 1 }
+    ]
+  },
+  // ==================== 🤖 نظام الحذف التلقائي مع رسالة مخصصة ====================
   {
     name: 'auto',
     description: 'نظام الحذف التلقائي',
@@ -282,221 +388,76 @@ const ownerCommands = [
   }
 ];
 
-‎// دمج جميع الأوامر
+// دمج جميع الأوامر
 const allCommands = [...slashCommands, ...adminCommands, ...ownerCommands];
 
-// ==================== 🤖 Client Ready ====================
-client.once('ready', async () => {
-  console.log(`✅ ${client.user.tag} أونلاين!`);
+client.on('ready', async () => {
+  console.log(`✅ ${client.user.tag} جاهز للعمل!`);
+
+  // تسجيل أوامر السلاش
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-  const globalSettings = await getGlobalSettings();
 
   try {
+    console.log('بدأ تحديث أوامر السلاش (/).');
     await rest.put(Routes.applicationCommands(client.user.id), { body: allCommands });
-    console.log('✅ تم تسجيل جميع الأوامر بنجاح!');
-  } catch (e) { console.error(e); }
-
-  cron.schedule('0 0 * * 5', async () => {
-    console.log("⏰ بدأ تحصيل الزكاة الأسبوعية...");
-    const users = await User.find({ balance: { $gt: 50 } });
-    let totalTax = 0;
-    for (const user of users) {
-      const oldBalance = user.balance;
-      const taxAmount = (oldBalance * 0.025).toFixed(2);
-      const tax = parseFloat(taxAmount);
-      user.balance = parseFloat((oldBalance - tax).toFixed(2));
-      user.history.push({ type: 'WEEKLY_TAX', amount: -tax });
-      await user.save();
-      totalTax += tax;
-      const discordUser = await client.users.fetch(user.userId).catch(() => null);
-      if (discordUser) {
-        await discordUser.send(`-# ** تم جمع الزكاة الاسبوعية التي تقدر بـ 2.5% على الثروة التي تبلغ فوق الـ50 دينار <:florktahehe:1458398337874268307> **`).catch(() => { });
-      }
-    }
-    console.log(`✅ تم خصم الزكاة من ${users.length} عضو بمجموع ${totalTax.toFixed(2)} دينار`);
-  });
+    console.log('تم تحديث أوامر السلاش بنجاح.');
+  } catch (error) {
+    console.error('❌ خطأ في تحديث أوامر السلاش:', error);
+  }
 });
 
-‎// ==================== 👋 نظام الترحيب ====================
-async function sendWelcome(member, guildSettings) {
-  const { channelId, title, description, color, image } = guildSettings.welcomeSettings;
-  if (!channelId) return;
-  const channel = member.guild.channels.cache.get(channelId);
-  if (!channel) return;
-  const embed = new EmbedBuilder().setColor(parseInt(color, 16) || 0x2b2d31);
-  const processText = (text) => text ? text.replace(/{member}/g, `${member}`) : null;
-  const finalTitle = processText(title);
-  const finalDesc = processText(description);
-  if (finalTitle) embed.setTitle(finalTitle);
-  if (finalDesc) embed.setDescription(finalDesc);
-  if (image) embed.setImage(image);
-  if (!finalTitle && !finalDesc && !image) return;
-  channel.send({ embeds: [embed] }).catch(() => { });
-}
-
-client.on('guildMemberAdd', async (member) => {
-  const globalSettings = await getGlobalSettings();
-  if (!globalSettings.allowedGuilds.includes(member.guild.id)) return;
-  const settings = await getSettings(member.guild.id);
-  await sendWelcome(member, settings);
-});
-
-‎// ==================== 💸 المتغيرات العامة ====================
-const pendingTransfers = new Map();
 const transferCooldowns = new Map();
-const activeNumberGames = new Map();
-const giveawayImages = new Map(); // لحفظ آخر صورة قيف أوي
+const pendingTransfers = new Map();
 
-‎// ==================== 🎮 دوال لعبة الأرقام ====================
-function getUserTag(userId) {
-  const user = client.users.cache.get(userId);
-  return user ? `<@${userId}>` : userId;
-}
-
-function findClosestGuess(guesses, secretNumber) {
-  if (!guesses || guesses.length === 0) return null;
-  let closest = guesses[0];
-  let minDiff = Math.abs(guesses[0].guess - secretNumber);
-  for (const g of guesses) {
-    const diff = Math.abs(g.guess - secretNumber);
-    if (diff < minDiff) {
-      minDiff = diff;
-      closest = g;
-    }
-  }
-  return closest;
-}
-
-async function startNumberGameAfterDelay(msg, gameData) {
-  setTimeout(async () => {
-    const game = activeNumberGames.get(msg.id);
-    if (!game) return;
-    if (game.players.length === 0) {
-      await msg.edit({ content: `-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **`, components: [] }).catch(() => { });
-      activeNumberGames.delete(msg.id);
-      return;
-    }
-    game.started = true;
-    game.secretNumber = Math.floor(Math.random() * 100) + 1;
-    const playersList = game.players.map(p => getUserTag(p)).join(' ');
-    await msg.channel.send(`-# ** تم بدأ اللعبة كل واحد من المشاركين عنده جولة يخمن فيها الرقم و كل مشارك له ${game.players.length === 1 ? '5' : '3'} محاولات الا اذا فاز احد فيكم <:new_emoji:1388436089584226387> **\n` + `-# المشاركين هم ${playersList}`).catch(() => { });
-    setTimeout(async () => { await msg.delete().catch(() => { }); }, 10000);
-    setTimeout(() => { startNextTurn(msg.channel, msg.id); }, 10000);
-  }, 20000);
-}
-
-async function startNextTurn(channel, gameId) {
-  const game = activeNumberGames.get(gameId);
-  if (!game || !game.started || game.winner) return;
-  
-  const maxAttempts = game.players.length === 1 ? 5 : 3;
-  
-  game.alivePlayers = game.players.filter(p => {
-    const attempts = game.attempts.get(p) || 0;
-    return attempts < maxAttempts;
-  });
-  
-  if (game.alivePlayers.length === 0) {
-    const guesses = game.guesses || [];
-    const closest = findClosestGuess(guesses, game.secretNumber);
-    if (game.players.length === 1) {
-      await channel.send(`-# ** نفذت خلصت محاولاتك الـ 5 و الرقم الصح كان ${game.secretNumber} <:emoji_11:1467287898448724039> **`).catch(() => { });
-    } else {
-      const closestUser = closest ? getUserTag(closest.userId) : 'لا يوجد';
-      await channel.send(`-# ** الرقم الصح كان ${game.secretNumber} محد جابها صح و نفذت كل محاولات كل المشتركين بس اقرب واحد جاب تخمين هو ${closestUser} <:emoji_11:1467287898448724039> **`).catch(() => { });
-    }
-    activeNumberGames.delete(gameId);
-    return;
-  }
-  
-  if (game.currentTurnIndex >= game.alivePlayers.length) game.currentTurnIndex = 0;
-  
-  const currentPlayer = game.alivePlayers[game.currentTurnIndex];
-  game.currentTurn = currentPlayer;
-  
-  if (!game.canGuess) game.canGuess = new Map();
-  game.players.forEach(p => game.canGuess.set(p, false));
-  
-  await channel.send(`-# **دور المشارك ${getUserTag(currentPlayer)} للتخمين **`).catch(() => { });
-  
-  game.canGuess.set(currentPlayer, true);
-  
-  if (game.timer) { clearTimeout(game.timer); game.timer = null; }
-  
-  const timer = setTimeout(async () => {
-    const game = activeNumberGames.get(gameId);
-    if (!game || !game.started || game.winner) return;
-    if (game.currentTurn === currentPlayer) {
-      
-      game.canGuess?.set(currentPlayer, false);
-      
-      await channel.send(`-# **المشارك ${getUserTag(currentPlayer)} انطرد عشان ما خمن قبل انتهاء الوقت <:s7_discord:1388214117365453062> **`).catch(() => { });
-      
-      const attempts = game.attempts.get(currentPlayer) || 0;
-      const maxAttempts = game.players.length === 1 ? 5 : 3;
-      game.attempts.set(currentPlayer, attempts + maxAttempts);
-      
-      game.currentTurnIndex++;
-      game.currentTurn = null;
-      
-      setTimeout(() => { startNextTurn(channel, gameId); }, 8000);
-    }
-  }, 15000);
-  
-  game.timer = timer;
-}
-
-‎// ==================== 📝 معالج الرسائل الموحد (مع تعديل الحذف التلقائي) ====================
 client.on('messageCreate', async (message) => {
-  if (message.author.bot || !message.guild) return;
-  const globalSettings = await getGlobalSettings();
-  if (!globalSettings.allowedGuilds.includes(message.guild.id)) return;
+  if (message.author.bot) return;
 
-  const args = message.content.trim().split(/\s+/);
-  const command = args[0];
+  // معالجة تأكيد التحويل
+  if (message.content.toLowerCase() === 'تأكيد' && pendingTransfers.has(message.reference?.messageId)) {
+    const { senderId, targetId, amount, msgId, channelId } = pendingTransfers.get(message.reference.messageId);
+    if (message.author.id !== senderId) return;
 
-‎  // 1️⃣ تأكيد التحويل
-  const pending = Array.from(pendingTransfers.values()).find(p => p.senderId === message.author.id && p.channelId === message.channel.id);
-  if (message.content === 'تأكيد' && pending) {
-    const data = pending;
-    const sender = await getUserData(data.senderId);
-    const target = await getUserData(data.targetId);
-    if (sender.balance < data.amount) {
-      pendingTransfers.delete(data.msgId);
-      return message.channel.send(`-# **رصيدك ما يكفي الحين يا فقير <:emoji_464:1388211597197050029>**`);
-    }
-    sender.balance = parseFloat((sender.balance - data.amount).toFixed(2));
-    target.balance = parseFloat((target.balance + data.amount).toFixed(2));
-    sender.history.push({ type: 'TRANSFER_SEND', amount: -data.amount });
-    target.history.push({ type: 'TRANSFER_RECEIVE', amount: data.amount });
-    await sender.save(); await target.save();
-    transferCooldowns.set(data.senderId, Date.now());
-    const confirmMsg = await message.channel.messages.fetch(data.msgId).catch(() => null);
-    if (confirmMsg) {
-      await confirmMsg.edit({ content: `-# **تم تحويل ${data.amount} لـ <@${data.targetId}> رصيدك الآن ${sender.balance} <a:moneywith_:1470458218953179237>**`, components: [] }).catch(() => { });
-    }
-    pendingTransfers.delete(data.msgId);
-    try { await message.delete(); } catch (e) { }
-    return;
+    pendingTransfers.delete(message.reference.messageId);
+    const confirmMsg = await message.channel.messages.fetch(msgId).catch(() => {});
+    if (confirmMsg) confirmMsg.delete().catch(() => {});
+
+    const senderData = await getUserData(senderId);
+    const targetData = await getUserData(targetId);
+
+    if (senderData.balance < amount) return message.channel.send(`-# **رصيدك ما يكفي يا فقير <:emoji_464:1388211597197050029>**`);
+
+    senderData.balance = parseFloat((senderData.balance - amount).toFixed(2));
+    senderData.history.push({ type: 'TRANSFER_SEND', amount: -amount, targetId: targetId });
+    targetData.balance = parseFloat((targetData.balance + amount).toFixed(2));
+    targetData.history.push({ type: 'TRANSFER_RECEIVE', amount: amount, senderId: senderId });
+
+    await senderData.save();
+    await targetData.save();
+
+    transferCooldowns.set(senderId, Date.now());
+    return message.channel.send(`-# **تم تحويل ${amount} دينار إلى <@${targetId}> بنجاح! <:emoji_41:1471619709936996406>**`);
   }
 
-‎  // 2️⃣ أوامر المالك النصية
-  if ((command === 'زد' || command === 'انقص') && message.author.id === OWNER_ID) {
-    const amount = parseFloat(args[1]);
-    
-    if (isNaN(amount) || amount <= 0) {
-      return message.channel.send(`-# **القيمة غير صحيحه <:__:1467633552408576192> **`);
-    }
-    
-    const ownerData = await getUserData(message.author.id);
-    
-    if (command === 'زد') {
+  if (!message.content.startsWith('!')) return;
+
+  const args = message.content.slice(1).trim().split(/ +/);
+  const command = args.shift().toLowerCase();
+
+  // 1️⃣ أوامر المالك النصية
+  if (message.author.id === OWNER_ID) {
+    if (command === 'addbal') {
+      const amount = parseFloat(args[0]);
+      if (isNaN(amount) || amount <= 0) return message.channel.send(`-# **القيمة غير صحيحه <:__:1467633552408576192> **`);
+      const ownerData = await getUserData(message.author.id);
       ownerData.balance = parseFloat((ownerData.balance + amount).toFixed(2));
       ownerData.history.push({ type: 'OWNER_ADD', amount: amount });
       await ownerData.save();
       return message.channel.send(`-# **تم اضافة الرصيد لحسابك <:emoji_41:1471619709936996406> **`);
-      
-    } else if (command === 'انقص') {
+    }
+    if (command === 'rembal') {
+      const amount = parseFloat(args[0]);
+      if (isNaN(amount) || amount <= 0) return message.channel.send(`-# **القيمة غير صحيحه <:__:1467633552408576192> **`);
+      const ownerData = await getUserData(message.author.id);
       if (ownerData.balance < amount) {
         return message.channel.send(`-# **العضو ما معه ذي الكمية saybu <:emoji_84:1389404919672340592> **`);
       }
@@ -507,7 +468,7 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-‎  // 3️⃣ أوامر الاقتصاد النصية
+  // 3️⃣ أوامر الاقتصاد النصية
   const isAdmin = message.member.permissions.has(PermissionsBitField.Flags.Administrator);
   
   if (command === 'دنانير' || command === 'تحويل' || command === 'اغنياء' || command === 'سجل') {
@@ -553,12 +514,12 @@ client.on('messageCreate', async (message) => {
   if (command === 'سجل') {
     const user = message.mentions.users.first() || message.author;
     const userData = await getUserData(user.id);
-    const history = userData.history.slice(-5).reverse().map(h => `-# **${h.type}: ${h.amount} (${h.date.toLocaleDateString()})**`).join('\n') || 'لا يوجد سجل.';
-    message.channel.send({ embeds: [new EmbedBuilder().setTitle(`سجل ${user.username}`).setDescription(history).setColor(0x2b2d31)] });
+    const formattedHistory = await formatHistory(client, userData.history);
+    message.channel.send({ embeds: [new EmbedBuilder().setTitle(`سجل ${user.username} <:emoji_41:1471619709936996406>`).setDescription(formattedHistory).setColor(0x2b2d31)] });
     return;
   }
 
-‎  // 4️⃣ أوامر الإدارة النصية
+  // 4️⃣ أوامر الإدارة النصية
   if (command === 'تايم') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
     const member = message.mentions.members.first();
@@ -663,7 +624,6 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-‎  // 5️⃣ معالجة التخمينات
   let activeGame = null;
   let gameId = null;
   for (const [id, game] of activeNumberGames.entries()) {
@@ -728,19 +688,19 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-‎  // ==================== 🤖 نظام الحذف التلقائي المعدل (مع التأخير الزمني) ====================
+// ==================== 🤖 نظام الحذف التلقائي المعدل (مع التأخير الزمني) ====================
   const autoDeleteChannels = await getAutoDeleteChannels(message.guild.id);
   
   for (const settings of autoDeleteChannels) {
     if (message.channel.id !== settings.channelId) continue;
     
-‎    // تحقق من الاستثناءات
+    // تحقق من الاستثناءات
     if (settings.exceptUsers.includes(message.author.id)) continue;
     
     let memberRoles = message.member?.roles.cache.map(r => r.id) || [];
     if (settings.exceptRoles.some(roleId => memberRoles.includes(roleId))) continue;
     
-‎    // تحقق من نوع الفلتر
+    // تحقق من نوع الفلتر
     let shouldDelete = false;
     let filterTypeText = '';
     
@@ -762,12 +722,12 @@ client.on('messageCreate', async (message) => {
         filterTypeText = 'الملفات';
         break;
       case 'words':
-‎        // كلمات ممنوعة
+        // كلمات ممنوعة
         if (settings.blockedWords.length > 0) {
           const content = message.content.toLowerCase();
           shouldDelete = settings.blockedWords.some(word => content.includes(word.toLowerCase()));
         }
-‎        // كلمات مسموحة (إذا كانت الكل ممنوع عدا المسموح)
+        // كلمات مسموحة (إذا كانت الكل ممنوع عدا المسموح)
         if (settings.allowedWords.length > 0 && !shouldDelete) {
           const content = message.content.toLowerCase();
           shouldDelete = !settings.allowedWords.some(word => content.includes(word.toLowerCase()));
@@ -778,25 +738,25 @@ client.on('messageCreate', async (message) => {
     
     if (shouldDelete) {
       try {
-‎        // تطبيق التأخير الزمني
+        // تطبيق التأخير الزمني
         if (settings.deleteDelay > 0) {
-‎          // تأخير الحذف
+          // تأخير الحذف
           setTimeout(async () => {
             try {
-‎              // التحقق أن الرسالة ما زالت موجودة
+              // التحقق أن الرسالة ما زالت موجودة
               const fetchedMsg = await message.channel.messages.fetch(message.id).catch(() => null);
               if (fetchedMsg) {
                 await message.delete();
               }
             } catch (e) {
-‎              // الرسالة ربما حذفت بالفعل
+              // الرسالة ربما حذفت بالفعل
             }
           }, settings.deleteDelay * 1000);
           
-‎          // إرسال رسالة تحذير فورية
+          // إرسال رسالة تحذير فورية
           let warningText = settings.customMessage || `-# ** سيتم حذف رسالتك بعد ${settings.deleteDelay} ثواني <:emoji_38:1401773302619439147> **`;
           
-‎          // استبدال المتغيرات
+          // استبدال المتغيرات
           warningText = warningText.replace(/{user}/g, message.author.toString())
                                   .replace(/{channel}/g, message.channel.toString())
                                   .replace(/{type}/g, filterTypeText)
@@ -807,13 +767,13 @@ client.on('messageCreate', async (message) => {
           setTimeout(() => warningMsg.delete().catch(() => {}), 10000);
           
         } else {
-‎          // حذف فوري
+          // حذف فوري
           await message.delete();
           
-‎          // إرسال رسالة تحذير (تنحذف بعد 10 ثواني)
+          // إرسال رسالة تحذير (تنحذف بعد 10 ثواني)
           let warningText = settings.customMessage || `-# ** هذا الروم مخصص بس للـ ${filterTypeText} يـ ذكي <:emoji_38:1401773302619439147> **`;
           
-‎          // استبدال المتغيرات
+          // استبدال المتغيرات
           warningText = warningText.replace(/{user}/g, message.author.toString())
                                   .replace(/{channel}/g, message.channel.toString())
                                   .replace(/{type}/g, filterTypeText)
@@ -825,7 +785,7 @@ client.on('messageCreate', async (message) => {
         }
         
       } catch (e) {
-‎        // رسالة خطأ إذا ماقدر يحذف
+        // رسالة خطأ إذا ماقدر يحذف
         console.error('خطأ في الحذف التلقائي:', e);
       }
     }
@@ -834,7 +794,7 @@ client.on('messageCreate', async (message) => {
   }
 });
 
-‎// ==================== 🎮 تفاعلات الأزرار ====================
+// ==================== 🎮 تفاعلات الأزرار ====================
 client.on('interactionCreate', async (i) => {
   const globalSettings = await getGlobalSettings();
   if (i.guild && !globalSettings.allowedGuilds.includes(i.guild.id)) return;
@@ -843,24 +803,24 @@ client.on('interactionCreate', async (i) => {
     const { commandName, options, user, member } = i;
     const userData = await getUserData(user.id);
 
-‎    // ==================== 👥 أوامر العامة ====================
+    // ==================== 👥 أوامر العامة ====================
     if (commandName === 'help') {
       const embed = new EmbedBuilder()
         .setTitle('قائمة الأوامر')
         .setColor(0x2b2d31)
         .setDescription(
-‎          `**👥 أوامر العامة**\n` +
+          `**👥 أوامر العامة**\n` +
           `-# /help - عرض الأوامر\n` +
           `-# /eco bal - عرض الرصيد\n` +
           `-# /eco pay - تحويل أموال\n` +
           `-# /eco top - قائمة الأغنياء\n` +
           `-# /eco hist - سجل المعاملات\n\n` +
-‎          `**📝 أوامر نصية**\n` +
-‎          `-# دنانير، تحويل، اغنياء، سجل\n` +
-‎          `-# تايم، طرد، حذف\n\n` +
-‎          `**🛡️ أوامر الإدارة**\n` +
+          `**📝 أوامر نصية**\n` +
+          `-# دنانير، تحويل، اغنياء، سجل\n` +
+          `-# تايم، طرد، حذف\n\n` +
+          `**🛡️ أوامر الإدارة**\n` +
           `-# /welcome, /ticket, /give, /num\n\n` +
-‎          `**👑 أوامر المالك**\n` +
+          `**👑 أوامر المالك**\n` +
           `-# /own, /bal, /auto`
         );
       return i.reply({ embeds: [embed] });
@@ -902,12 +862,12 @@ client.on('interactionCreate', async (i) => {
         return i.reply({ embeds: [embed] });
       }
       if (sub === 'hist') {
-        const history = userData.history.slice(-5).reverse().map(h => `-# **${h.type}: ${h.amount} (${h.date.toLocaleDateString()})**`).join('\n') || 'لا يوجد سجل.';
-        return i.reply({ embeds: [new EmbedBuilder().setTitle(`سجل ${user.username}`).setDescription(history).setColor(0x2b2d31)] });
+        const formattedHistory = await formatHistory(client, userData.history);
+        return i.reply({ embeds: [new EmbedBuilder().setTitle(`سجل ${user.username} <:emoji_41:1471619709936996406>`).setDescription(formattedHistory).setColor(0x2b2d31)] });
       }
     }
 
-‎    // ==================== 🛡️ أوامر الإدارة ====================
+    // ==================== 🛡️ أوامر الإدارة ====================
     if (commandName === 'ticket') {
       const sub = options.getSubcommand();
       const ticketSettings = await getTicketSettings(i.guild.id);
@@ -986,7 +946,7 @@ client.on('interactionCreate', async (i) => {
         const durationMs = timeValue * (timeUnit === 'm' ? 60 : timeUnit === 'h' ? 3600 : 86400) * 1000;
         const endTime = Math.floor((Date.now() + durationMs) / 1000);
         
-‎        // حفظ آخر صورة
+        // حفظ آخر صورة
         let image = giveawayImages.get(i.guild.id);
         if (imageOption) {
           image = imageOption;
@@ -1074,7 +1034,7 @@ client.on('interactionCreate', async (i) => {
       }
     }
 
-‎    // ==================== 👑 أوامر المالك ====================
+    // ==================== 👑 أوامر المالك ====================
     if (commandName === 'own' && user.id === OWNER_ID) {
       const sub = options.getSubcommand();
       
@@ -1132,9 +1092,93 @@ client.on('interactionCreate', async (i) => {
       }
     }
 
-‎    // ==================== 🤖 نظام الحذف التلقائي (أوامر المالك) ====================
-    if (commandName === 'auto' && user.id === OWNER_ID) {
+   if (commandName === 'sub' && user.id === OWNER_ID) {
       const sub = options.getSubcommand();
+
+      if (sub === 'add') {
+        const guildId = options.getString('id');
+        const durationValue = options.getString('duration');
+        const durationMap = { '3d': 'تجريبي\n', '7d': 'اسبوع\n', '30d': 'شهر\n', '60d': 'شهرين\n', '1y': 'سنة' };
+        const durationText = durationMap[durationValue];
+
+        try {
+          const guild = await client.guilds.fetch(guildId);
+          const owner = await guild.fetchOwner();
+
+          const expiresAt = new Date();
+          if (durationValue.endsWith('d')) {
+            expiresAt.setDate(expiresAt.getDate() + parseInt(durationValue));
+          } else if (durationValue.endsWith('y')) {
+            expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+          }
+
+          const subData = {
+            guildId: guild.id,
+            guildName: guild.name,
+            ownerId: owner.id,
+            duration: durationText,
+            durationValue: durationValue,
+            expiresAt: expiresAt,
+            status: 'active'
+          };
+
+          const existingSub = await getSubscription(guild.id);
+          if (existingSub) {
+            await updateSubscription(guild.id, subData);
+          } else {
+            await addSubscription(subData);
+          }
+
+          await owner.send(`-# **تم الاشتراك في خدمتة البوت المتكامل في باقة \"${durationText}\" سوف يتم اعلامك قبل يوم من انتهاء الاشتراك <:emoji_38:1401773302619439147> **`).catch(() => {});
+          return i.reply({ content: `✅ تم تفعيل الاشتراك للسيرفر ${guild.name} لمدة ${durationText}`, ephemeral: true });
+        } catch (error) {
+          console.error(error);
+          return i.reply({ content: '❌ تعذر العثور على السيرفر أو تفعيل الاشتراك.', ephemeral: true });
+        }
+      }
+
+      if (sub === 'remove') {
+        const guildId = options.getString('id');
+        try {
+          const sub = await getSubscription(guildId);
+          if (sub) {
+            const owner = await client.users.fetch(sub.ownerId).catch(() => null);
+            if (owner) {
+              await owner.send(`-# **تم إلغاء اشتراككم في خدمة البوت المتكامل للسيرفر ${sub.guildName} <:emoji_464:1388211597197050029> **`).catch(() => {});
+            }
+          }
+
+          await removeSubscription(guildId);
+          const guild = await client.guilds.fetch(guildId).catch(() => null);
+          if (guild) {
+            await guild.leave();
+          }
+          return i.reply({ content: '✅ تم إلغاء الاشتراك وإخراج البوت من السيرفر.', ephemeral: true });
+        } catch (error) {
+          console.error(error);
+          return i.reply({ content: '❌ حدث خطأ أثناء إزالة الاشتراك.', ephemeral: true });
+        }
+      }
+
+      if (sub === 'list') {
+        const subs = await getAllSubscriptions();
+        if (subs.length === 0) {
+          return i.reply({ content: 'لا توجد اشتراكات حالياً.', ephemeral: true });
+        }
+
+        let list = subs.map(s => {
+          return `- **${s.guildName}** (ID: ${s.guildId})\n  - الحالة: ${s.status}\n  - المدة: ${s.duration}\n  - تنتهي في: ${s.expiresAt.toLocaleDateString()}`;
+        }).join('\n');
+
+        if (list.length > 2000) {
+          list = list.substring(0, 1990) + '...';
+        }
+
+        return i.reply({ content: `**قائمة الاشتراكات:**\n${list}`, ephemeral: true });
+      }
+    }
+
+    if (commandName === 'auto' && user.id === OWNER_ID) {      const sub = options.getSubcommand();
       
       if (sub === 'add') {
         const channel = options.getChannel('channel');
@@ -1146,16 +1190,16 @@ client.on('interactionCreate', async (i) => {
         const exceptRolesStr = options.getString('except_roles') || '';
         const customMessage = options.getString('message') || null;
         
-‎        // تحويل النصوص إلى مصفوفات
+        // تحويل النصوص إلى مصفوفات
         const allowedWords = allowedStr.split(',').map(s => s.trim()).filter(s => s);
         const blockedWords = blockedStr.split(',').map(s => s.trim()).filter(s => s);
         const exceptUsers = exceptUsersStr.split(',').map(s => s.trim()).filter(s => s);
         const exceptRoles = exceptRolesStr.split(',').map(s => s.trim()).filter(s => s);
         
-‎        // حذف الإعدادات القديمة لهذا الروم إن وجدت
+        // حذف الإعدادات القديمة لهذا الروم إن وجدت
         await AutoDelete.deleteMany({ guildId: i.guild.id, channelId: channel.id });
         
-‎        // إنشاء إعدادات جديدة
+        // إنشاء إعدادات جديدة
         const newSettings = new AutoDelete({
           guildId: i.guild.id,
           channelId: channel.id,
@@ -1205,8 +1249,8 @@ client.on('interactionCreate', async (i) => {
           };
           
           const delayText = ch.deleteDelay === 0 ? 'فوري' : `${ch.deleteDelay} ثانية`;
-          const allowedText = ch.allowedWords.length > 0 ? ch.allowedWords.join('، ') : 'لا يوجد';
-          const blockedText = ch.blockedWords.length > 0 ? ch.blockedWords.join('، ') : 'لا يوجد';
+          const allowedText = ch.allowedWords.length > 0 ? ch.allowedWords.join(', ') : 'لا يوجد';
+          const blockedText = ch.blockedWords.length > 0 ? ch.blockedWords.join(', ') : 'لا يوجد';
           const exceptUsersText = ch.exceptUsers.length > 0 ? ch.exceptUsers.map(id => `<@${id}>`).join(' ') : 'لا يوجد';
           const exceptRolesText = ch.exceptRoles.length > 0 ? ch.exceptRoles.map(id => `<@&${id}>`).join(' ') : 'لا يوجد';
           const customMessageText = ch.customMessage || 'الرسالة الافتراضية';
@@ -1226,7 +1270,7 @@ client.on('interactionCreate', async (i) => {
           message += `\n`;
         }
         
-‎        // تقسيم الرسالة إذا كانت طويلة
+        // تقسيم الرسالة إذا كانت طويلة
         if (message.length > 2000) {
           const chunks = message.match(/[\s\S]{1,1900}/g) || [];
           await i.reply({ content: chunks[0], ephemeral: true });
@@ -1240,7 +1284,7 @@ client.on('interactionCreate', async (i) => {
     }
   }
 
-‎  // ==================== 🎮 تفاعلات الأزرار ====================
+  // ==================== 🎮 تفاعلات الأزرار ====================
   if (i.isButton()) {
     if (i.customId === 'open_ticket') {
       const ticketSettings = await getTicketSettings(i.guild.id);
@@ -1257,7 +1301,7 @@ client.on('interactionCreate', async (i) => {
         ]
       });
       
-‎      // بناء الرسالة مع الرتبة إذا موجودة
+      // بناء الرسالة مع الرتبة إذا موجودة
       let ticketMessage = `${i.user}`;
       
       if (ticketSettings.supportRoleId) {
@@ -1298,11 +1342,87 @@ client.on('interactionCreate', async (i) => {
     }
 
     if (i.customId === 'join_giveaway') {
-‎      // معالج القيف أوي موجود في الـ collector
+      // معالج القيف أوي موجود في الـ collector
     }
   }
 });
 
-‎// ==================== 🚀 تشغيل البوت ====================
+client.on('guildCreate', async (guild) => {
+  const isSub = await isSubscribed(guild.id);
+  if (!isSub) {
+    const owner = await guild.fetchOwner();
+    const messageContent = "-# **هذا البوت خاص و لن يعمل في خادمك الا اذا تواصلت مع سيرفر المطور لكي يسمح لك مجانا او لا <:emoji_41:1471619709936996406> **";
+    try {
+      await owner.send(messageContent);
+      setTimeout(() => guild.leave().catch(() => {}), 10000);
+    } catch (e) {
+      console.error(`Failed to send DM to owner ${owner.user.tag} for guild ${guild.name}:`, e);
+      const generalChannel = guild.channels.cache.find(
+        channel => channel.type === ChannelType.GuildText &&
+                   channel.permissionsFor(guild.members.me).has(PermissionsBitField.Flags.SendMessages)
+      );
+      if (generalChannel) {
+        await generalChannel.send(messageContent).catch(() => {});
+        setTimeout(() => guild.leave().catch(() => {}), 10000);
+      } else {
+        console.error(`Could not find a suitable channel to send message in guild ${guild.name}`);
+        setTimeout(() => guild.leave().catch(() => {}), 10000);
+      }
+    }
+  }
+});
+
+cron.schedule('0 */6 * * *', async () => {
+  const subscriptions = await getAllSubscriptions();
+  const now = new Date();
+
+  for (const sub of subscriptions) {
+    if (sub.status === 'active') {
+      const timeLeft = sub.expiresAt.getTime() - now.getTime();
+      const hoursLeft = timeLeft / (1000 * 60 * 60);
+
+      try {
+        const guild = await client.guilds.fetch(sub.guildId).catch(() => null);
+        if (!guild) {
+          console.log(`Guild ${sub.guildId} not found, removing subscription.`);
+          await removeSubscription(sub.guildId);
+          continue;
+        }
+        const owner = await client.users.fetch(sub.ownerId).catch(() => null);
+
+        if (hoursLeft <= 24 && hoursLeft > 0) {
+          if (owner) {
+            await owner.send("-# **عزيزي المشترك اشتراكك في بوتنا المتكامل وشك على الانتهاء المدة الباقية لك 24 ساعة <:emoji_84:1389404919672340592> **\n-# **سوف يخرج البوت من الخادم ان لم تتجدد الباقة <:emoji_84:1389404919672340592> **").catch(() => {});
+          }
+        } else if (hoursLeft <= 0) {
+          await updateSubscription(sub.guildId, { status: 'expired' });
+          if (owner) {
+            await owner.send("-# **انتهى اشتراككم في خدمتنا يرجى مراجعة الخادم الأم لتجديد الاشتراك <:new_emoji:1388436095842385931> **").catch(() => {});
+          }
+          await guild.leave().catch(() => {});
+        }
+      } catch (error) {
+        console.error(`Error processing subscription for guild ${sub.guildId}:`, error);
+      }
+    }
+  }
+});
+
+cron.schedule('0 0 0 * * 5', async () => {
+  const users = await User.find({ balance: { $gt: 50 } });
+  for (const user of users) {
+    const taxAmount = user.balance * 0.025;
+    user.balance = parseFloat((user.balance - taxAmount).toFixed(2));
+    user.history.push({ type: 'WEEKLY_TAX', amount: -taxAmount });
+    await user.save();
+    try {
+      const discordUser = await client.users.fetch(user.userId);
+      await discordUser.send("-# ** تم جمع الزكاة الاسبوعية التي تقدر بـ 2.5% على الثروة التي تبلغ فوق الـ50 دينار <:florktahehe:1458398337874268307> **").catch(() => {});
+    } catch (error) {
+      console.error(`Failed to send tax message to user ${user.userId}:`, error);
+    }
+  }
+});
+
 app.get('/', (req, res) => res.send('Bot is Live!'));
 app.listen(3000, () => client.login(process.env.TOKEN));
