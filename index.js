@@ -784,33 +784,42 @@ client.on('messageCreate', async (message) => {
   }
 
   if (command === 'سجل') {
-    const user = message.mentions.users.first() || message.author;
-    const userData = await getUserData(user.id);
-    
-    const history = userData.history
-      .slice(-5)
-      .reverse()
-      .map(h => {
-        let action = '';
-        if (h.type === 'TRANSFER_SEND') action = `تحويل إلى المستخدم ${h.targetName || 'مستخدم'}`;
-        else if (h.type === 'TRANSFER_RECEIVE') action = `استلام من المستخدم ${h.targetName || 'مستخدم'}`;
-        else if (h.type === 'WEEKLY_TAX') action = 'زكاة أسبوعية';
-        else if (h.type === 'OWNER_ADD') action = 'إضافة من المالك';
-        else if (h.type === 'OWNER_REMOVE') action = 'سحب من المالك';
-        else action = h.type;
-        
-        const date = new Date(h.date);
-        return `-# **عملية ${action} بمبلغ ${Math.abs(h.amount)} في شهر ${date.getMonth() + 1} يوم ${date.getDate()} <:emoji_41:1471983856440836109>**`;
-      })
-      .join('\n') || 'لا يوجد سجل.';
-    
-    const embed = new EmbedBuilder()
-      .setDescription(`**السجل الخاص بـ ${user.username} <:emoji_41:1471619709936996406>**\n\n${history}`)
-      .setColor(0x2b2d31);
-    
-    message.channel.send({ embeds: [embed] });
-    return;
-  }
+  const user = message.mentions.users.first() || message.author;
+  const userData = await getUserData(user.id);
+  
+  const history = userData.history
+    .slice(-5)
+    .reverse()
+    .map(h => {
+      const date = new Date(h.date);
+      const dateStr = `${date.getDate()}-${date.getMonth() + 1}`;
+      
+      if (h.type === 'TRANSFER_SEND') 
+        return `-# **تحويل الى ${h.targetName || 'مستخدم'} في ${dateStr} <:emoji_41:1471619709936996406>**`;
+      
+      if (h.type === 'TRANSFER_RECEIVE') 
+        return `-# **استلام من ${h.targetName || 'مستخدم'} في ${dateStr} <:emoji_41:1471619709936996406>**`;
+      
+      if (h.type === 'WEEKLY_TAX') 
+        return `-# **خصم زكاة 2.5% = ${Math.abs(h.amount)} <:emoji_40:1471983905430311074>**`;
+      
+      if (h.type === 'OWNER_ADD') 
+        return `-# **إضافة رصيد ${h.amount} <:emoji_41:1471619709936996406>**`;
+      
+      if (h.type === 'OWNER_REMOVE') 
+        return `-# **سحب رصيد ${Math.abs(h.amount)} <:emoji_41:1471619709936996406>**`;
+      
+      return `-# **${h.type}: ${Math.abs(h.amount)} في ${dateStr} <:emoji_41:1471619709936996406>**`;
+    })
+    .join('\n') || 'لا يوجد سجل.';
+  
+  const embed = new EmbedBuilder()
+    .setDescription(`**السجل الخاص بـ ${user.username} <:emoji_41:1471619709936996406>**\n\n${history}`)
+    .setColor(0x2b2d31);
+  
+  message.channel.send({ embeds: [embed] });
+  return;
+}
 
   if (command === 'ارقام') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
@@ -1030,29 +1039,41 @@ client.on('interactionCreate', async (i) => {
     }
 
     if (commandName === 'hist') {
-      const history = userData.history
-        .slice(-5)
-        .reverse()
-        .map(h => {
-          let action = '';
-          if (h.type === 'TRANSFER_SEND') action = `تحويل إلى المستخدم ${h.targetName || 'مستخدم'}`;
-          else if (h.type === 'TRANSFER_RECEIVE') action = `استلام من المستخدم ${h.targetName || 'مستخدم'}`;
-          else if (h.type === 'WEEKLY_TAX') action = 'زكاة أسبوعية';
-          else if (h.type === 'OWNER_ADD') action = 'إضافة من المالك';
-          else if (h.type === 'OWNER_REMOVE') action = 'سحب من المالك';
-          else action = h.type;
-          
-          const date = new Date(h.date);
-          return `-# **عملية ${action} بمبلغ ${Math.abs(h.amount)} في شهر ${date.getMonth() + 1} يوم ${date.getDate()} <:emoji_41:1471983856440836109>**`;
-        })
-        .join('\n') || 'لا يوجد سجل.';
+  const target = options.getUser('user') || user;
+  const userData = await getUserData(target.id);
+  
+  const history = userData.history
+    .slice(-5)
+    .reverse()
+    .map(h => {
+      const date = new Date(h.date);
+      const dateStr = `${date.getDate()}-${date.getMonth() + 1}`;
       
-      const embed = new EmbedBuilder()
-        .setDescription(`**السجل الخاص بـ ${user.username} <:emoji_41:1471619709936996406>**\n\n${history}`)
-        .setColor(0x2b2d31);
+      if (h.type === 'TRANSFER_SEND') 
+        return `-# **تحويل الى ${h.targetName || 'مستخدم'} في ${dateStr} <:emoji_41:1471619709936996406>**`;
       
-      return i.reply({ embeds: [embed] });
-    }
+      if (h.type === 'TRANSFER_RECEIVE') 
+        return `-# **استلام من ${h.targetName || 'مستخدم'} في ${dateStr} <:emoji_41:1471619709936996406>**`;
+      
+      if (h.type === 'WEEKLY_TAX') 
+        return `-# **خصم زكاة 2.5% = ${Math.abs(h.amount)} <:emoji_40:1471983905430311074>**`;
+      
+      if (h.type === 'OWNER_ADD') 
+        return `-# **إضافة رصيد ${h.amount} <:emoji_41:1471619709936996406>**`;
+      
+      if (h.type === 'OWNER_REMOVE') 
+        return `-# **سحب رصيد ${Math.abs(h.amount)} <:emoji_41:1471619709936996406>**`;
+      
+      return `-# **${h.type}: ${Math.abs(h.amount)} في ${dateStr} <:emoji_41:1471619709936996406>**`;
+    })
+    .join('\n') || 'لا يوجد سجل.';
+  
+  const embed = new EmbedBuilder()
+    .setDescription(`**السجل الخاص بـ ${target.username} <:emoji_41:1471619709936996406>**\n\n${history}`)
+    .setColor(0x2b2d31);
+  
+  return i.reply({ embeds: [embed] });
+}
 
     // أوامر الترحيب
     if (commandName === 'wel') {
