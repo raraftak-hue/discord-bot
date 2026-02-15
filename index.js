@@ -1,4 +1,4 @@
-// ==================== 🤖 البوت المتكامل - النسخة المعدلة 🤖 ====================
+ // ==================== 🤖 البوت المتكامل - النسخة المعدلة 🤖 ====================
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionsBitField } = require('discord.js');
 const { REST, Routes } = require('discord.js');
 const express = require('express');
@@ -317,192 +317,19 @@ const ownerCommands = [
           { name: 'channel', description: 'الروم', type: 7, required: true, channel_types: [0] }
         ]
       },
-      {
-        name: 'list',
-        description: 'عرض الإعدادات',
-        type: 1
-      }
+      { name: 'list', description: 'قائمة الرومات', type: 1 }
     ]
   }
 ];
 
 const allCommands = [...slashCommands, ...ownerCommands];
-
-// ==================== 💸 المتغيرات العامة ====================
 const pendingTransfers = new Map();
 const transferCooldowns = new Map();
 const activeNumberGames = new Map();
 
-// ==================== 👋 نظام الترحيب ====================
-async function sendWelcome(member, guildSettings) {
-  const { channelId, title, description, color, image } = guildSettings.welcomeSettings;
-  if (!channelId) return;
-  const channel = member.guild.channels.cache.get(channelId);
-  if (!channel) return;
-  const embed = new EmbedBuilder().setColor(parseInt(color, 16) || 0x2b2d31);
-  const processText = (text) => text ? text.replace(/{member}/g, `${member}`) : null;
-  const finalTitle = processText(title);
-  const finalDesc = processText(description);
-  if (finalTitle) embed.setTitle(finalTitle);
-  if (finalDesc) embed.setDescription(finalDesc);
-  if (image) embed.setImage(image);
-  if (!finalTitle && !finalDesc && !image) return;
-  channel.send({ embeds: [embed] }).catch(() => { });
-}
-
-// ==================== 🎮 دوال لعبة الأرقام ====================
-function getUserTag(userId) {
-  const user = client.users.cache.get(userId);
-  return user ? `<@${userId}>` : userId;
-}
-
-function findClosestGuess(guesses, secretNumber) {
-  if (!guesses || guesses.length === 0) return null;
-  let closest = guesses[0];
-  let minDiff = Math.abs(guesses[0].guess - secretNumber);
-  for (const g of guesses) {
-    const diff = Math.abs(g.guess - secretNumber);
-    if (diff < minDiff) { minDiff = diff; closest = g; }
-  }
-  return closest;
-}
-
-async function startNumberGameAfterDelay(msg, gameData, guildId) {
-  setTimeout(async () => {
-    const gameKey = `${guildId}-${msg.id}`;
-    const game = activeNumberGames.get(gameKey);
-    if (!game) return;
-    if (game.players.length === 0) {
-      await msg.edit({ content: `-# **اللعبة فشلت عشان مافي عدد كافي دخلها <:new_emoji:1388436095842385931> **`, components: [] }).catch(() => { });
-      activeNumberGames.delete(gameKey);
-      return;
-    }
-    game.started = true;
-    game.secretNumber = Math.floor(Math.random() * 100) + 1;
-    const playersList = game.players.map(p => getUserTag(p)).join(' ');
-    await msg.channel.send(`-# ** تم بدأ اللعبة كل واحد من المشاركين عنده جولة يخمن فيها الرقم و كل مشارك له ${game.players.length === 1 ? '5' : '3'} محاولات الا اذا فاز احد فيكم <:new_emoji:1388436089584226387> **\n-# المشاركين هم ${playersList}`).catch(() => { });
-    setTimeout(async () => { await msg.delete().catch(() => { }); }, 10000);
-    setTimeout(() => { startNextTurn(msg.channel, msg.id, guildId); }, 10000);
-  }, 20000);
-}
-
-async function startNextTurn(channel, msgId, guildId) {
-  const gameKey = `${guildId}-${msgId}`;
-  const game = activeNumberGames.get(gameKey);
-  if (!game || !game.started || game.winner) return;
-  const maxAttempts = game.players.length === 1 ? 5 : 3;
-  game.alivePlayers = game.players.filter(p => {
-    const attempts = game.attempts.get(p) || 0;
-    return attempts < maxAttempts;
-  });
-  if (game.alivePlayers.length === 0) {
-    const guesses = game.guesses || [];
-    const closest = findClosestGuess(guesses, game.secretNumber);
-    if (game.players.length === 1) {
-      await channel.send(`-# ** نفذت خلصت محاولاتك الـ 5 و الرقم الصح كان ${game.secretNumber} <:emoji_11:1467287898448724039> **`).catch(() => { });
-    } else {
-      const closestUser = closest ? getUserTag(closest.userId) : 'لا يوجد';
-      await channel.send(`-# ** الرقم الصح كان ${game.secretNumber} محد جابها صح و نفذت كل محاولات كل المشتركين بس اقرب واحد جاب تخمين هو ${closestUser} <:emoji_11:1467287898448724039> **`).catch(() => { });
-    }
-    activeNumberGames.delete(gameKey);
-    return;
-  }
-  if (game.currentTurnIndex >= game.alivePlayers.length) game.currentTurnIndex = 0;
-  const currentPlayer = game.alivePlayers[game.currentTurnIndex];
-  game.currentTurn = currentPlayer;
-  if (!game.canGuess) game.canGuess = new Map();
-  game.players.forEach(p => game.canGuess.set(p, false));
-  await channel.send(`-# **دور المشارك ${getUserTag(currentPlayer)} للتخمين **`).catch(() => { });
-  game.canGuess.set(currentPlayer, true);
-  if (game.timer) { clearTimeout(game.timer); game.timer = null; }
-  const timer = setTimeout(async () => {
-    const game = activeNumberGames.get(gameKey);
-    if (!game || !game.started || game.winner) return;
-    if (game.currentTurn === currentPlayer) {
-      game.canGuess?.set(currentPlayer, false);
-      await channel.send(`-# **المشارك ${getUserTag(currentPlayer)} انطرد عشان ما خمن قبل انتهاء الوقت <:s7_discord:1388214117365453062> **`).catch(() => { });
-      const attempts = game.attempts.get(currentPlayer) || 0;
-      const maxAttempts = game.players.length === 1 ? 5 : 3;
-      game.attempts.set(currentPlayer, attempts + maxAttempts);
-      game.currentTurnIndex++;
-      game.currentTurn = null;
-      setTimeout(() => { startNextTurn(channel, msgId, guildId); }, 8000);
-    }
-  }, 15000);
-  game.timer = timer;
-}
-
-// ==================== 🎁 دالة إنهاء القيف أوي ====================
-async function endGiveaway(giveaway) {
-  try {
-    const guild = await client.guilds.fetch(giveaway.guildId).catch(() => null);
-    if (!guild) return;
-    const channel = await guild.channels.fetch(giveaway.channelId).catch(() => null);
-    if (!channel) return;
-    const message = await channel.messages.fetch(giveaway.messageId).catch(() => null);
-    if (!message) return;
-    const participants = giveaway.participants;
-    if (participants.length === 0) {
-      await message.edit({ content: '❌ انتهى القيف أوي بدون مشاركين.', embeds: [], components: [] }).catch(() => { });
-    } else {
-      const winners = [];
-      const participantsCopy = [...participants];
-      for (let i = 0; i < Math.min(giveaway.winners, participantsCopy.length); i++) {
-        const winnerIdx = Math.floor(Math.random() * participantsCopy.length);
-        winners.push(`<@${participantsCopy.splice(winnerIdx, 1)[0]}>`);
-      }
-      const embed = EmbedBuilder.from(message.embeds[0]).setDescription(`-# **انتهى السحب على ${giveaway.prize}**\n-# **الفائزين هم** ${winners.join(', ')}`);
-      await message.edit({ embeds: [embed], components: [] }).catch(() => { });
-      await channel.send(`-# **مبروك فزتم بـ ${giveaway.prize} افتحوا تكت عشان تستلموها <:emoji_33:1401771703306027008> **\n-# **${winners.join(', ')}**`).catch(() => { });
-    }
-    giveaway.ended = true;
-    await giveaway.save();
-  } catch (e) { console.error('خطأ في إنهاء القيف:', e); }
-}
-
-// ==================== 📜 دالة معالجة السجل 📜 ====================
-async function formatHistory(history) {
-  const filtered = history
-    .filter(h => h.type !== 'STARTING_GIFT')
-    .slice(-3)
-    .reverse();
-
-  if (filtered.length === 0) return "-# **ما عندك اي تحويلات صارت <:emoji_32:1471962578895769611> **";
-
-  const lines = await Promise.all(filtered.map(async h => {
-    const date = new Date(h.date);
-    const dateStr = `${date.getDate()}-${date.getMonth() + 1}`;
-    
-    if (h.type === 'TRANSFER_SEND') {
-      const target = await client.users.fetch(h.targetUser).catch(() => null);
-      const name = target ? target.username : (h.targetName || 'مستخدم سابق');
-      return `-# ** تحويل الى ${name} في ${dateStr} <:emoji_41:1471619709936996406>**`;
-    } else if (h.type === 'TRANSFER_RECEIVE') {
-      const target = await client.users.fetch(h.targetUser).catch(() => null);
-      const name = target ? target.username : (h.targetName || 'مستخدم سابق');
-      return `-# ** استلام من ${name} في ${dateStr} <:emoji_41:1471983856440836109> **`;
-    } else if (h.type === 'WEEKLY_TAX') {
-      return `-# ** خصم زكاة 2.5% = ${Math.abs(h.amount)} في ${dateStr} <:emoji_40:1471983905430311074>**`;
-    } else {
-      let action = h.type === 'OWNER_ADD' ? 'إضافة من المالك' : (h.type === 'OWNER_REMOVE' ? 'سحب من المالك' : h.type);
-      return `-# **عملية ${action} بمبلغ ${Math.abs(h.amount)} في ${dateStr} <:emoji_41:1471983856440836109>**`;
-    }
-  }));
-
-  return lines.join('\n');
-}
-
-// ==================== 🤖 Client Ready ====================
+// ==================== 🚀 بدء التشغيل 🚀 ====================
 client.once('ready', async () => {
-  console.log(`✅ ${client.user.tag} أونلاين!`);
-  
-  // 1️⃣ مسح السجل القديم لجميع المستخدمين (قم بتعليق هذا الكود بعد أول تشغيل)
-  /*
-  try {
-    await User.updateMany({}, { $set: { history: [] } });
-    console.log('🧹 تم مسح سجل جميع المستخدمين بنجاح!');
-  } catch (e) { console.error('❌ فشل مسح السجل:', e); }
-  */
+  console.log(`✅ تم تسجيل الدخول بـ ${client.user.tag}`);
 
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   try {
@@ -518,20 +345,37 @@ client.once('ready', async () => {
     } else { await endGiveaway(g); }
   }
 
-  cron.schedule('0 * * * *', async () => {
+  // الكرون جوب المعدل (يعمل كل 6 ساعات)
+  cron.schedule('0 */6 * * *', async () => {
     const settings = await getGlobalSettings();
     const now = new Date();
+    const oneDayFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
     for (const sub of settings.subscriptions) {
-      if (sub.status === 'active' && sub.expiresAt < now) {
-        sub.status = 'expired'; await settings.save();
-        try {
-          const guild = await client.guilds.fetch(sub.guildId).catch(() => null);
-          if (guild) {
-            const owner = await client.users.fetch(guild.ownerId).catch(() => null);
-            if (owner) await owner.send(`-# **انتهى اشتراككم في خدمتنا يرجى مراجعة الخادم الأم لتجديد الاشتراك <:new_emoji:1388436095842385931> **`);
-            await guild.leave();
-          }
-        } catch (e) { }
+      if (sub.status === 'active') {
+        // تنبيه قبل 24 ساعة
+        if (sub.expiresAt <= oneDayFromNow && sub.expiresAt > now) {
+          try {
+            const owner = await client.users.fetch(sub.ownerId).catch(() => null);
+            if (owner) {
+              await owner.send(`-# **عزيزي المشترك اشتراكك في بوتنا المتكامل وشك على الانتهاء المدة الباقية لك 24 ساعة <:emoji_84:1389404919672340592> **\n-# **سوف يخرج البوت من الخادم ان لم تتجدد الباقة <:emoji_84:1389404919672340592> **`).catch(() => {});
+            }
+          } catch (e) {}
+        }
+
+        // انتهاء الاشتراك
+        if (sub.expiresAt < now) {
+          sub.status = 'expired';
+          await settings.save();
+          try {
+            const guild = await client.guilds.fetch(sub.guildId).catch(() => null);
+            if (guild) {
+              const owner = await client.users.fetch(guild.ownerId).catch(() => null);
+              if (owner) await owner.send(`-# **انتهى اشتراككم في خدمتنا يرجى مراجعة الخادم الأم لتجديد الاشتراك <:new_emoji:1388436095842385931> **`).catch(() => {});
+              await guild.leave().catch(() => {});
+            }
+          } catch (e) {}
+        }
       }
     }
   });
@@ -673,7 +517,6 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // معالجة التخمينات والحذف التلقائي (نفس المنطق السابق)
   let activeGame = null; let gameKey = null;
   for (const [key, game] of activeNumberGames.entries()) {
     if (key.startsWith(message.guild.id) && game.started && game.alivePlayers?.includes(message.author.id) && game.currentTurn === message.author.id && game.canGuess?.get(message.author.id) === true) {
@@ -693,8 +536,6 @@ client.on('messageCreate', async (message) => {
         activeNumberGames.delete(gameKey);
       } else {
         const hint = guess > activeGame.secretNumber ? 'أصغر' : 'أكبر';
-        await message.channel.send(`-# ** خطأ الرقم ${hint} من ${guess} <:emoji_11:1467287898448724039> **`).catch(() => { });
-        activeGame.currentTurnIndex++; activeGame.currentTurn = null;
         setTimeout(() => { startNextTurn(message.channel, gameKey.split('-')[1], message.guild.id); }, 3000);
       }
       return;
@@ -767,7 +608,6 @@ client.on('interactionCreate', async (i) => {
       return i.reply({ embeds: [embed] });
     }
 
-    // أوامر الترحيب والتذاكر والأرقام والقيف أوي (نفس المنطق السابق)
     if (commandName === 'wel') {
       const sub = options.getSubcommand(); const settings = await getSettings(i.guild.id);
       if (sub === 'ch') { settings.welcomeSettings.channelId = options.getChannel('room').id; await settings.save(); return i.reply({ content: '✅ تم تعيين روم الترحيب', ephemeral: true }); }
@@ -860,7 +700,7 @@ client.on('interactionCreate', async (i) => {
         let guild; try { guild = await client.guilds.fetch(serverId); } catch (e) { return i.reply({ content: `-# ** البوت غير متواجد في هذا السيرفر <:2thumbup:1467287897429512396> **`, ephemeral: true }); }
         let expiresAt = new Date(); let durationText = '';
         switch (duration) {
-          case 'trial': expiresAt.setDate(expiresAt.getDate() + 3); durationText = 'تجريبي (3 أيام)'; break;
+          case 'trial': expiresAt.setDate(expiresAt.getDate() + 3); durationText = 'تجريبي'; break;
           case '7d': expiresAt.setDate(expiresAt.getDate() + 7); durationText = 'اسبوع'; break;
           case '30d': expiresAt.setDate(expiresAt.getDate() + 30); durationText = 'شهر'; break;
           case '60d': expiresAt.setDate(expiresAt.getDate() + 60); durationText = 'شهرين'; break;
@@ -869,12 +709,40 @@ client.on('interactionCreate', async (i) => {
         settings.subscriptions = settings.subscriptions.filter(s => s.guildId !== serverId);
         settings.subscriptions.push({ guildId: serverId, guildName: guild.name, ownerId: guild.ownerId, duration: durationText, expiresAt, status: 'active' });
         if (!settings.allowedGuilds.includes(serverId)) settings.allowedGuilds.push(serverId);
-        await settings.save(); return i.reply({ content: `-# ** تم اضافة البوت للسيرفر بنجاح <:2thumbup:1467287897429512396> **`, ephemeral: true });
+        await settings.save();
+
+        // إرسال رسالة للأونر على الخاص عند التفعيل
+        const owner = await client.users.fetch(guild.ownerId).catch(() => null);
+        if (owner) {
+          await owner.send(`-# **تم الاشتراك في خدمتة البوت المتكامل في باقة "${durationText}" سوف يتم اعلامك قبل يوم من انتهاء الاشتراك <:emoji_38:1401773302619439147> **`).catch(() => {});
+        }
+
+        return i.reply({ content: `-# ** تم تفعيل الاشتراك للسيرفر ${guild.name} بنجاح لمدة ${durationText} <:emoji_41:1471619709936996406> **`, ephemeral: true });
       }
+
       if (sub === 'remove') {
-        const serverId = options.getString('id'); settings.subscriptions = settings.subscriptions.filter(s => s.guildId !== serverId);
+        const serverId = options.getString('id');
+        const subToRemove = settings.subscriptions.find(s => s.guildId === serverId);
+        const guildName = subToRemove ? subToRemove.guildName : "غير معروف";
+        const ownerId = subToRemove ? subToRemove.ownerId : null;
+
+        // إرسال رسالة للأونر على الخاص قبل الحذف
+        if (ownerId) {
+          const owner = await client.users.fetch(ownerId).catch(() => null);
+          if (owner) {
+            await owner.send(`-# **تم إلغاء اشتراككم في خدمة البوت المتكامل للسيرفر ${guildName} <:emoji_464:1388211597197050029> **`).catch(() => {});
+          }
+        }
+
+        settings.subscriptions = settings.subscriptions.filter(s => s.guildId !== serverId);
         settings.allowedGuilds = settings.allowedGuilds.filter(id => id !== serverId);
-        await settings.save(); try { const guild = await client.guilds.fetch(serverId); await guild.leave(); } catch (e) { }
+        await settings.save();
+
+        try { 
+          const guild = await client.guilds.fetch(serverId); 
+          await guild.leave(); 
+        } catch (e) { }
+
         return i.reply({ content: `-# ** تم حذف البوت من السيرفر بنجاح <:emoji_464:1388211597197050029> **`, ephemeral: true });
       }
     }
@@ -934,35 +802,125 @@ client.on('interactionCreate', async (i) => {
   }
 });
 
+// حدث guildCreate المعدل (فترة سماح 24 ساعة)
 client.on('guildCreate', async (guild) => {
   const globalSettings = await getGlobalSettings(); 
   const subscription = globalSettings.subscriptions.find(s => s.guildId === guild.id);
   
   if (!subscription || subscription.status !== 'active') {
-    const channel = guild.channels.cache.filter(ch => 
-      ch.type === ChannelType.GuildText && 
-      ch.permissionsFor(guild.members.me).has(PermissionsBitField.Flags.SendMessages)
-    ).first();
+    const messageContent = "-# **هذا البوت خاص و لن يعمل في خادمك الا اذا تواصلت مع سيرفر المطور لكي يسمح لك مجانا او لا <:emoji_41:1471619709936996406> **\n-# **البوت سوف يخرج نفسه من السيرفر في غضون ٢٤ ساعة <:emoji_32:1471962578895769611> **";
+    
+    const owner = await client.users.fetch(guild.ownerId).catch(() => null);
+    let sentPrivate = false;
+    if (owner) {
+      try {
+        await owner.send(messageContent);
+        sentPrivate = true;
+      } catch (e) { sentPrivate = false; }
+    }
 
-    if (channel) {
-      await channel.send({ 
-        embeds: [
-          new EmbedBuilder()
-            .setColor(0x2b2d31)
-            .setDescription("-# **هذا البوت خاص و لن يعمل في خادمك الا اذا تواصلت مع سيرفر المطور لكي يسمح لك مجانا او لا <:emoji_41:1471619709936996406> **\n\n-# **البوت سوف يخرج نفسه من السيرفر في غضون ١٠ ثوان <:emoji_32:1471962578895769611> **")
-        ] 
-      });
+    if (!sentPrivate) {
+      const channel = guild.channels.cache.find(ch => 
+        ch.type === ChannelType.GuildText && 
+        ch.permissionsFor(guild.members.me).has(PermissionsBitField.Flags.SendMessages)
+      );
+      if (channel) await channel.send(messageContent).catch(() => {});
     }
     
-    setTimeout(() => guild.leave(), 10000);
+    setTimeout(async () => {
+      const currentSettings = await getGlobalSettings();
+      const currentSub = currentSettings.subscriptions.find(s => s.guildId === guild.id);
+      if (!currentSub || currentSub.status !== 'active') {
+        await guild.leave().catch(() => {});
+      }
+    }, 24 * 60 * 60 * 1000);
   }
 });
-
 
 client.on('guildMemberAdd', async (member) => {
   const globalSettings = await getGlobalSettings(); if (!globalSettings.allowedGuilds.includes(member.guild.id)) return;
   const settings = await getSettings(member.guild.id); await sendWelcome(member, settings);
 });
+
+// ==================== 🛠️ وظائف إضافية ====================
+async function formatHistory(history) {
+  if (history.length === 0) return 'لا يوجد سجل معاملات.';
+  return history.slice(-5).map(h => {
+    const date = new Date(h.date).toLocaleDateString('ar-EG');
+    if (h.type === 'TRANSFER_SEND') return `-# **تحويل لـ ${h.targetName}: ${h.amount} دينار (${date})**`;
+    if (h.type === 'TRANSFER_RECEIVE') return `-# **استلام من ${h.targetName}: ${h.amount} دينار (${date})**`;
+    if (h.type === 'OWNER_ADD') return `-# **إضافة من المطور: ${h.amount} دينار (${date})**`;
+    if (h.type === 'OWNER_REMOVE') return `-# **سحب من المطور: ${h.amount} دينار (${date})**`;
+    if (h.type === 'WEEKLY_TAX') return `-# **ضريبة أسبوعية: ${h.amount} دينار (${date})**`;
+    return `-# **عملية أخرى: ${h.amount} دينار (${date})**`;
+  }).join('\n');
+}
+
+async function sendWelcome(member, settings) {
+  const channel = member.guild.channels.cache.get(settings.welcomeSettings.channelId);
+  if (!channel) return;
+  const embed = new EmbedBuilder()
+    .setTitle(settings.welcomeSettings.title?.replace(/{user}/g, member.user.username) || 'أهلاً بك!')
+    .setDescription(settings.welcomeSettings.description?.replace(/{user}/g, `${member}`) || `نورت السيرفر يا ${member}`)
+    .setColor(parseInt(settings.welcomeSettings.color, 16) || 0x2b2d31);
+  if (settings.welcomeSettings.image) embed.setImage(settings.welcomeSettings.image);
+  await channel.send({ embeds: [embed] }).catch(() => { });
+}
+
+async function endGiveaway(g) {
+  const giveaway = await Giveaway.findById(g._id);
+  if (!giveaway || giveaway.ended) return;
+  giveaway.ended = true; await giveaway.save();
+  const guild = await client.guilds.fetch(giveaway.guildId).catch(() => null);
+  if (!guild) return;
+  const channel = guild.channels.cache.get(giveaway.channelId);
+  if (!channel) return;
+  if (giveaway.participants.length === 0) return channel.send(`-# **انتهى القيف أوي على ${giveaway.prize} ولكن لا يوجد مشاركين <:emoji_84:1389404919672340592> **`);
+  const winners = [];
+  const participants = [...giveaway.participants];
+  for (let i = 0; i < Math.min(giveaway.winners, participants.length); i++) {
+    const index = Math.floor(Math.random() * participants.length);
+    winners.push(participants.splice(index, 1)[0]);
+  }
+  channel.send(`-# **مبروك للفائزين بالقيف أوي على ${giveaway.prize}: ${winners.map(w => `<@${w}>`).join(', ')} <:emoji_33:1401771703306027008> **`);
+}
+
+function startNumberGameAfterDelay(msg, game, guildId) {
+  setTimeout(async () => {
+    if (game.players.length < 2) {
+      await msg.edit({ content: `-# **اللعبة فشلت لعدم وجود لاعبين كافيين <:new_emoji:1388436095842385931> **`, components: [] }).catch(() => { });
+      activeNumberGames.delete(`${guildId}-${msg.id}`);
+      return;
+    }
+    game.started = true;
+    game.secretNumber = Math.floor(Math.random() * 100) + 1;
+    game.alivePlayers = [...game.players];
+    game.currentTurnIndex = 0;
+    game.currentTurn = game.alivePlayers[0];
+    await msg.edit({ content: `-# **بدأت اللعبة! الرقم السري بين 1 و 100. الدور الآن على <@${game.currentTurn}> <:new_emoji:1388436089584226387> **`, components: [] }).catch(() => { });
+    startNextTurn(msg.channel, msg.id, guildId);
+  }, 30000);
+}
+
+async function startNextTurn(channel, msgId, guildId) {
+  const game = activeNumberGames.get(`${guildId}-${msgId}`);
+  if (!game || !game.started || game.winner) return;
+  game.canGuess.set(game.currentTurn, true);
+  game.timer = setTimeout(async () => {
+    const currentPlayer = game.currentTurn;
+    game.alivePlayers = game.alivePlayers.filter(p => p !== currentPlayer);
+    if (game.alivePlayers.length < 1) {
+      await channel.send(`-# **انتهت اللعبة! الكل خسر وما حد جاب الرقم <:new_emoji:1388436095842385931> الرقم كان ${game.secretNumber}**`).catch(() => { });
+      activeNumberGames.delete(`${guildId}-${msgId}`);
+      return;
+    }
+    await channel.send(`-# **انتهى وقت <@${currentPlayer}> وطلع من اللعبة <:emoji_84:1389404919672340592> **`).catch(() => { });
+    game.currentTurnIndex = game.currentTurnIndex % game.alivePlayers.length;
+    game.currentTurn = game.alivePlayers[game.currentTurnIndex];
+    startNextTurn(channel, msgId, guildId);
+  }, 15000);
+  await channel.send(`-# **الدور الآن على <@${game.currentTurn}> معك 15 ثانية للتخمين <:new_emoji:1388436089584226387> **`).catch(() => { });
+}
 
 app.get('/', (req, res) => res.send('Bot is Live!'));
 app.listen(3000, () => client.login(process.env.TOKEN));
