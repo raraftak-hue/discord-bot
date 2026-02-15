@@ -497,12 +497,12 @@ client.once('ready', async () => {
   console.log(`✅ ${client.user.tag} أونلاين!`);
   
   // 1️⃣ مسح السجل القديم لجميع المستخدمين (قم بتعليق هذا الكود بعد أول تشغيل)
-  
+  /*
   try {
     await User.updateMany({}, { $set: { history: [] } });
     console.log('🧹 تم مسح سجل جميع المستخدمين بنجاح!');
   } catch (e) { console.error('❌ فشل مسح السجل:', e); }
-  
+  */
 
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   try {
