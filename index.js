@@ -1057,16 +1057,16 @@ client.on('interactionCreate', async (i) => {
     }
 
     if (commandName === 'top') {
-      const topUsers = await User.find().sort({ balance: -1 }).limit(5);
-      const topMsg = topUsers.map((u, idx) => `-# **\u200F${idx + 1}. \u202B<@${u.userId}>\u202C - ${u.balance} دينار**`).join('\n');
-      
-      const embed = new EmbedBuilder()
-        .setTitle('الطبقة الارستقراطية <:y_coroa:1404576666105417871>')
-        .setDescription(topMsg)
+    const topUsers = await User.find().sort({ balance: -1 }).limit(5);
+    const topMsg = topUsers.map((u, idx) => `-# **\u200F${idx + 1}. \u202B<@${u.userId}>\u202C - ${u.balance} دينار**`).join('\n');
+
+    // ✅ التعديل هنا: العنوان في الـ description
+    const embed = new EmbedBuilder()
+        .setDescription(`**الطبقة الارستقراطية <:y_coroa:1404576666105417871>**\n\n${topMsg}`)
         .setColor(0x2b2d31);
-      
-      return i.reply({ embeds: [embed] });
-    }
+
+    return i.reply({ embeds: [embed] });
+}
 
     // ==================== 📝 أوامر السجل ====================
 if (commandName === 'hist') {
