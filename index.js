@@ -783,34 +783,73 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  if (command === 'سجل') {
+  // ==================== أوامر السجل النصية ====================
+if (command === 'سجل') {
     const user = message.mentions.users.first() || message.author;
     const userData = await getUserData(user.id);
-    
-    const history = userData.history
-      .slice(-5)
-      .reverse()
-      .map(h => {
-        let action = '';
-        if (h.type === 'TRANSFER_SEND') action = `تحويل إلى المستخدم ${h.targetName || 'مستخدم'}`;
-        else if (h.type === 'TRANSFER_RECEIVE') action = `استلام من المستخدم ${h.targetName || 'مستخدم'}`;
-        else if (h.type === 'WEEKLY_TAX') action = 'زكاة أسبوعية';
-        else if (h.type === 'OWNER_ADD') action = 'إضافة من المالك';
-        else if (h.type === 'OWNER_REMOVE') action = 'سحب من المالك';
-        else action = h.type;
-        
-        const date = new Date(h.date);
-        return `-# **عملية ${action} بمبلغ ${Math.abs(h.amount)} في شهر ${date.getMonth() + 1} يوم ${date.getDate()} <:emoji_41:1471983856440836109>**`;
-      })
-      .join('\n') || 'لا يوجد سجل.';
-    
+    const currentYear = new Date().getFullYear();
+
+    // تصفية: السنة الحالية + تجاهل هدايا الترحيب
+    const thisYearHistory = userData.history.filter(h => {
+        const hDate = new Date(h.date);
+        return hDate.getFullYear() === currentYear && h.type !== 'STARTING_GIFT';
+    });
+
+    // ✅ 1. إذا ما في تحويلات بالسنة الحالية
+    if (thisYearHistory.length === 0) {
+        const embed = new EmbedBuilder()
+            .setDescription(`-# **ما عندك اي تحويلات صارت في ذي السنة <:emoji_32:1471962578895769611> **`)
+            .setColor(0x2b2d31);
+        return message.channel.send({ embeds: [embed] });
+    }
+
+    // تجهيز البيانات مع جلب الأسماء القديمة
+    const historyPromises = thisYearHistory
+        .slice(-5)
+        .reverse()
+        .map(async (h) => {
+            const date = new Date(h.date);
+            const dateStr = `${date.getDate()}-${date.getMonth() + 1}`;
+
+            let targetName = h.targetName;
+
+            // ✅ 2. محاولة جلب الاسم للتحويلات القديمة
+            if (!targetName && h.targetUser) {
+                try {
+                    const targetUser = await client.users.fetch(h.targetUser).catch(() => null);
+                    targetName = targetUser ? targetUser.username : 'مستخدم سابق';
+                } catch {
+                    targetName = 'مستخدم سابق';
+                }
+            } else if (!targetName) {
+                targetName = 'مستخدم سابق';
+            }
+
+            // تنسيق الرسائل حسب الطلب
+            if (h.type === 'TRANSFER_SEND')
+                return `-# ** تحويل الى ${targetName} في ${dateStr} <:emoji_41:1471619709936996406>**`;
+            if (h.type === 'TRANSFER_RECEIVE')
+                return `-# ** استلام من ${targetName} في ${dateStr} <:emoji_41:1471983856440836109> **`;
+            if (h.type === 'WEEKLY_TAX')
+                return `-# ** خصم زكاة 2.5% = ${Math.abs(h.amount)} في ${dateStr} <:emoji_40:1471983905430311074>**`;
+            if (h.type === 'OWNER_ADD')
+                return `-# ** اضافة من المالك ${Math.abs(h.amount)} في ${dateStr} <:emoji_41:1471619709936996406>**`;
+            if (h.type === 'OWNER_REMOVE')
+                return `-# ** سحب من المالك ${Math.abs(h.amount)} في ${dateStr} <:emoji_41:1471619709936996406>**`;
+            return '';
+        });
+
+    const historyResults = await Promise.all(historyPromises);
+    const history = historyResults.filter(text => text !== '').join('\n');
+
+    // ✅ 3. إرسال السجل
     const embed = new EmbedBuilder()
-      .setDescription(`**السجل الخاص بـ ${user.username} <:emoji_41:1471619709936996406>**\n\n${history}`)
-      .setColor(0x2b2d31);
-    
+        .setDescription(`**السجل الخاص بـ ${user.username} <:emoji_41:1471619709936996406>**\n\n${history}`)
+        .setColor(0x2b2d31);
+
     message.channel.send({ embeds: [embed] });
     return;
-  }
+}
 
   if (command === 'ارقام') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
@@ -1029,30 +1068,71 @@ client.on('interactionCreate', async (i) => {
       return i.reply({ embeds: [embed] });
     }
 
-    if (commandName === 'hist') {
-      const history = userData.history
-        .slice(-5)
+    // ==================== 📝 أوامر السجل ====================
+if (commandName === 'hist') {
+    const currentYear = new Date().getFullYear();
+
+    // تصفية: السنة الحالية + تجاهل هدايا الترحيب
+    const thisYearHistory = userData.history.filter(h => {
+        const hDate = new Date(h.date);
+        return hDate.getFullYear() === currentYear && h.type !== 'STARTING_GIFT';
+    });
+
+    // ✅ 1. إذا ما في تحويلات بالسنة الحالية
+    if (thisYearHistory.length === 0) {
+        const embed = new EmbedBuilder()
+            .setDescription(`-# **ما عندك اي تحويلات صارت في ذي السنة <:emoji_32:1471962578895769611> **`)
+            .setColor(0x2b2d31);
+        return i.reply({ embeds: [embed] });
+    }
+
+    // تجهيز البيانات مع جلب الأسماء القديمة
+    const historyPromises = thisYearHistory
+        .slice(-5) // آخر 5 عمليات
         .reverse()
-        .map(h => {
-          let action = '';
-          if (h.type === 'TRANSFER_SEND') action = `تحويل إلى المستخدم ${h.targetName || 'مستخدم'}`;
-          else if (h.type === 'TRANSFER_RECEIVE') action = `استلام من المستخدم ${h.targetName || 'مستخدم'}`;
-          else if (h.type === 'WEEKLY_TAX') action = 'زكاة أسبوعية';
-          else if (h.type === 'OWNER_ADD') action = 'إضافة من المالك';
-          else if (h.type === 'OWNER_REMOVE') action = 'سحب من المالك';
-          else action = h.type;
-          
-          const date = new Date(h.date);
-          return `-# **عملية ${action} بمبلغ ${Math.abs(h.amount)} في شهر ${date.getMonth() + 1} يوم ${date.getDate()} <:emoji_41:1471983856440836109>**`;
-        })
-        .join('\n') || 'لا يوجد سجل.';
-      
-      const embed = new EmbedBuilder()
+        .map(async (h) => {
+            const date = new Date(h.date);
+            const dateStr = `${date.getDate()}-${date.getMonth() + 1}`; // صيغة يوم-شهر
+
+            let targetName = h.targetName;
+
+            // ✅ 2. إذا كان التحويل قديم وما فيه اسم، نجربه من API ديسكورد
+            if (!targetName && h.targetUser) {
+                try {
+                    const targetUser = await client.users.fetch(h.targetUser).catch(() => null);
+                    targetName = targetUser ? targetUser.username : 'مستخدم سابق';
+                } catch {
+                    targetName = 'مستخدم سابق';
+                }
+            } else if (!targetName) {
+                targetName = 'مستخدم سابق';
+            }
+
+            // تنسيق الرسائل حسب الطلب
+            if (h.type === 'TRANSFER_SEND')
+                return `-# ** تحويل الى ${targetName} في ${dateStr} <:emoji_41:1471619709936996406>**`;
+            if (h.type === 'TRANSFER_RECEIVE')
+                return `-# ** استلام من ${targetName} في ${dateStr} <:emoji_41:1471983856440836109> **`;
+            if (h.type === 'WEEKLY_TAX')
+                return `-# ** خصم زكاة 2.5% = ${Math.abs(h.amount)} في ${dateStr} <:emoji_40:1471983905430311074>**`;
+            if (h.type === 'OWNER_ADD')
+                return `-# ** اضافة من المالك ${Math.abs(h.amount)} في ${dateStr} <:emoji_41:1471619709936996406>**`;
+            if (h.type === 'OWNER_REMOVE')
+                return `-# ** سحب من المالك ${Math.abs(h.amount)} في ${dateStr} <:emoji_41:1471619709936996406>**`;
+            return ''; // تجاهل الأنواع الأخرى
+        });
+
+    // انتظار جميع النتائج
+    const historyResults = await Promise.all(historyPromises);
+    const history = historyResults.filter(text => text !== '').join('\n');
+
+    // ✅ 3. إرسال السجل (مع العنوان في الوصف)
+    const embed = new EmbedBuilder()
         .setDescription(`**السجل الخاص بـ ${user.username} <:emoji_41:1471619709936996406>**\n\n${history}`)
         .setColor(0x2b2d31);
-      
-      return i.reply({ embeds: [embed] });
-    }
+
+    return i.reply({ embeds: [embed] });
+}
 
     // أوامر الترحيب
     if (commandName === 'wel') {
