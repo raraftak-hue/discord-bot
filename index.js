@@ -935,15 +935,29 @@ client.on('interactionCreate', async (i) => {
 });
 
 client.on('guildCreate', async (guild) => {
-  const globalSettings = await getGlobalSettings(); const subscription = globalSettings.subscriptions.find(s => s.guildId === guild.id);
+  const globalSettings = await getGlobalSettings(); 
+  const subscription = globalSettings.subscriptions.find(s => s.guildId === guild.id);
+  
   if (!subscription || subscription.status !== 'active') {
-    const channel = guild.channels.cache.filter(ch => ch.type === ChannelType.GuildText && ch.permissionsFor(guild.members.me).has(PermissionsBitField.Flags.SendMessages)).first();
-    if (channel) await channel.send({ embeds: [new EmbedBuilder().setColor(0x2b2d31).setDescription("-# **هذا البوت خاص و لن يعمل في خادمك الا اذا تواصلت مع سيرفر المطور لكي يسمح لك مجانا او لا <:emoji_41:1471619709936996406> **
+    const channel = guild.channels.cache.filter(ch => 
+      ch.type === ChannelType.GuildText && 
+      ch.permissionsFor(guild.members.me).has(PermissionsBitField.Flags.SendMessages)
+    ).first();
 
--# **البوت سوف يخرج نفسه من السيرفر في غضون ١٠ ثوان <:emoji_32:1471962578895769611> **")] });
+    if (channel) {
+      await channel.send({ 
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x2b2d31)
+            .setDescription("-# **هذا البوت خاص و لن يعمل في خادمك الا اذا تواصلت مع سيرفر المطور لكي يسمح لك مجانا او لا <:emoji_41:1471619709936996406> **\n\n-# **البوت سوف يخرج نفسه من السيرفر في غضون ١٠ ثوان <:emoji_32:1471962578895769611> **")
+        ] 
+      });
+    }
+    
     setTimeout(() => guild.leave(), 10000);
   }
 });
+
 
 client.on('guildMemberAdd', async (member) => {
   const globalSettings = await getGlobalSettings(); if (!globalSettings.allowedGuilds.includes(member.guild.id)) return;
