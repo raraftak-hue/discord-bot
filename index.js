@@ -1,4 +1,3 @@
-// ==================== 🤖 البوت المتكامل - النسخة النهائية 🤖 ====================
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionsBitField } = require('discord.js');
 const { REST, Routes } = require('discord.js');
 const express = require('express');
@@ -416,7 +415,6 @@ async function startNextTurn(channel, msgId, guildId) {
   if (!game.canGuess) game.canGuess = new Map();
   game.players.forEach(p => game.canGuess.set(p, false));
   
-  // الرسالة الأصلية: دور المشارك @فلان للتخمين
   await channel.send(`-# **دور المشارك ${getUserTag(currentPlayer)} للتخمين **`).catch(() => { });
   game.canGuess.set(currentPlayer, true);
   
@@ -545,45 +543,30 @@ async function endGiveaway(giveaway) {
 client.once('ready', async () => {
   console.log(`✅ تم تسجيل الدخول بـ ${client.user.tag}`);
   
-  /* 
-  // كود مسح السجل (اختياري - شيل التعليق إذا تبي تمسح السجل)
+  const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   try {
-    await User.updateMany({}, { $set: { history: [] } });
-    console.log('🧹 تم مسح سجل جميع المستخدمين بنجاح!');
-  } catch (e) { console.error('❌ فشل مسح السجل:', e); }
-  */
+    await rest.put(Routes.applicationCommands(client.user.id), { body: allCommands });
+    console.log('✅ تم تسجيل جميع الأوامر بنجاح!');
+  } catch (e) { console.error(e); }
 
   const now = new Date();
+  const activeGiveaways = await Giveaway.find({ ended: false, endTime: { $gt: now } });
+  for (const g of activeGiveaways) {
+    const timeLeft = g.endTime.getTime() - now.getTime();
+    setTimeout(() => endGiveaway(g), timeLeft);
+    console.log(`🔄 تم استعادة قيف: ${g.prize}`);
+  }
 
-// القيفات الجارية
-const activeGiveaways = await Giveaway.find({ 
-  ended: false, 
-  endTime: { $gt: now } 
-});
+  const endedGiveaways = await Giveaway.find({ ended: false, endTime: { $lt: now } });
+  for (const g of endedGiveaways) {
+    await endGiveaway(g);
+  }
 
-for (const g of activeGiveaways) {
-  const timeLeft = g.endTime.getTime() - now.getTime();
-  setTimeout(() => endGiveaway(g), timeLeft);
-  console.log(`🔄 تم استعادة قيف: ${g.prize}`);
-}
-
-// القيفات المنتهية
-const endedGiveaways = await Giveaway.find({ 
-  ended: false, 
-  endTime: { $lt: now } 
-});
-
-for (const g of endedGiveaways) {
-  await endGiveaway(g);
-}
-
-  // ==================== ⏰ التحقق من الاشتراكات كل ساعة ====================
   cron.schedule('0 * * * *', async () => {
     const settings = await getGlobalSettings();
     const now = new Date();
     const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
     
-    // حذف السيرفرات المنتهية نهائياً بعد 10 أيام
     const initialSubCount = settings.subscriptions.length;
     settings.subscriptions = settings.subscriptions.filter(sub => {
       if (sub.status === 'expired' && sub.expiresAt < tenDaysAgo) {
@@ -599,7 +582,6 @@ for (const g of endedGiveaways) {
       if (sub.status === 'active') {
         const timeLeft = sub.expiresAt.getTime() - now.getTime();
         
-        // تحذير قبل 24 ساعة
         if (timeLeft <= 24 * 60 * 60 * 1000 && timeLeft > 0 && !sub.warned24h) {
           try {
             const guild = await client.guilds.fetch(sub.guildId).catch(() => null);
@@ -617,7 +599,6 @@ for (const g of endedGiveaways) {
           } catch (e) {}
         }
         
-        // عند انتهاء الاشتراك
         if (sub.expiresAt < now) {
           sub.status = 'expired';
           await settings.save();
@@ -625,7 +606,6 @@ for (const g of endedGiveaways) {
           try {
             const guild = await client.guilds.fetch(sub.guildId).catch(() => null);
             if (guild) {
-              // إرسال رسالة للأونر
               const owner = await client.users.fetch(guild.ownerId).catch(() => null);
               if (owner) {
                 await owner.send(
@@ -633,7 +613,6 @@ for (const g of endedGiveaways) {
                 );
               }
               
-              // إرسال رسالة في السيرفر قبل المغادرة
               const channel = guild.channels.cache.find(ch => 
                 ch.type === ChannelType.GuildText && 
                 ch.permissionsFor(guild.members.me).has(PermissionsBitField.Flags.SendMessages)
@@ -645,7 +624,6 @@ for (const g of endedGiveaways) {
                 );
               }
               
-              // مغادرة السيرفر
               await guild.leave();
               console.log(`🚫 غادرت سيرفر منتهي الاشتراك: ${guild.name}`);
             }
@@ -655,7 +633,6 @@ for (const g of endedGiveaways) {
     }
   });
 
-  // ==================== 💰 الزكاة الأسبوعية (كل جمعة) ====================
   cron.schedule('0 0 * * 5', async () => {
     console.log("⏰ بدأ تحصيل الزكاة الأسبوعية...");
     const users = await User.find({ balance: { $gt: 50 } });
@@ -677,7 +654,6 @@ for (const g of endedGiveaways) {
   });
 });
 
-// ==================== 📝 معالج الرسائل ====================
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
   const globalSettings = await getGlobalSettings();
@@ -685,7 +661,6 @@ client.on('messageCreate', async (message) => {
   const args = message.content.trim().split(/\s+/);
   const command = args[0];
 
-  // ==================== أوامر الأعضاء النصية ====================
   if (command === 'اوامر') {
     const embed = new EmbedBuilder()
       .setColor(0x2b2d31)
@@ -838,7 +813,6 @@ client.on('messageCreate', async (message) => {
     if (found) return message.channel.send(`-# ** تم ايقاف اللعبة <:new_emoji:1388436095842385931> **`);
   }
 
-  // ==================== أوامر المالك النصية ====================
   if (command === 'زد' && message.author.id === OWNER_ID) {
     const amount = parseFloat(args[1]);
     if (isNaN(amount) || amount <= 0) return message.channel.send(`-# **القيمة غير صحيحه <:__:1467633552408576192> **`);
@@ -860,7 +834,6 @@ client.on('messageCreate', async (message) => {
     return message.channel.send(`-# **تم سحب الرصيد من حسابك <:emoji_41:1471619709936996406> **`);
   }
 
-  // ==================== معالجة التخمينات - الكود الأصلي مع الرسائل الأصلية ====================
   let activeGame = null; 
   let gameKey = null;
   for (const [key, game] of activeNumberGames.entries()) {
@@ -883,25 +856,20 @@ client.on('messageCreate', async (message) => {
       
       if (guess === activeGame.secretNumber) {
         activeGame.winner = message.author.id;
-        // رسالة الفوز الأصلية
         await message.channel.send(`-# **مبروك المشارك ${getUserTag(message.author.id)} جاب الرقم الصح و هو ${activeGame.secretNumber} حظا اوفر للمشاركين الآخرين فالمرات القادمة <:emoji_33:1471962823532740739> **`).catch(() => { });
         activeNumberGames.delete(gameKey);
       } else {
-        // رسالة التخمين الغلط الأصلية
-        const hint = guess > activeGame.secretNumber ? 'أكبر' : 'أصغر';
+        const hint = guess > activeGame.secretNumber ? 'أكبر' : 'أصغر'; // ✅ التصحيح هنا
         await message.channel.send(`-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم ${hint} من الرقم ${guess} **`).catch(() => { });
         
         const maxAttempts = activeGame.players.length === 1 ? 5 : 3;
         
-        // إذا خلصت محاولات اللاعب
         if (attempts >= maxAttempts) {
-          // رسالة انتهاء المحاولات الأصلية
           await message.channel.send(`-# **المشارك ${getUserTag(message.author.id)} انطرد عشان خلصت محاولاته ${maxAttempts} <:emoji_32:1471962578895769611> **`).catch(() => { });
           activeGame.currentTurnIndex++;
           activeGame.currentTurn = null;
           setTimeout(() => { startNextTurn(message.channel, gameKey.split('-')[1], message.guild.id); }, 3000);
         } else {
-          // نقل الدور للاعب التالي
           activeGame.currentTurnIndex++;
           activeGame.currentTurn = null;
           setTimeout(() => { startNextTurn(message.channel, gameKey.split('-')[1], message.guild.id); }, 3000);
@@ -910,7 +878,6 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  // ==================== نظام الحذف التلقائي ====================
   const autoDeleteChannels = await getAutoDeleteChannels(message.guild.id);
   const autoDelete = autoDeleteChannels.find(ch => ch.channelId === message.channel.id);
   if (autoDelete) {
@@ -934,13 +901,11 @@ client.on('messageCreate', async (message) => {
   }
 });
 
-// ==================== 🛠️ معالج التفاعلات (السلاش والأزرار) ====================
 client.on('interactionCreate', async (i) => {
   if (i.isChatInputCommand()) {
     const { commandName, options, member, user, guild } = i;
     const userData = await getUserData(user.id);
 
-    // ==================== أوامر الإدارة السلاش ====================
     if (commandName === 'wel') {
       const sub = options.getSubcommand();
       const settings = await getSettings(i.guild.id);
@@ -1068,7 +1033,6 @@ client.on('interactionCreate', async (i) => {
       }
     }
 
-    // ==================== أوامر المالك السلاش ====================
     if (commandName === 'sub' && i.user.id === OWNER_ID) {
       const sub = options.getSubcommand();
       const settings = await getGlobalSettings();
@@ -1219,7 +1183,6 @@ client.on('interactionCreate', async (i) => {
     }
   }
 
-  // ==================== معالج الأزرار ====================
   if (i.isButton()) {
     if (i.customId === 'open_ticket') {
       const ticketSettings = await getTicketSettings(i.guild.id);
@@ -1303,7 +1266,6 @@ client.on('interactionCreate', async (i) => {
   }
 });
 
-// ==================== 🚫 عند إضافة البوت لسيرفر جديد ====================
 client.on('guildCreate', async (guild) => {
   const globalSettings = await getGlobalSettings();
   const subscription = globalSettings.subscriptions.find(s => s.guildId === guild.id);
@@ -1329,7 +1291,6 @@ client.on('guildCreate', async (guild) => {
   }
 });
 
-// ==================== 👋 عند دخول عضو جديد ====================
 client.on('guildMemberAdd', async (member) => {
   const globalSettings = await getGlobalSettings();
   if (!globalSettings.allowedGuilds.includes(member.guild.id)) return;
@@ -1337,6 +1298,5 @@ client.on('guildMemberAdd', async (member) => {
   await sendWelcome(member, settings);
 });
 
-// ==================== 🚀 تشغيل السيرفر ====================
 app.get('/', (req, res) => res.send('Bot is Live!'));
 app.listen(3000, () => client.login(process.env.TOKEN));
