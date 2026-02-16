@@ -859,7 +859,7 @@ client.on('messageCreate', async (message) => {
         await message.channel.send(`-# **مبروك المشارك ${getUserTag(message.author.id)} جاب الرقم الصح و هو ${activeGame.secretNumber} حظا اوفر للمشاركين الآخرين فالمرات القادمة <:emoji_33:1471962823532740739> **`).catch(() => { });
         activeNumberGames.delete(gameKey);
       } else {
-        const hint = guess > activeGame.secretNumber ? 'أكبر' : 'أصغر'; // ✅ التصحيح هنا
+        const hint = guess < activeGame.secretNumber ? 'أكبر' : 'أصغر'; // ✅ التصحيح هنا
         await message.channel.send(`-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم ${hint} من الرقم ${guess} **`).catch(() => { });
         
         const maxAttempts = activeGame.players.length === 1 ? 5 : 3;
