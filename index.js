@@ -370,10 +370,16 @@ async function startNumberGameAfterDelay(msg, gameData, guildId) {
     game.secretNumber = Math.floor(Math.random() * 100) + 1;
     const playersList = game.players.map(p => getUserTag(p)).join(' ');
     
-    await msg.channel.send(
-      `-# ** تم بدأ اللعبة كل واحد من المشاركين عنده جولة يخمن فيها الرقم و كل مشارك له ${game.players.length === 1 ? '5' : '3'} محاولات الا اذا فاز احد فيكم <:new_emoji:1388436089584226387> **\n` +
-      `-# المشاركين هم ${playersList}`
-    ).catch(() => { });
+    if (game.players.length === 1) {
+  await msg.channel.send(
+    `-# ** يـ ${getUserTag(game.players[0])} يا وحيد تم بدء الوضع الفردي معك بس 5 محاولات <:emoji_43:1397804543789498428> **`
+  ).catch(() => { });
+} else {
+  await msg.channel.send(
+    `-# ** تم بدأ اللعبة كل واحد من المشاركين عنده جولة يخمن فيها الرقم و كل مشارك له 3 محاولات الا اذا فاز احد فيكم <:new_emoji:1388436089584226387> **\n` +
+    `-# المشاركين هم ${playersList}`
+  ).catch(() => { });
+}
     
     setTimeout(async () => { await msg.delete().catch(() => { }); }, 10000);
     setTimeout(() => { startNextTurn(msg.channel, msg.id, guildId); }, 10000);
