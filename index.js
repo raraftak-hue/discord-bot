@@ -40,6 +40,7 @@ const SettingsSchema = new mongoose.Schema({
   guildId: String,
   prefix: { type: String, default: null },
   economyChannel: { type: String, default: null },
+  economyMessage: { type: String, default: null },
   welcomeSettings: {
     channelId: String,
     title: String,
@@ -236,6 +237,19 @@ const slashCommands = [
     ]
   },
   {
+    name: 'setecomsg',
+    description: 'تعيين رسالة الخطأ عند استخدام أوامر الاقتصاد في روم غير مخصص',
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+    options: [
+      {
+        name: 'message',
+        description: 'الرسالة (اتركها فارغة لإلغائها)',
+        type: 3,
+        required: false
+      }
+    ]
+  },
+  {
     name: 'prefix',
     description: 'تعيين بادئة الأوامر النصية',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
@@ -246,6 +260,31 @@ const slashCommands = [
         type: 3,
         required: false,
         max_length: 3
+      }
+    ]
+  },
+  {
+    name: 'embed',
+    description: 'إرسال رسالة إمبد (بدون عنوان حقيقي)',
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+    options: [
+      {
+        name: 'content',
+        description: 'محتوى الإمبد (تدعم ** للعناوين و -# للخط الصغير)',
+        type: 3,
+        required: true
+      },
+      {
+        name: 'color',
+        description: 'لون الإمبد (مثال: #ff0000)',
+        type: 3,
+        required: false
+      },
+      {
+        name: 'image',
+        description: 'رابط صورة',
+        type: 3,
+        required: false
       }
     ]
   }
@@ -749,7 +788,11 @@ client.on('messageCreate', async (message) => {
   const economyCommands = ['دنانير', 'تحويل', 'اغنياء', 'سجل'];
   if (economyCommands.includes(command)) {
     if (settings.economyChannel && message.channel.id !== settings.economyChannel) {
-      return message.channel.send(`❌ هذا الأمر فقط في <#${settings.economyChannel}>`);
+      if (settings.economyMessage) {
+        return message.channel.send(settings.economyMessage.replace(/{channel}/g, `<#${settings.economyChannel}>`));
+      } else {
+        return;
+      }
     }
   }
 
@@ -1163,6 +1206,21 @@ client.on('interactionCreate', async (i) => {
       return i.reply({ embeds: [embed], ephemeral: true });
     }
 
+    if (commandName === 'setecomsg') {
+      const msg = options.getString('message');
+      const settings = await getSettings(guild.id);
+      
+      if (!msg || msg === '') {
+        settings.economyMessage = null;
+        await settings.save();
+        return i.reply({ content: '✅ تم إلغاء رسالة الخطأ، البوت يتجاهل الأوامر بصمت.', ephemeral: true });
+      }
+      
+      settings.economyMessage = msg;
+      await settings.save();
+      return i.reply({ content: `✅ تم تعيين رسالة الخطأ إلى: ${msg}`, ephemeral: true });
+    }
+
     if (commandName === 'prefix') {
       const newPrefix = options.getString('value');
       const settings = await getSettings(guild.id);
@@ -1181,6 +1239,21 @@ client.on('interactionCreate', async (i) => {
       await settings.save();
       
       return i.reply({ content: `✅ تم تعيين البادئة إلى \`${newPrefix}\``, ephemeral: true });
+    }
+
+    if (commandName === 'embed') {
+      const content = options.getString('content');
+      const color = options.getString('color') || '#2b2d31';
+      const image = options.getString('image');
+      
+      const embed = new EmbedBuilder()
+        .setDescription(content)
+        .setColor(parseInt(color.replace('#', ''), 16));
+      
+      if (image) embed.setImage(image);
+      
+      await i.channel.send({ embeds: [embed] });
+      return i.reply({ content: '✅ تم إرسال الإمبد!', ephemeral: true });
     }
 
     // ==================== أوامر المالك السلاش ====================
