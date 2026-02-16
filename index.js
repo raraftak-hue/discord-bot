@@ -553,22 +553,29 @@ client.once('ready', async () => {
   } catch (e) { console.error('❌ فشل مسح السجل:', e); }
   */
 
-  const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-  try {
-    await rest.put(Routes.applicationCommands(client.user.id), { body: allCommands });
-    console.log('✅ تم تسجيل جميع الأوامر بنجاح!');
-  } catch (e) { console.error(e); }
+  const now = new Date();
 
-  const activeGiveaways = await Giveaway.find({ ended: false });
-  for (const g of activeGiveaways) {
-    if (g.endTime > new Date()) {
-      const timeLeft = g.endTime.getTime() - Date.now();
-      setTimeout(() => endGiveaway(g), timeLeft);
-      console.log(`🔄 تم استعادة قيف: ${g.prize}`);
-    } else { 
-      await endGiveaway(g); 
-    }
-  }
+// القيفات الجارية
+const activeGiveaways = await Giveaway.find({ 
+  ended: false, 
+  endTime: { $gt: now } 
+});
+
+for (const g of activeGiveaways) {
+  const timeLeft = g.endTime.getTime() - now.getTime();
+  setTimeout(() => endGiveaway(g), timeLeft);
+  console.log(`🔄 تم استعادة قيف: ${g.prize}`);
+}
+
+// القيفات المنتهية
+const endedGiveaways = await Giveaway.find({ 
+  ended: false, 
+  endTime: { $lt: now } 
+});
+
+for (const g of endedGiveaways) {
+  await endGiveaway(g);
+}
 
   // ==================== ⏰ التحقق من الاشتراكات كل ساعة ====================
   cron.schedule('0 * * * *', async () => {
