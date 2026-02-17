@@ -224,7 +224,7 @@ const slashCommands = [
   },
   {
     name: 'pre',
-    description: 'تغيير البادئة',
+    description: 'تغيير البادئة (اكتب "حذف" عشان تشيلها)',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
     options: [
       {
@@ -774,15 +774,15 @@ client.on('messageCreate', async (message) => {
     let membersMsg = '';
     
     if (prefix) {
-      membersMsg = `-# **${prefix}دنانير، ${prefix}تحويل، ${prefix}اغنياء، ${prefix}سجل**`;
+      membersMsg = `${prefix}دنانير، ${prefix}تحويل، ${prefix}اغنياء، ${prefix}سجل`;
     } else {
-      membersMsg = `-# **دنانير، تحويل، اغنياء، سجل**`;
+      membersMsg = `دنانير، تحويل، اغنياء، سجل`;
     }
     
     const embed = new EmbedBuilder()
       .setColor(0x2b2d31)
       .setDescription(
-        `** members<:emoji_32:1471962578895769611> **\n${membersMsg}\n\n` +
+        `** members<:emoji_32:1471962578895769611> **\n-# ** text - ${membersMsg}**\n\n` +
         `** Mods <:emoji_38:1470920843398746215>**\n` +
         `-# ** wel, tic, give,pre,emb**\n` +
         `-# ** text -  تايم، طرد، حذف، ارقام، ايقاف**`
@@ -1360,7 +1360,7 @@ client.on('interactionCreate', async (i) => {
         
         await newSettings.save();
         
-        let replyMsg = `-# ** تم تعيين هذا الروم للحذف التلقائي <:new_emoji:1388436089584226387> **`;
+        let replyMsg = `-# **ما في رومات حذف تلقائي <:new_emoji:1388436095842385931> **`;
         if (allowedWords.length > 0) replyMsg += `\n-# **كلمات مستثناة: ${allowedWords.join('، ')}**`;
         if (allowedUsers.length > 0) replyMsg += `\n-# **أعضاء مسموح لهم: <@${allowedUsers.join('>, <@')}>**`;
         
@@ -1370,17 +1370,16 @@ client.on('interactionCreate', async (i) => {
       if (sub === 'rem') {
         const channel = options.getChannel('channel');
         await AutoDelete.deleteMany({ guildId: i.guild.id, channelId: channel.id });
-        return i.reply({ content: `-# ** تم حذف هذا الروم من الحذف التلقائي <:new_emoji:1388436095842385931> **`, ephemeral: true });
+        return i.reply({ content: `-# **تم حذف روم الحذف التلقائي <:new_emoji:1388436095842385931> **`, ephemeral: true });
       }
       
       if (sub === 'list') {
         const channels = await getAutoDeleteChannels(i.guild.id);
         
         if (channels.length === 0) {
-          return i.reply({ content: '⚠️ لا يوجد رومات مفعلة للحذف التلقائي', ephemeral: true });
+          return i.reply({ content: `-# **ما في رومات حذف تلقائي <:new_emoji:1388436095842385931> **`, ephemeral: true });
         }
         
-        let message = `**رومات الحذف التلقائي <:new_emoji:1388436089584226387> **\n\n`;
         const filterTypes = { 
           'all': 'جميع الرسائل', 
           'images': 'الصور', 
@@ -1388,19 +1387,30 @@ client.on('interactionCreate', async (i) => {
           'files': 'الملفات' 
         };
         
+        let description = '';
+        
         for (const ch of channels) {
-          message += `-# **الروم <#${ch.channelId}>**\n`;
-          message += `-# **النوع: ${filterTypes[ch.filterType] || ch.filterType}**\n`;
+          let استثناءات = [];
           if (ch.allowedWords && ch.allowedWords.length > 0) {
-            message += `-# **كلمات مستثناة: ${ch.allowedWords.join('، ')}**\n`;
+            استثناءات.push(`كلمات: ${ch.allowedWords.join('، ')}`);
           }
           if (ch.exceptUsers && ch.exceptUsers.length > 0) {
-            message += `-# **أعضاء مسموح لهم: <@${ch.exceptUsers.join('>, <@')}>**\n`;
+            استثناءات.push(`أعضاء: <@${ch.exceptUsers.join('>, <@')}>`);
           }
-          message += `\n`;
+          
+          let استثناءاتنص = استثناءات.length > 0 ? استثناءات.join(' و ') : 'لا يوجد';
+          
+          description += `-# ** روم <#${ch.channelId}> و سيحذف ${filterTypes[ch.filterType] || ch.filterType} ما عدا ${استثناءاتنص} في مدة ${ch.deleteDelay} ثانية <:new_emoji:1388436089584226387> **\n\n`;
         }
         
-        return i.reply({ content: message, ephemeral: true });
+        const embed = new EmbedBuilder()
+          .setTitle('رومات الحذف التلقائي')
+          .setDescription(description)
+          .setColor(0x2b2d31);
+        
+        await i.deferReply({ ephemeral: true });
+        await i.channel.send({ embeds: [embed] });
+        await i.deleteReply();
       }
     }
   }
