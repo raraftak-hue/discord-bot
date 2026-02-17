@@ -842,43 +842,53 @@ client.on('messageCreate', async (message) => {
   }
 
   if (command === 'تأكيد') {
-    const pending = Array.from(pendingTransfers.entries()).find(([key, data]) => {
+    let foundKey = null;
+    let foundData = null;
+    
+    for (const [key, data] of pendingTransfers.entries()) {
       const [guildId, msgId] = key.split('-');
-      return guildId === message.guild.id && 
-             data.senderId === message.author.id && 
-             data.channelId === message.channel.id;
-    });
-
-    if (!pending) return;
+      if (guildId === message.guild.id && 
+          data.senderId === message.author.id && 
+          data.channelId === message.channel.id) {
+        foundKey = key;
+        foundData = data;
+        break;
+      }
+    }
     
-    const [key, data] = pending;
-    const sender = await getUserData(data.senderId);
-    const target = await getUserData(data.targetId);
+    if (!foundKey || !foundData) {
+      return message.channel.send(`-# **ما في عملية تحويل معلقة لك**`);
+    }
     
-    if (sender.balance < data.totalAmount) {
-      pendingTransfers.delete(key);
+    const sender = await getUserData(foundData.senderId);
+    const target = await getUserData(foundData.targetId);
+    
+    if (sender.balance < foundData.totalAmount) {
+      pendingTransfers.delete(foundKey);
       return message.channel.send(`-# **رصيدك ما يكفي الحين يا فقير <:emoji_464:1388211597197050029>**`);
     }
     
-    sender.balance = parseFloat((sender.balance - data.totalAmount).toFixed(2));
-    target.balance = parseFloat((target.balance + data.amount).toFixed(2));
+    sender.balance = parseFloat((sender.balance - foundData.totalAmount).toFixed(2));
+    target.balance = parseFloat((target.balance + foundData.amount).toFixed(2));
     
-    sender.history.push({ type: 'TRANSFER_SEND', amount: -data.amount, targetUser: data.targetId, targetName: target.username, date: new Date() });
-    target.history.push({ type: 'TRANSFER_RECEIVE', amount: data.amount, targetUser: data.senderId, targetName: sender.username, date: new Date() });
+    sender.history.push({ type: 'TRANSFER_SEND', amount: -foundData.amount, targetUser: foundData.targetId, targetName: target.username, date: new Date() });
+    target.history.push({ type: 'TRANSFER_RECEIVE', amount: foundData.amount, targetUser: foundData.senderId, targetName: sender.username, date: new Date() });
     
     await sender.save(); 
     await target.save();
-    transferCooldowns.set(data.senderId, Date.now());
+    transferCooldowns.set(foundData.senderId, Date.now());
     
-    const confirmMsg = await message.channel.messages.fetch(data.msgId).catch(() => null);
-    if (confirmMsg) {
-      await confirmMsg.edit({ 
-        content: `-# **تم تحويل ${data.amount} لـ <@${data.targetId}> رصيدك الآن ${sender.balance} <a:moneywith_:1470458218953179237>**`, 
-        components: [] 
-      }).catch(() => { });
-    }
+    try {
+      const confirmMsg = await message.channel.messages.fetch(foundData.msgId).catch(() => null);
+      if (confirmMsg) {
+        await confirmMsg.edit({ 
+          content: `-# **تم تحويل ${foundData.amount} لـ <@${foundData.targetId}> رصيدك الآن ${sender.balance} <a:moneywith_:1470458218953179237>**`, 
+          components: [] 
+        }).catch(() => { });
+      }
+    } catch (e) {}
     
-    pendingTransfers.delete(key);
+    pendingTransfers.delete(foundKey);
     try { await message.delete(); } catch (e) { }
     return;
   }
