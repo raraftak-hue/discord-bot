@@ -881,7 +881,7 @@ client.on('messageCreate', async (message) => {
         activeNumberGames.delete(gameKey);
       } else {
         // رسالة التخمين الغلط الأصلية
-        const hint = guess > activeGame.secretNumber ? 'أكبر' : 'أصغر';
+        const hint = guess < activeGame.secretNumber ? 'أكبر' : 'أصغر';
         await message.channel.send(`-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم ${hint} من الرقم ${guess} **`).catch(() => { });
         
         const maxAttempts = activeGame.players.length === 1 ? 5 : 3;
