@@ -1045,16 +1045,35 @@ client.on('messageCreate', async (message) => {
     return message.channel.send(`-# **تم اضافة الرصيد لحسابك <:emoji_41:1471619709936996406> **`);
   }
 
-  if (command === 'انقص' && message.author.id === OWNER_ID) {
-    const amount = parseFloat(args[1]);
-    if (isNaN(amount) || amount <= 0) return message.channel.send(`-# **القيمة غير صحيحه <:__:1467633552408576192> **`);
-    const ownerData = await getUserData(message.author.id);
-    if (ownerData.balance < amount) return message.channel.send(`-# **العضو ما معه ذي الكمية saybu <:emoji_84:1389404919672340592> **`);
-    ownerData.balance = parseFloat((ownerData.balance - amount).toFixed(2));
-    ownerData.history.push({ type: 'OWNER_REMOVE', amount: -amount, date: new Date() });
-    await ownerData.save();
-    return message.channel.send(`-# **تم سحب الرصيد من حسابك <:emoji_41:1471619709936996406> **`);
+  if (command === 'سحب' && message.author.id === OWNER_ID) {
+  const target = message.mentions.users.first() || message.author;
+  const amount = parseFloat(args[1]);
+  
+  if (isNaN(amount) || amount <= 0) return message.channel.send(`-# **القيمة غير صحيحه <:__:1467633552408576192> **`);
+  
+  const targetData = await getUserData(target.id);
+  
+  if (targetData.balance < amount) {
+    return message.channel.send(`-# **العضو ما معه ذي الكمية saybu <:emoji_84:1389404919672340592> **`);
   }
+  
+  targetData.balance = parseFloat((targetData.balance - amount).toFixed(2));
+  targetData.history.push({ 
+    type: 'OWNER_REMOVE', 
+    amount: -amount, 
+    targetUser: message.author.id,
+    targetName: message.author.username,
+    date: new Date() 
+  });
+  
+  await targetData.save();
+  
+  if (target.id === message.author.id) {
+    return message.channel.send(`-# **تم سحب ${amount} دينار من حسابك <:emoji_41:1471619709936996406> **`);
+  } else {
+    return message.channel.send(`-# **تم سحب ${amount} دينار من ${target.username} <:emoji_41:1471619709936996406> **`);
+  }
+}
 
   // ==================== معالجة التخمينات ====================
   let activeGame = null; 
