@@ -785,7 +785,7 @@ client.on('messageCreate', async (message) => {
         `** members<:emoji_32:1471962578895769611> **\n-# ** text - ${membersMsg}**\n\n` +
         `** Mods <:emoji_38:1470920843398746215>**\n` +
         `-# ** wel, tic, give,pre,emb**\n` +
-        `-# ** text -  تايم، طرد، حذف، ارقام، ايقاف**`
+        `-# ** text -  تايم، تكلم، طرد، حذف، ارقام، ايقاف**`
       );
     return message.channel.send({ embeds: [embed] });
   }
