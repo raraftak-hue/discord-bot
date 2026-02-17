@@ -167,7 +167,6 @@ function calculateTax(balance, amount) {
 
 // ==================== 📋 جميع الأوامر في مكان واحد ====================
 const allCommands = [
-  // أوامر عامة
   { name: 'help', description: 'عرض الأوامر' },
   { name: 'bal', description: 'عرض الرصيد' },
   {
@@ -181,81 +180,78 @@ const allCommands = [
   { name: 'top', description: 'قائمة الأغنياء' },
   { name: 'hist', description: 'سجل المعاملات' },
   
-  // أوامر الإدارة (مع subcommands)
+  // wel - أمر واحد مع قائمة اختيار
   {
     name: 'wel',
     description: 'نظام الترحيب',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
     options: [
       {
-        name: 'channel',
-        description: 'تعيين روم الترحيب',
-        type: 1,
-        options: [{ name: 'room', description: 'الروم', type: 7, required: true }]
-      },
-      {
-        name: 'message',
-        description: 'تعديل رسالة الترحيب',
-        type: 1,
-        options: [
-          { name: 'title', description: 'العنوان', type: 3, required: false },
-          { name: 'desc', description: 'الوصف', type: 3, required: false },
-          { name: 'color', description: 'اللون', type: 3, required: false },
-          { name: 'image', description: 'الصورة', type: 3, required: false }
+        name: 'action',
+        description: 'اختر الإجراء',
+        type: 3,
+        required: true,
+        choices: [
+          { name: 'تعيين الروم', value: 'channel' },
+          { name: 'تعديل الرسالة', value: 'message' },
+          { name: 'عرض الإعدادات', value: 'info' },
+          { name: 'تجربة الرسالة', value: 'test' }
         ]
       },
-      { name: 'info', description: 'عرض الإعدادات', type: 1 },
-      { name: 'test', description: 'تجربة الرسالة', type: 1 }
+      { name: 'room', description: 'الروم (لإجراء تعيين الروم)', type: 7, required: false, channel_types: [0] },
+      { name: 'title', description: 'العنوان (لتعديل الرسالة)', type: 3, required: false },
+      { name: 'desc', description: 'الوصف (لتعديل الرسالة)', type: 3, required: false },
+      { name: 'color', description: 'اللون (لتعديل الرسالة)', type: 3, required: false },
+      { name: 'image', description: 'الصورة (لتعديل الرسالة)', type: 3, required: false }
     ]
   },
+  
+  // tic - أمر واحد مع قائمة اختيار
   {
     name: 'tic',
     description: 'نظام التذاكر',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
     options: [
-      { name: 'panel', description: 'عرض لوحة التذاكر', type: 1 },
       {
-        name: 'set',
-        description: 'إعدادات التذاكر',
-        type: 1,
-        options: [
-          { name: 'category', description: 'روم التذاكر', type: 7, required: false, channel_types: [4] },
-          { name: 'desc', description: 'الوصف', type: 3, required: false },
-          { name: 'color', description: 'اللون', type: 3, required: false },
-          { name: 'image', description: 'الصورة', type: 3, required: false },
-          { name: 'role', description: 'رتبة الدعم', type: 8, required: false },
-          { name: 'btn1_label', description: 'اسم الزر الأول', type: 3, required: false },
-          { name: 'btn1_style', description: 'لون الزر الأول (1-4)', type: 4, required: false, min_value: 1, max_value: 4 },
-          { name: 'btn1_role', description: 'رتبة الزر الأول', type: 8, required: false },
-          { name: 'btn2_label', description: 'اسم الزر الثاني', type: 3, required: false },
-          { name: 'btn2_style', description: 'لون الزر الثاني (1-4)', type: 4, required: false, min_value: 1, max_value: 4 },
-          { name: 'btn2_role', description: 'رتبة الزر الثاني', type: 8, required: false },
-          { name: 'btn3_label', description: 'اسم الزر الثالث', type: 3, required: false },
-          { name: 'btn3_style', description: 'لون الزر الثالث (1-4)', type: 4, required: false, min_value: 1, max_value: 4 },
-          { name: 'btn3_role', description: 'رتبة الزر الثالث', type: 8, required: false }
+        name: 'action',
+        description: 'اختر الإجراء',
+        type: 3,
+        required: true,
+        choices: [
+          { name: 'عرض لوحة التذاكر', value: 'panel' },
+          { name: 'إعدادات التذاكر', value: 'set' }
         ]
-      }
+      },
+      { name: 'category', description: 'روم التذاكر (للإعدادات)', type: 7, required: false, channel_types: [4] },
+      { name: 'desc', description: 'الوصف (للإعدادات)', type: 3, required: false },
+      { name: 'color', description: 'اللون (للإعدادات)', type: 3, required: false },
+      { name: 'image', description: 'الصورة (للإعدادات)', type: 3, required: false },
+      { name: 'role', description: 'رتبة الدعم (للإعدادات)', type: 8, required: false },
+      { name: 'btn1_label', description: 'اسم الزر الأول', type: 3, required: false },
+      { name: 'btn1_style', description: 'لون الزر الأول (1-4)', type: 4, required: false, min_value: 1, max_value: 4 },
+      { name: 'btn1_role', description: 'رتبة الزر الأول', type: 8, required: false },
+      { name: 'btn2_label', description: 'اسم الزر الثاني', type: 3, required: false },
+      { name: 'btn2_style', description: 'لون الزر الثاني (1-4)', type: 4, required: false, min_value: 1, max_value: 4 },
+      { name: 'btn2_role', description: 'رتبة الزر الثاني', type: 8, required: false },
+      { name: 'btn3_label', description: 'اسم الزر الثالث', type: 3, required: false },
+      { name: 'btn3_style', description: 'لون الزر الثالث (1-4)', type: 4, required: false, min_value: 1, max_value: 4 },
+      { name: 'btn3_role', description: 'رتبة الزر الثالث', type: 8, required: false }
     ]
   },
+  
   {
     name: 'giv',
     description: 'نظام القيف أوي',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
     options: [
-      {
-        name: 'start',
-        description: 'بدء قيف أوي',
-        type: 1,
-        options: [
-          { name: 'prize', description: 'الجائزة', type: 3, required: true },
-          { name: 'time', description: 'المدة (10m, 1h, 1d)', type: 3, required: true },
-          { name: 'winners', description: 'عدد الفائزين', type: 4, required: true },
-          { name: 'cond', description: 'الشروط', type: 3, required: false },
-          { name: 'img', description: 'الصورة', type: 3, required: false }
-        ]
-      }
+      { name: 'prize', description: 'الجائزة', type: 3, required: true },
+      { name: 'time', description: 'المدة (10m, 1h, 1d)', type: 3, required: true },
+      { name: 'winners', description: 'عدد الفائزين', type: 4, required: true },
+      { name: 'cond', description: 'الشروط', type: 3, required: false },
+      { name: 'img', description: 'الصورة', type: 3, required: false }
     ]
   },
+  
   {
     name: 'eco',
     description: 'روم الاقتصاد',
@@ -265,6 +261,7 @@ const allCommands = [
       { name: 'message', description: 'رسالة الخطأ (اتركها فارغة للإلغاء)', type: 3, required: false }
     ]
   },
+  
   {
     name: 'prefix',
     description: 'بادئة الأوامر',
@@ -273,6 +270,7 @@ const allCommands = [
       { name: 'value', description: 'البادئة (اتركها فارغة للإلغاء)', type: 3, required: false, max_length: 3 }
     ]
   },
+  
   {
     name: 'embed',
     description: 'إرسال إمبد',
@@ -284,95 +282,84 @@ const allCommands = [
     ]
   },
   
-  // أوامر المالك
+  // sub - أمر واحد مع قائمة اختيار
   {
     name: 'sub',
     description: 'نظام الاشتراكات',
     default_member_permissions: "0",
     options: [
       {
-        name: 'add',
-        description: 'إضافة سيرفر',
-        type: 1,
-        options: [
-          { name: 'id', description: 'ايدي السيرفر', type: 3, required: true },
-          {
-            name: 'duration',
-            description: 'المدة',
-            type: 3,
-            required: true,
-            choices: [
-              { name: 'تجريبي (3 أيام)', value: 'trial' },
-              { name: 'اسبوع', value: '7d' },
-              { name: 'شهر', value: '30d' },
-              { name: 'شهرين', value: '60d' },
-              { name: 'سنة', value: '1y' }
-            ]
-          }
+        name: 'action',
+        description: 'اختر الإجراء',
+        type: 3,
+        required: true,
+        choices: [
+          { name: 'إضافة سيرفر', value: 'add' },
+          { name: 'حذف سيرفر', value: 'remove' }
         ]
       },
+      { name: 'id', description: 'ايدي السيرفر', type: 3, required: true },
       {
-        name: 'remove',
-        description: 'حذف سيرفر',
-        type: 1,
-        options: [
-          { name: 'id', description: 'ايدي السيرفر', type: 3, required: true }
+        name: 'duration',
+        description: 'المدة (لإجراء الإضافة)',
+        type: 3,
+        required: false,
+        choices: [
+          { name: 'تجريبي (3 أيام)', value: 'trial' },
+          { name: 'اسبوع', value: '7d' },
+          { name: 'شهر', value: '30d' },
+          { name: 'شهرين', value: '60d' },
+          { name: 'سنة', value: '1y' }
         ]
       }
     ]
   },
+  
   {
     name: 'host',
     description: 'عرض السيرفرات',
     default_member_permissions: "0"
   },
+  
+  // auto - أمر واحد مع قائمة اختيار
   {
     name: 'auto',
     description: 'الحذف التلقائي',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
     options: [
       {
-        name: 'add',
-        description: 'إضافة روم',
-        type: 1,
-        options: [
-          { name: 'channel', description: 'الروم', type: 7, required: true, channel_types: [0] },
-          { name: 'delay', description: 'مدة الحذف (ثواني)', type: 4, required: false },
-          {
-            name: 'type',
-            description: 'نوع الفلتر',
-            type: 3,
-            required: false,
-            choices: [
-              { name: 'الكل', value: 'all' },
-              { name: 'كلمات محددة', value: 'words' },
-              { name: 'صور', value: 'images' },
-              { name: 'روابط', value: 'links' },
-              { name: 'ملفات', value: 'files' }
-            ]
-          },
-          { name: 'allowed', description: 'كلمات مسموحة (مفصولة بفواصل)', type: 3, required: false },
-          { name: 'blocked', description: 'كلمات ممنوعة (مفصولة بفواصل)', type: 3, required: false },
-          { name: 'except_users', description: 'مستثنون (ايديات مفصولة)', type: 3, required: false },
-          { name: 'except_roles', description: 'رتب مستثناة (ايديات مفصولة)', type: 3, required: false },
-          { name: 'message', description: 'رسالة مخصصة', type: 3, required: false },
-          { name: 'delete_bots', description: 'يحذف رسائل البوتات؟', type: 5, required: false },
-          { name: 'ignore_commands', description: 'يتجاهل الأوامر؟', type: 5, required: false }
+        name: 'action',
+        description: 'اختر الإجراء',
+        type: 3,
+        required: true,
+        choices: [
+          { name: 'إضافة روم', value: 'add' },
+          { name: 'إزالة روم', value: 'rem' },
+          { name: 'عرض الإعدادات', value: 'list' }
         ]
       },
+      { name: 'channel', description: 'الروم (لإجراءات الإضافة/الإزالة)', type: 7, required: false, channel_types: [0] },
+      { name: 'delay', description: 'مدة الحذف (ثواني)', type: 4, required: false },
       {
-        name: 'rem',
-        description: 'إزالة روم',
-        type: 1,
-        options: [
-          { name: 'channel', description: 'الروم', type: 7, required: true, channel_types: [0] }
+        name: 'type',
+        description: 'نوع الفلتر',
+        type: 3,
+        required: false,
+        choices: [
+          { name: 'الكل', value: 'all' },
+          { name: 'كلمات محددة', value: 'words' },
+          { name: 'صور', value: 'images' },
+          { name: 'روابط', value: 'links' },
+          { name: 'ملفات', value: 'files' }
         ]
       },
-      {
-        name: 'list',
-        description: 'عرض الإعدادات',
-        type: 1
-      }
+      { name: 'allowed', description: 'كلمات مسموحة (مفصولة بفواصل)', type: 3, required: false },
+      { name: 'blocked', description: 'كلمات ممنوعة (مفصولة بفواصل)', type: 3, required: false },
+      { name: 'except_users', description: 'مستثنون (ايديات مفصولة)', type: 3, required: false },
+      { name: 'except_roles', description: 'رتب مستثناة (ايديات مفصولة)', type: 3, required: false },
+      { name: 'message', description: 'رسالة مخصصة', type: 3, required: false },
+      { name: 'delete_bots', description: 'يحذف رسائل البوتات؟', type: 5, required: false },
+      { name: 'ignore_commands', description: 'يتجاهل الأوامر؟', type: 5, required: false }
     ]
   }
 ];
@@ -751,7 +738,7 @@ client.on('messageCreate', async (message) => {
   } else {
     args = message.content.trim().split(/\s+/);
     command = args[0];
-    const knownCommands = ['دنانير', 'تحويل', 'اغنياء', 'سجل', 'اوامر', 'ارقام', 'ايقاف', 'زد', 'انقص'];
+    const knownCommands = ['دنانير', 'تحويل', 'اغنياء', 'سجل', 'اوامر', 'ارقام', 'ايقاف', 'زد', 'انقص', 'حذف'];
     if (!knownCommands.includes(command)) return;
   }
 
@@ -776,6 +763,26 @@ client.on('messageCreate', async (message) => {
     return message.channel.send(`-# **تم سحب الرصيد من حسابك <:emoji_41:1471619709936996406> **`);
   }
 
+  if (command === 'حذف') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
+      return message.channel.send(`-# **ما عندك صلاحية لحذف الرسائل <:emoji_84:1389404919672340592> **`);
+    }
+    
+    const amount = parseInt(args[1]);
+    if (isNaN(amount) || amount < 1 || amount > 100) {
+      return message.channel.send(`-# **حدد عدد الرسايل (1-100) <:emoji_334:1388211595053760663> **`);
+    }
+    
+    try {
+      await message.channel.bulkDelete(amount + 1);
+      const msg = await message.channel.send(`-# **تم حذف ${amount} رسايل <:2thumbup:1467287897429512396> **`);
+      setTimeout(() => msg.delete().catch(() => { }), 3000);
+    } catch (error) {
+      message.channel.send(`-# **ما اقدر احذف الرسايل، تأكد من الصلاحيات <:emoji_84:1389404919672340592> **`);
+    }
+    return;
+  }
+
   const economyCommands = ['دنانير', 'تحويل', 'اغنياء', 'سجل'];
   if (economyCommands.includes(command)) {
     if (settings.economyChannel && message.channel.id !== settings.economyChannel) {
@@ -794,9 +801,7 @@ client.on('messageCreate', async (message) => {
         `**Members <:emoji_32:1471962578895769611>**\n` +
         `-# **text - دنانير، تحويل، اغنياء، سجل**\n\n` +
         `**Mods <:emoji_38:1470920843398746215>**\n` +
-        `-# **wel**: channel, message, info, test\n` +
-        `-# **tic**: panel, set\n` +
-        `-# **giv**, **eco**, **prefix**, **embed**, **sub**, **host**, **auto**\n` +
+        `-# **wel, tic, giv, eco, prefix, embed, sub, host, auto**\n` +
         `-# **text - تايم، طرد، حذف، ارقام، ايقاف**`
       );
     return message.channel.send({ embeds: [embed] });
@@ -1050,9 +1055,7 @@ client.on('interactionCreate', async (i) => {
           `**Members <:emoji_32:1471962578895769611>**\n` +
           `-# **text - دنانير، تحويل، اغنياء، سجل**\n\n` +
           `**Mods <:emoji_38:1470920843398746215>**\n` +
-          `-# **wel**: channel, message, info, test\n` +
-          `-# **tic**: panel, set\n` +
-          `-# **giv**, **eco**, **prefix**, **embed**, **sub**, **host**, **auto**\n` +
+          `-# **wel, tic, giv, eco, prefix, embed, sub, host, auto**\n` +
           `-# **text - تايم، طرد، حذف، ارقام، ايقاف**`
         );
       return i.reply({ embeds: [embed], ephemeral: true });
@@ -1116,16 +1119,18 @@ client.on('interactionCreate', async (i) => {
     }
 
     if (commandName === 'wel') {
-      const sub = options.getSubcommand();
+      const action = options.getString('action');
       const settings = await getSettings(guild.id);
       
-      if (sub === 'channel') {
-        settings.welcomeSettings.channelId = options.getChannel('room').id;
+      if (action === 'channel') {
+        const room = options.getChannel('room');
+        if (!room) return i.reply({ content: '❌ الروم مطلوب لهذا الإجراء', ephemeral: true });
+        settings.welcomeSettings.channelId = room.id;
         await settings.save();
-        return i.reply({ content: `✅ تم تعيين روم الترحيب`, ephemeral: true });
+        return i.reply({ content: `✅ تم تعيين روم الترحيب إلى ${room}`, ephemeral: true });
       }
       
-      if (sub === 'message') {
+      if (action === 'message') {
         if (options.getString('title')) settings.welcomeSettings.title = options.getString('title');
         if (options.getString('desc')) settings.welcomeSettings.description = options.getString('desc');
         if (options.getString('color')) settings.welcomeSettings.color = options.getString('color').replace('#', '');
@@ -1134,7 +1139,7 @@ client.on('interactionCreate', async (i) => {
         return i.reply({ content: `✅ تم تعديل رسالة الترحيب`, ephemeral: true });
       }
       
-      if (sub === 'info') {
+      if (action === 'info') {
         const embed = new EmbedBuilder()
           .setColor(0x2b2d31)
           .setDescription(
@@ -1147,17 +1152,17 @@ client.on('interactionCreate', async (i) => {
         return i.reply({ embeds: [embed], ephemeral: true });
       }
       
-      if (sub === 'test') {
+      if (action === 'test') {
         await sendWelcome(member, settings);
         return i.reply({ content: `✅ تم إرسال تجربة الترحيب`, ephemeral: true });
       }
     }
 
     if (commandName === 'tic') {
-      const sub = options.getSubcommand();
+      const action = options.getString('action');
       const ticketSettings = await getTicketSettings(guild.id);
       
-      if (sub === 'panel') {
+      if (action === 'panel') {
         const embed = new EmbedBuilder()
           .setColor(parseInt(ticketSettings.embedColor, 16) || 0x2b2d31);
         
@@ -1193,7 +1198,7 @@ client.on('interactionCreate', async (i) => {
         await i.deleteReply();
       }
       
-      if (sub === 'set') {
+      if (action === 'set') {
         let updated = false;
         
         if (options.getChannel('category')) { 
@@ -1247,61 +1252,57 @@ client.on('interactionCreate', async (i) => {
     }
 
     if (commandName === 'giv') {
-      const sub = options.getSubcommand();
+      const prize = options.getString('prize');
+      const durationStr = options.getString('time');
+      const winnersCount = options.getInteger('winners');
+      const condition = options.getString('cond') || '';
+      const imageOption = options.getString('img');
       
-      if (sub === 'start') {
-        const prize = options.getString('prize');
-        const durationStr = options.getString('time');
-        const winnersCount = options.getInteger('winners');
-        const condition = options.getString('cond') || '';
-        const imageOption = options.getString('img');
-        
-        const timeMatch = durationStr.match(/^(\d+)([mhd])$/);
-        if (!timeMatch) return i.reply({ content: `صيغة الوقت غلط! (10m, 1h, 1d)`, ephemeral: true });
-        
-        const durationMs = parseInt(timeMatch[1]) * (timeMatch[2] === 'm' ? 60 : timeMatch[2] === 'h' ? 3600 : 86400) * 1000;
-        const endTime = new Date(Date.now() + durationMs);
-        
-        const embed = new EmbedBuilder()
-          .setDescription(
-            `-# **سحب عشوائي على ${prize} ينتهي في <t:${Math.floor(endTime.getTime() / 1000)}:R> <:emoji_45:1397804598110195863> **\n` +
-            `-# **الي سوا السحب العشوائي ${i.user} <:y_coroa:1404576666105417871> **\n` +
-            `-# **الشروط ${condition} <:new_emoji:1388436089584226387> **`
-          )
-          .setColor(0x2b2d31);
-        
-        if (imageOption) {
-          embed.setImage(imageOption);
-          giveawayImages.set(guild.id, imageOption);
-        } else {
-          const lastImage = giveawayImages.get(guild.id);
-          if (lastImage) embed.setImage(lastImage);
-        }
-        
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('join_giveaway').setLabel('ادخل').setStyle(ButtonStyle.Secondary)
-        );
-        
-        await i.deferReply({ ephemeral: true });
-        const msg = await i.channel.send({ embeds: [embed], components: [row] });
-        await i.deleteReply();
-        
-        const giveaway = new Giveaway({
-          guildId: guild.id,
-          channelId: i.channel.id,
-          messageId: msg.id,
-          prize,
-          endTime,
-          winners: winnersCount,
-          participants: [],
-          image: imageOption || giveawayImages.get(guild.id),
-          condition,
-          hostId: user.id
-        });
-        
-        await giveaway.save();
-        setTimeout(async () => { await endGiveaway(giveaway); }, durationMs);
+      const timeMatch = durationStr.match(/^(\d+)([mhd])$/);
+      if (!timeMatch) return i.reply({ content: `صيغة الوقت غلط! (10m, 1h, 1d)`, ephemeral: true });
+      
+      const durationMs = parseInt(timeMatch[1]) * (timeMatch[2] === 'm' ? 60 : timeMatch[2] === 'h' ? 3600 : 86400) * 1000;
+      const endTime = new Date(Date.now() + durationMs);
+      
+      const embed = new EmbedBuilder()
+        .setDescription(
+          `-# **سحب عشوائي على ${prize} ينتهي في <t:${Math.floor(endTime.getTime() / 1000)}:R> <:emoji_45:1397804598110195863> **\n` +
+          `-# **الي سوا السحب العشوائي ${i.user} <:y_coroa:1404576666105417871> **\n` +
+          `-# **الشروط ${condition} <:new_emoji:1388436089584226387> **`
+        )
+        .setColor(0x2b2d31);
+      
+      if (imageOption) {
+        embed.setImage(imageOption);
+        giveawayImages.set(guild.id, imageOption);
+      } else {
+        const lastImage = giveawayImages.get(guild.id);
+        if (lastImage) embed.setImage(lastImage);
       }
+      
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('join_giveaway').setLabel('ادخل').setStyle(ButtonStyle.Secondary)
+      );
+      
+      await i.deferReply({ ephemeral: true });
+      const msg = await i.channel.send({ embeds: [embed], components: [row] });
+      await i.deleteReply();
+      
+      const giveaway = new Giveaway({
+        guildId: guild.id,
+        channelId: i.channel.id,
+        messageId: msg.id,
+        prize,
+        endTime,
+        winners: winnersCount,
+        participants: [],
+        image: imageOption || giveawayImages.get(guild.id),
+        condition,
+        hostId: user.id
+      });
+      
+      await giveaway.save();
+      setTimeout(async () => { await endGiveaway(giveaway); }, durationMs);
     }
 
     if (commandName === 'eco') {
@@ -1356,12 +1357,14 @@ client.on('interactionCreate', async (i) => {
     }
 
     if (commandName === 'sub' && user.id === OWNER_ID) {
-      const sub = options.getSubcommand();
+      const action = options.getString('action');
       const settings = await getGlobalSettings();
       
-      if (sub === 'add') {
+      if (action === 'add') {
         const serverId = options.getString('id');
         const duration = options.getString('duration');
+        
+        if (!duration) return i.reply({ content: `❌ المدة مطلوبة للإضافة`, ephemeral: true });
         
         let guild;
         try {
@@ -1404,7 +1407,7 @@ client.on('interactionCreate', async (i) => {
         return i.reply({ content: `-# ** تم تفعيل السيرفر بنجاح <:2thumbup:1467287897429512396> **`, ephemeral: true });
       }
       
-      if (sub === 'remove') {
+      if (action === 'remove') {
         const serverId = options.getString('id');
         
         const subscription = settings.subscriptions.find(s => s.guildId === serverId);
@@ -1451,10 +1454,12 @@ client.on('interactionCreate', async (i) => {
     }
 
     if (commandName === 'auto') {
-      const sub = options.getSubcommand();
+      const action = options.getString('action');
       
-      if (sub === 'add') {
+      if (action === 'add') {
         const channel = options.getChannel('channel');
+        if (!channel) return i.reply({ content: '❌ الروم مطلوب للإضافة', ephemeral: true });
+        
         const delay = options.getInteger('delay') ?? 0;
         const filterType = options.getString('type') ?? 'all';
         const allowedStr = options.getString('allowed') || '';
@@ -1494,8 +1499,10 @@ client.on('interactionCreate', async (i) => {
         });
       }
       
-      if (sub === 'rem') {
+      if (action === 'rem') {
         const channel = options.getChannel('channel');
+        if (!channel) return i.reply({ content: '❌ الروم مطلوب للإزالة', ephemeral: true });
+        
         await AutoDelete.deleteMany({ guildId: guild.id, channelId: channel.id });
         
         return i.reply({ 
@@ -1504,7 +1511,7 @@ client.on('interactionCreate', async (i) => {
         });
       }
       
-      if (sub === 'list') {
+      if (action === 'list') {
         const channels = await getAutoDeleteChannels(guild.id);
         
         if (channels.length === 0) {
