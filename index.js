@@ -1047,7 +1047,13 @@ client.on('messageCreate', async (message) => {
 
   if (command === 'سحب' && message.author.id === OWNER_ID) {
   const target = message.mentions.users.first() || message.author;
-  const amount = parseFloat(args[1]);
+  
+  let amount;
+  if (message.mentions.users.first()) {
+    amount = parseFloat(args[2]);
+  } else {
+    amount = parseFloat(args[1]);
+  }
   
   if (isNaN(amount) || amount <= 0) return message.channel.send(`-# **القيمة غير صحيحه <:__:1467633552408576192> **`);
   
