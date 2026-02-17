@@ -167,6 +167,7 @@ function calculateTax(balance, amount) {
 
 // ==================== 📋 جميع الأوامر في مكان واحد ====================
 const allCommands = [
+  // أوامر عامة
   { name: 'help', description: 'عرض الأوامر' },
   { name: 'bal', description: 'عرض الرصيد' },
   {
@@ -180,132 +181,126 @@ const allCommands = [
   { name: 'top', description: 'قائمة الأغنياء' },
   { name: 'hist', description: 'سجل المعاملات' },
   
-  // wel - أمر واحد مع قائمة اختيار
+  // أوامر إدارة
   {
     name: 'wel',
-    description: 'نظام الترحيب',
+    description: 'ترحيب',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
     options: [
       {
         name: 'action',
-        description: 'اختر الإجراء',
+        description: 'اختر',
         type: 3,
         required: true,
         choices: [
-          { name: 'تعيين الروم', value: 'channel' },
-          { name: 'تعديل الرسالة', value: 'message' },
-          { name: 'عرض الإعدادات', value: 'info' },
-          { name: 'تجربة الرسالة', value: 'test' }
+          { name: 'روم', value: 'channel' },
+          { name: 'رسالة', value: 'message' },
+          { name: 'معلومات', value: 'info' },
+          { name: 'تجربة', value: 'test' }
         ]
       },
-      { name: 'room', description: 'الروم (لإجراء تعيين الروم)', type: 7, required: false, channel_types: [0] },
-      { name: 'title', description: 'العنوان (لتعديل الرسالة)', type: 3, required: false },
-      { name: 'desc', description: 'الوصف (لتعديل الرسالة)', type: 3, required: false },
-      { name: 'color', description: 'اللون (لتعديل الرسالة)', type: 3, required: false },
-      { name: 'image', description: 'الصورة (لتعديل الرسالة)', type: 3, required: false }
+      { name: 'room', description: 'الروم', type: 7, required: false, channel_types: [0] },
+      { name: 'title', description: 'العنوان', type: 3, required: false },
+      { name: 'desc', description: 'الوصف', type: 3, required: false },
+      { name: 'color', description: 'اللون', type: 3, required: false },
+      { name: 'img', description: 'الصورة', type: 3, required: false }
     ]
   },
-  
-  // tic - أمر واحد مع قائمة اختيار
   {
     name: 'tic',
-    description: 'نظام التذاكر',
+    description: 'تذاكر',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
     options: [
       {
         name: 'action',
-        description: 'اختر الإجراء',
+        description: 'اختر',
         type: 3,
         required: true,
         choices: [
-          { name: 'عرض لوحة التذاكر', value: 'panel' },
-          { name: 'إعدادات التذاكر', value: 'set' }
+          { name: 'لوحة', value: 'panel' },
+          { name: 'إعدادات', value: 'set' }
         ]
       },
-      { name: 'category', description: 'روم التذاكر (للإعدادات)', type: 7, required: false, channel_types: [4] },
-      { name: 'desc', description: 'الوصف (للإعدادات)', type: 3, required: false },
-      { name: 'color', description: 'اللون (للإعدادات)', type: 3, required: false },
-      { name: 'image', description: 'الصورة (للإعدادات)', type: 3, required: false },
-      { name: 'role', description: 'رتبة الدعم (للإعدادات)', type: 8, required: false },
-      { name: 'btn1_label', description: 'اسم الزر الأول', type: 3, required: false },
-      { name: 'btn1_style', description: 'لون الزر الأول (1-4)', type: 4, required: false, min_value: 1, max_value: 4 },
-      { name: 'btn1_role', description: 'رتبة الزر الأول', type: 8, required: false },
-      { name: 'btn2_label', description: 'اسم الزر الثاني', type: 3, required: false },
-      { name: 'btn2_style', description: 'لون الزر الثاني (1-4)', type: 4, required: false, min_value: 1, max_value: 4 },
-      { name: 'btn2_role', description: 'رتبة الزر الثاني', type: 8, required: false },
-      { name: 'btn3_label', description: 'اسم الزر الثالث', type: 3, required: false },
-      { name: 'btn3_style', description: 'لون الزر الثالث (1-4)', type: 4, required: false, min_value: 1, max_value: 4 },
-      { name: 'btn3_role', description: 'رتبة الزر الثالث', type: 8, required: false }
+      { name: 'cat', description: 'روم التذاكر', type: 7, required: false, channel_types: [4] },
+      { name: 'desc', description: 'الوصف', type: 3, required: false },
+      { name: 'color', description: 'اللون', type: 3, required: false },
+      { name: 'img', description: 'الصورة', type: 3, required: false },
+      { name: 'role', description: 'رتبة الدعم', type: 8, required: false },
+      { name: 'btn1', description: 'الزر1', type: 3, required: false },
+      { name: 's1', description: 'لون1 (1-4)', type: 4, required: false, min_value: 1, max_value: 4 },
+      { name: 'r1', description: 'رتبة1', type: 8, required: false },
+      { name: 'btn2', description: 'الزر2', type: 3, required: false },
+      { name: 's2', description: 'لون2 (1-4)', type: 4, required: false, min_value: 1, max_value: 4 },
+      { name: 'r2', description: 'رتبة2', type: 8, required: false },
+      { name: 'btn3', description: 'الزر3', type: 3, required: false },
+      { name: 's3', description: 'لون3 (1-4)', type: 4, required: false, min_value: 1, max_value: 4 },
+      { name: 'r3', description: 'رتبة3', type: 8, required: false }
     ]
   },
-  
   {
     name: 'giv',
-    description: 'نظام القيف أوي',
+    description: 'قيف',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
     options: [
       { name: 'prize', description: 'الجائزة', type: 3, required: true },
-      { name: 'time', description: 'المدة (10m, 1h, 1d)', type: 3, required: true },
-      { name: 'winners', description: 'عدد الفائزين', type: 4, required: true },
+      { name: 'time', description: 'المدة (10m,1h,1d)', type: 3, required: true },
+      { name: 'win', description: 'عدد الفائزين', type: 4, required: true },
       { name: 'cond', description: 'الشروط', type: 3, required: false },
       { name: 'img', description: 'الصورة', type: 3, required: false }
     ]
   },
-  
   {
     name: 'eco',
-    description: 'روم الاقتصاد',
+    description: 'اقتصاد',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
     options: [
       { name: 'room', description: 'الروم', type: 7, required: true, channel_types: [0] },
-      { name: 'message', description: 'رسالة الخطأ (اتركها فارغة للإلغاء)', type: 3, required: false }
+      { name: 'msg', description: 'الرسالة', type: 3, required: false }
     ]
   },
-  
   {
-    name: 'prefix',
-    description: 'بادئة الأوامر',
+    name: 'pre',
+    description: 'بادئة',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
     options: [
-      { name: 'value', description: 'البادئة (اتركها فارغة للإلغاء)', type: 3, required: false, max_length: 3 }
+      { name: 'val', description: 'البادئة', type: 3, required: false, max_length: 3 }
     ]
   },
-  
   {
-    name: 'embed',
-    description: 'إرسال إمبد',
+    name: 'emb',
+    description: 'إمبد',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
     options: [
-      { name: 'content', description: 'نص الإمبد', type: 3, required: true },
-      { name: 'color', description: 'اللون (مثال: #ff0000)', type: 3, required: false },
-      { name: 'image', description: 'رابط صورة', type: 3, required: false }
+      { name: 'txt', description: 'النص', type: 3, required: true },
+      { name: 'color', description: 'اللون', type: 3, required: false },
+      { name: 'img', description: 'الصورة', type: 3, required: false }
     ]
   },
   
-  // sub - أمر واحد مع قائمة اختيار
+  // أوامر مالك
   {
     name: 'sub',
-    description: 'نظام الاشتراكات',
+    description: 'اشتراك',
     default_member_permissions: "0",
     options: [
       {
         name: 'action',
-        description: 'اختر الإجراء',
+        description: 'اختر',
         type: 3,
         required: true,
         choices: [
-          { name: 'إضافة سيرفر', value: 'add' },
-          { name: 'حذف سيرفر', value: 'remove' }
+          { name: '➕ إضافة', value: 'add' },
+          { name: '➖ حذف', value: 'remove' }
         ]
       },
       { name: 'id', description: 'ايدي السيرفر', type: 3, required: true },
       {
-        name: 'duration',
-        description: 'المدة (لإجراء الإضافة)',
+        name: 'dur',
+        description: 'المدة',
         type: 3,
         required: false,
         choices: [
-          { name: 'تجريبي (3 أيام)', value: 'trial' },
+          { name: '3أيام', value: 'trial' },
           { name: 'اسبوع', value: '7d' },
           { name: 'شهر', value: '30d' },
           { name: 'شهرين', value: '60d' },
@@ -314,52 +309,49 @@ const allCommands = [
       }
     ]
   },
-  
   {
     name: 'host',
-    description: 'عرض السيرفرات',
+    description: 'السيرفرات',
     default_member_permissions: "0"
   },
-  
-  // auto - أمر واحد مع قائمة اختيار
   {
     name: 'auto',
-    description: 'الحذف التلقائي',
+    description: 'حذف تلقائي',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
     options: [
       {
         name: 'action',
-        description: 'اختر الإجراء',
+        description: 'اختر',
         type: 3,
         required: true,
         choices: [
-          { name: 'إضافة روم', value: 'add' },
-          { name: 'إزالة روم', value: 'rem' },
-          { name: 'عرض الإعدادات', value: 'list' }
+          { name: '➕ إضافة', value: 'add' },
+          { name: '➖ حذف', value: 'rem' },
+          { name: '📋 قائمة', value: 'list' }
         ]
       },
-      { name: 'channel', description: 'الروم (لإجراءات الإضافة/الإزالة)', type: 7, required: false, channel_types: [0] },
-      { name: 'delay', description: 'مدة الحذف (ثواني)', type: 4, required: false },
+      { name: 'ch', description: 'الروم', type: 7, required: false, channel_types: [0] },
+      { name: 'delay', description: 'التأخير', type: 4, required: false },
       {
         name: 'type',
-        description: 'نوع الفلتر',
+        description: 'النوع',
         type: 3,
         required: false,
         choices: [
           { name: 'الكل', value: 'all' },
-          { name: 'كلمات محددة', value: 'words' },
+          { name: 'كلمات', value: 'words' },
           { name: 'صور', value: 'images' },
           { name: 'روابط', value: 'links' },
           { name: 'ملفات', value: 'files' }
         ]
       },
-      { name: 'allowed', description: 'كلمات مسموحة (مفصولة بفواصل)', type: 3, required: false },
-      { name: 'blocked', description: 'كلمات ممنوعة (مفصولة بفواصل)', type: 3, required: false },
-      { name: 'except_users', description: 'مستثنون (ايديات مفصولة)', type: 3, required: false },
-      { name: 'except_roles', description: 'رتب مستثناة (ايديات مفصولة)', type: 3, required: false },
-      { name: 'message', description: 'رسالة مخصصة', type: 3, required: false },
-      { name: 'delete_bots', description: 'يحذف رسائل البوتات؟', type: 5, required: false },
-      { name: 'ignore_commands', description: 'يتجاهل الأوامر؟', type: 5, required: false }
+      { name: 'allow', description: 'كلمات مسموحة', type: 3, required: false },
+      { name: 'block', description: 'كلمات ممنوعة', type: 3, required: false },
+      { name: 'ex_u', description: 'مستثنون', type: 3, required: false },
+      { name: 'ex_r', description: 'رتب مستثناة', type: 3, required: false },
+      { name: 'msg', description: 'رسالة', type: 3, required: false },
+      { name: 'bots', description: 'بوتات؟', type: 5, required: false },
+      { name: 'cmd', description: 'تجاهل أوامر؟', type: 5, required: false }
     ]
   }
 ];
@@ -801,7 +793,7 @@ client.on('messageCreate', async (message) => {
         `**Members <:emoji_32:1471962578895769611>**\n` +
         `-# **text - دنانير، تحويل، اغنياء، سجل**\n\n` +
         `**Mods <:emoji_38:1470920843398746215>**\n` +
-        `-# **wel, tic, giv, eco, prefix, embed, sub, host, auto**\n` +
+        `-# **wel, tic, giv, eco, pre, emb, sub, host, auto**\n` +
         `-# **text - تايم، طرد، حذف، ارقام، ايقاف**`
       );
     return message.channel.send({ embeds: [embed] });
@@ -850,9 +842,12 @@ client.on('messageCreate', async (message) => {
   }
 
   if (command === 'تأكيد') {
-    const pending = Array.from(pendingTransfers.entries()).find(([key, data]) => 
-      key.startsWith(message.guild.id) && data.senderId === message.author.id && data.channelId === message.channel.id
-    );
+    const pending = Array.from(pendingTransfers.entries()).find(([key, data]) => {
+      const [guildId, msgId] = key.split('-');
+      return guildId === message.guild.id && 
+             data.senderId === message.author.id && 
+             data.channelId === message.channel.id;
+    });
 
     if (!pending) return;
     
@@ -1055,7 +1050,7 @@ client.on('interactionCreate', async (i) => {
           `**Members <:emoji_32:1471962578895769611>**\n` +
           `-# **text - دنانير، تحويل، اغنياء، سجل**\n\n` +
           `**Mods <:emoji_38:1470920843398746215>**\n` +
-          `-# **wel, tic, giv, eco, prefix, embed, sub, host, auto**\n` +
+          `-# **wel, tic, giv, eco, pre, emb, sub, host, auto**\n` +
           `-# **text - تايم، طرد، حذف، ارقام، ايقاف**`
         );
       return i.reply({ embeds: [embed], ephemeral: true });
@@ -1124,7 +1119,7 @@ client.on('interactionCreate', async (i) => {
       
       if (action === 'channel') {
         const room = options.getChannel('room');
-        if (!room) return i.reply({ content: '❌ الروم مطلوب لهذا الإجراء', ephemeral: true });
+        if (!room) return i.reply({ content: '❌ الروم مطلوب', ephemeral: true });
         settings.welcomeSettings.channelId = room.id;
         await settings.save();
         return i.reply({ content: `✅ تم تعيين روم الترحيب إلى ${room}`, ephemeral: true });
@@ -1134,7 +1129,7 @@ client.on('interactionCreate', async (i) => {
         if (options.getString('title')) settings.welcomeSettings.title = options.getString('title');
         if (options.getString('desc')) settings.welcomeSettings.description = options.getString('desc');
         if (options.getString('color')) settings.welcomeSettings.color = options.getString('color').replace('#', '');
-        if (options.getString('image')) settings.welcomeSettings.image = options.getString('image');
+        if (options.getString('img')) settings.welcomeSettings.image = options.getString('img');
         await settings.save();
         return i.reply({ content: `✅ تم تعديل رسالة الترحيب`, ephemeral: true });
       }
@@ -1201,8 +1196,8 @@ client.on('interactionCreate', async (i) => {
       if (action === 'set') {
         let updated = false;
         
-        if (options.getChannel('category')) { 
-          ticketSettings.categoryId = options.getChannel('category').id; 
+        if (options.getChannel('cat')) { 
+          ticketSettings.categoryId = options.getChannel('cat').id; 
           updated = true; 
         }
         if (options.getString('desc')) { 
@@ -1213,8 +1208,8 @@ client.on('interactionCreate', async (i) => {
           ticketSettings.embedColor = options.getString('color').replace('#', ''); 
           updated = true; 
         }
-        if (options.getString('image')) { 
-          ticketSettings.embedImage = options.getString('image'); 
+        if (options.getString('img')) { 
+          ticketSettings.embedImage = options.getString('img'); 
           updated = true; 
         }
         if (options.getRole('role')) { 
@@ -1224,9 +1219,9 @@ client.on('interactionCreate', async (i) => {
         
         const newButtons = [];
         for (let i = 1; i <= 3; i++) {
-          const label = options.getString(`btn${i}_label`);
-          const style = options.getInteger(`btn${i}_style`);
-          const role = options.getRole(`btn${i}_role`);
+          const label = options.getString(`btn${i}`);
+          const style = options.getInteger(`s${i}`);
+          const role = options.getRole(`r${i}`);
           
           if (label && style) {
             newButtons.push({
@@ -1254,12 +1249,12 @@ client.on('interactionCreate', async (i) => {
     if (commandName === 'giv') {
       const prize = options.getString('prize');
       const durationStr = options.getString('time');
-      const winnersCount = options.getInteger('winners');
+      const winnersCount = options.getInteger('win');
       const condition = options.getString('cond') || '';
       const imageOption = options.getString('img');
       
       const timeMatch = durationStr.match(/^(\d+)([mhd])$/);
-      if (!timeMatch) return i.reply({ content: `صيغة الوقت غلط! (10m, 1h, 1d)`, ephemeral: true });
+      if (!timeMatch) return i.reply({ content: `صيغة الوقت غلط! (10m,1h,1d)`, ephemeral: true });
       
       const durationMs = parseInt(timeMatch[1]) * (timeMatch[2] === 'm' ? 60 : timeMatch[2] === 'h' ? 3600 : 86400) * 1000;
       const endTime = new Date(Date.now() + durationMs);
@@ -1307,7 +1302,7 @@ client.on('interactionCreate', async (i) => {
 
     if (commandName === 'eco') {
       const channel = options.getChannel('room');
-      const msg = options.getString('message');
+      const msg = options.getString('msg');
       const settings = await getSettings(guild.id);
       
       settings.economyChannel = channel.id;
@@ -1315,20 +1310,20 @@ client.on('interactionCreate', async (i) => {
       await settings.save();
       
       const response = msg 
-        ? `✅ تم تعيين روم الاقتصاد إلى ${channel} مع رسالة مخصصة`
+        ? `✅ تم تعيين روم الاقتصاد إلى ${channel} مع رسالة`
         : `✅ تم تعيين روم الاقتصاد إلى ${channel}`;
       
       return i.reply({ content: response, ephemeral: true });
     }
 
-    if (commandName === 'prefix') {
-      const newPrefix = options.getString('value');
+    if (commandName === 'pre') {
+      const newPrefix = options.getString('val');
       const settings = await getSettings(guild.id);
       
       if (!newPrefix || newPrefix === '') {
         settings.prefix = null;
         await settings.save();
-        return i.reply({ content: `✅ تم إلغاء البادئة، الأوامر النصية تشتغل بدون بادئة`, ephemeral: true });
+        return i.reply({ content: `✅ تم إلغاء البادئة`, ephemeral: true });
       }
       
       if (newPrefix.length > 3) {
@@ -1341,10 +1336,10 @@ client.on('interactionCreate', async (i) => {
       return i.reply({ content: `✅ تم تعيين البادئة إلى \`${newPrefix}\``, ephemeral: true });
     }
 
-    if (commandName === 'embed') {
-      const content = options.getString('content');
+    if (commandName === 'emb') {
+      const content = options.getString('txt');
       const color = options.getString('color') || '#2b2d31';
-      const image = options.getString('image');
+      const image = options.getString('img');
       
       const embed = new EmbedBuilder()
         .setDescription(content)
@@ -1362,9 +1357,9 @@ client.on('interactionCreate', async (i) => {
       
       if (action === 'add') {
         const serverId = options.getString('id');
-        const duration = options.getString('duration');
+        const duration = options.getString('dur');
         
-        if (!duration) return i.reply({ content: `❌ المدة مطلوبة للإضافة`, ephemeral: true });
+        if (!duration) return i.reply({ content: `❌ المدة مطلوبة`, ephemeral: true });
         
         let guild;
         try {
@@ -1457,18 +1452,18 @@ client.on('interactionCreate', async (i) => {
       const action = options.getString('action');
       
       if (action === 'add') {
-        const channel = options.getChannel('channel');
-        if (!channel) return i.reply({ content: '❌ الروم مطلوب للإضافة', ephemeral: true });
+        const channel = options.getChannel('ch');
+        if (!channel) return i.reply({ content: '❌ الروم مطلوب', ephemeral: true });
         
         const delay = options.getInteger('delay') ?? 0;
         const filterType = options.getString('type') ?? 'all';
-        const allowedStr = options.getString('allowed') || '';
-        const blockedStr = options.getString('blocked') || '';
-        const exceptUsersStr = options.getString('except_users') || '';
-        const exceptRolesStr = options.getString('except_roles') || '';
-        const customMessage = options.getString('message') || null;
-        const deleteBots = options.getBoolean('delete_bots') ?? false;
-        const ignoreCommands = options.getBoolean('ignore_commands') ?? true;
+        const allowedStr = options.getString('allow') || '';
+        const blockedStr = options.getString('block') || '';
+        const exceptUsersStr = options.getString('ex_u') || '';
+        const exceptRolesStr = options.getString('ex_r') || '';
+        const customMessage = options.getString('msg') || null;
+        const deleteBots = options.getBoolean('bots') ?? false;
+        const ignoreCommands = options.getBoolean('cmd') ?? true;
         
         const allowedWords = allowedStr.split(',').map(s => s.trim()).filter(s => s);
         const blockedWords = blockedStr.split(',').map(s => s.trim()).filter(s => s);
@@ -1500,8 +1495,8 @@ client.on('interactionCreate', async (i) => {
       }
       
       if (action === 'rem') {
-        const channel = options.getChannel('channel');
-        if (!channel) return i.reply({ content: '❌ الروم مطلوب للإزالة', ephemeral: true });
+        const channel = options.getChannel('ch');
+        if (!channel) return i.reply({ content: '❌ الروم مطلوب', ephemeral: true });
         
         await AutoDelete.deleteMany({ guildId: guild.id, channelId: channel.id });
         
@@ -1515,55 +1510,16 @@ client.on('interactionCreate', async (i) => {
         const channels = await getAutoDeleteChannels(guild.id);
         
         if (channels.length === 0) {
-          return i.reply({ content: '⚠️ لا يوجد رومات مفعلة للحذف التلقائي.', ephemeral: true });
+          return i.reply({ content: '⚠️ لا يوجد رومات مفعلة.', ephemeral: true });
         }
         
-        let message = `**📋 رومات الحذف التلقائي <:new_emoji:1388436089584226387> **\n\n`;
+        let message = `**رومات الحذف التلقائي <:new_emoji:1388436089584226387>**\n`;
         
         for (const ch of channels) {
-          const filterTypes = {
-            'all': '📝 جميع الرسائل',
-            'words': '🔤 كلمات محددة',
-            'images': '🖼️ الصور',
-            'links': '🔗 الروابط',
-            'files': '📁 الملفات'
-          };
-          
-          const delayText = ch.deleteDelay === 0 ? 'فوري' : `${ch.deleteDelay} ثانية`;
-          const allowedText = ch.allowedWords.length > 0 ? ch.allowedWords.join('، ') : 'لا يوجد';
-          const blockedText = ch.blockedWords.length > 0 ? ch.blockedWords.join('، ') : 'لا يوجد';
-          const exceptUsersText = ch.exceptUsers.length > 0 ? ch.exceptUsers.map(id => `<@${id}>`).join(' ') : 'لا يوجد';
-          const exceptRolesText = ch.exceptRoles.length > 0 ? ch.exceptRoles.map(id => `<@&${id}>`).join(' ') : 'لا يوجد';
-          const customMessageText = ch.customMessage || 'الرسالة الافتراضية';
-          const deleteBotsText = ch.deleteBotMessages ? '✅ نعم' : '❌ لا';
-          const ignoreCommandsText = ch.ignoreCommands ? '✅ نعم' : '❌ لا';
-          
-          message += `**🔹 <#${ch.channelId}>**\n`;
-          message += `⏱️ **المدة:** ${delayText}\n`;
-          message += `🔍 **النوع:** ${filterTypes[ch.filterType] || ch.filterType}\n`;
-          message += `🚫 **المستثنون:** ${exceptUsersText}\n`;
-          message += `🛡️ **الرتب المستثناة:** ${exceptRolesText}\n`;
-          message += `📜 **الرسالة:** ${customMessageText}\n`;
-          message += `🤖 **يحذف رسائل البوتات:** ${deleteBotsText}\n`;
-          message += `⚙️ **يتجاهل الأوامر:** ${ignoreCommandsText}\n`;
-          
-          if (ch.filterType === 'words') {
-            if (ch.blockedWords.length > 0) message += `🔴 **كلمات ممنوعة:** ${blockedText}\n`;
-            if (ch.allowedWords.length > 0) message += `🟢 **كلمات مسموحة فقط:** ${allowedText}\n`;
-          }
-          
-          message += `\n`;
+          message += `-# **<#${ch.channelId}>**\n`;
         }
         
-        if (message.length > 2000) {
-          const chunks = message.match(/[\s\S]{1,1900}/g) || [];
-          await i.reply({ content: chunks[0], ephemeral: true });
-          for (let j = 1; j < chunks.length; j++) {
-            await i.followUp({ content: chunks[j], ephemeral: true });
-          }
-        } else {
-          await i.reply({ content: message, ephemeral: true });
-        }
+        return i.reply({ content: message, ephemeral: true });
       }
     }
   }
