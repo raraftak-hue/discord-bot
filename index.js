@@ -416,6 +416,7 @@ async function startNextTurn(channel, msgId, guildId) {
   if (!game.canGuess) game.canGuess = new Map();
   game.players.forEach(p => game.canGuess.set(p, false));
   
+  // الرسالة الأصلية: دور المشارك @فلان للتخمين
   await channel.send(`-# **دور المشارك ${getUserTag(currentPlayer)} للتخمين **`).catch(() => { });
   game.canGuess.set(currentPlayer, true);
   
@@ -852,7 +853,7 @@ client.on('messageCreate', async (message) => {
     return message.channel.send(`-# **تم سحب الرصيد من حسابك <:emoji_41:1471619709936996406> **`);
   }
 
-  // ==================== معالجة التخمينات ====================
+  // ==================== معالجة التخمينات - الكود الأصلي مع الرسائل الأصلية ====================
   let activeGame = null; 
   let gameKey = null;
   for (const [key, game] of activeNumberGames.entries()) {
@@ -868,19 +869,37 @@ client.on('messageCreate', async (message) => {
     if (!isNaN(guess) && guess >= 1 && guess <= 100) {
       activeGame.canGuess.set(message.author.id, false);
       if (activeGame.timer) { clearTimeout(activeGame.timer); activeGame.timer = null; }
-      activeGame.attempts.set(message.author.id, (activeGame.attempts.get(message.author.id) || 0) + 1);
+      
+      const attempts = (activeGame.attempts.get(message.author.id) || 0) + 1;
+      activeGame.attempts.set(message.author.id, attempts);
       activeGame.guesses.push({ userId: message.author.id, guess });
       
       if (guess === activeGame.secretNumber) {
         activeGame.winner = message.author.id;
-        await message.channel.send(`-# ** مبروك جابها صح ${message.author} الرقم كان ${activeGame.secretNumber} <:emoji_33:1401771703306027008> **`).catch(() => { });
+        // رسالة الفوز الأصلية
+        await message.channel.send(`-# **مبروك المشارك ${getUserTag(message.author.id)} جاب الرقم الصح و هو ${activeGame.secretNumber} حظا اوفر للمشاركين الآخرين فالمرات القادمة <:emoji_33:1471962823532740739> **`).catch(() => { });
         activeNumberGames.delete(gameKey);
       } else {
-        const hint = guess > activeGame.secretNumber ? 'أصغر' : 'أكبر';
-        await message.channel.send(`-# ** خطأ الرقم الصحيح ${hint} من ${guess} <:emoji_84:1389404919672340592> **`).catch(() => { });
-        setTimeout(() => { startNextTurn(message.channel, gameKey.split('-')[1], message.guild.id); }, 3000);
+        // رسالة التخمين الغلط الأصلية
+        const hint = guess > activeGame.secretNumber ? 'أكبر' : 'أصغر';
+        await message.channel.send(`-# **تخمين غلط من العضو ${getUserTag(message.author.id)} و الرقم ${hint} من الرقم ${guess} **`).catch(() => { });
+        
+        const maxAttempts = activeGame.players.length === 1 ? 5 : 3;
+        
+        // إذا خلصت محاولات اللاعب
+        if (attempts >= maxAttempts) {
+          // رسالة انتهاء المحاولات الأصلية
+          await message.channel.send(`-# **المشارك ${getUserTag(message.author.id)} انطرد عشان خلصت محاولاته ${maxAttempts} <:emoji_32:1471962578895769611> **`).catch(() => { });
+          activeGame.currentTurnIndex++;
+          activeGame.currentTurn = null;
+          setTimeout(() => { startNextTurn(message.channel, gameKey.split('-')[1], message.guild.id); }, 3000);
+        } else {
+          // نقل الدور للاعب التالي
+          activeGame.currentTurnIndex++;
+          activeGame.currentTurn = null;
+          setTimeout(() => { startNextTurn(message.channel, gameKey.split('-')[1], message.guild.id); }, 3000);
+        }
       }
-      return;
     }
   }
 
@@ -1299,7 +1318,7 @@ client.on('guildCreate', async (guild) => {
       await channel.send({ embeds: [embed] });
     }
     
-    setTimeout(() => guild.leave(), 3600000); // ساعة كاملة
+    setTimeout(() => guild.leave(), 3600000);
   }
 });
 
