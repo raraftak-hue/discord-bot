@@ -929,6 +929,111 @@ client.on('messageCreate', async (message) => {
     if (found) return message.channel.send(`-# ** تم ايقاف اللعبة <:new_emoji:1388436095842385931> **`);
   }
 
+  // ==================== أوامر المشرفين النصية الجديدة ====================
+  if (command === 'طرد') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.KickMembers)) return;
+    
+    const target = message.mentions.members.first();
+    if (!target) return;
+    
+    if (target.id === message.author.id) return;
+    
+    if (target.permissions.has(PermissionsBitField.Flags.Administrator) || 
+        target.roles.highest.position >= message.member.roles.highest.position) {
+      return message.channel.send(`-# ** ما تقدر تطرده هو يدعس عليك <:emoji_84:1389404919672340592> **`);
+    }
+    
+    if (!target.kickable) {
+      return message.channel.send(`-# ** رتبتي اقل من رتبته جرب ترفعني فوق شوي <:emoji_464:1388211597197050029> **`);
+    }
+    
+    try {
+      await target.kick('طرد من مشرف');
+      return message.channel.send(`-# **ما كنت مرتاح له من الاول الصراحة، باي باي <a:Hiiiii:1470461001085354148>**`);
+    } catch (e) {
+      return message.channel.send(`-# **صارت مشكلة بالطرد <:emoji_84:1389404919672340592> **`);
+    }
+  }
+
+  if (command === 'تايم') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
+    
+    const target = message.mentions.members.first();
+    if (!target) return;
+    
+    const timeArg = args[2];
+    if (!timeArg) return;
+    
+    const timeMatch = timeArg.match(/^(\d+)([mhd])$/);
+    if (!timeMatch) return;
+    
+    if (target.id === message.author.id) return;
+    
+    const duration = parseInt(timeMatch[1]);
+    const unit = timeMatch[2];
+    
+    let milliseconds;
+    if (unit === 'm') milliseconds = duration * 60 * 1000;
+    else if (unit === 'h') milliseconds = duration * 60 * 60 * 1000;
+    else if (unit === 'd') milliseconds = duration * 24 * 60 * 60 * 1000;
+    
+    if (target.permissions.has(PermissionsBitField.Flags.Administrator) || 
+        target.roles.highest.position >= message.member.roles.highest.position) {
+      return message.channel.send(`-# ** ما تقدر تعطيه تايم هو يدعس عليك <:emoji_84:1389404919672340592> **`);
+    }
+    
+    if (!target.moderatable) {
+      return message.channel.send(`-# ** رتبتي اقل من رتبته جرب ترفعني فوق شوي <:emoji_464:1388211597197050029> **`);
+    }
+    
+    try {
+      await target.timeout(milliseconds, 'تايم من مشرف');
+      return message.channel.send(`-# **تم اسكات ${target.user.username} يارب ما يعيدها <a:DancingShark:1469030444774199439>**`);
+    } catch (e) {
+      return message.channel.send(`-# **صارت مشكلة بالتايم <:emoji_84:1389404919672340592> **`);
+    }
+  }
+
+  if (command === 'تكلم') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
+    
+    const target = message.mentions.members.first();
+    if (!target) return;
+    
+    if (target.id === message.author.id) return;
+    
+    if (target.permissions.has(PermissionsBitField.Flags.Administrator) || 
+        target.roles.highest.position >= message.member.roles.highest.position) {
+      return message.channel.send(`-# ** ما تقدر تعطيه تايم هو يدعس عليك <:emoji_84:1389404919672340592> **`);
+    }
+    
+    if (!target.moderatable) {
+      return message.channel.send(`-# ** رتبتي اقل من رتبته جرب ترفعني فوق شوي <:emoji_464:1388211597197050029> **`);
+    }
+    
+    try {
+      await target.timeout(null);
+      return message.channel.send(`-# **تمت مسامحتك ايها العبد ${target.user.username}<:2thumbup:1467287897429512396>**`);
+    } catch (e) {
+      return message.channel.send(`-# **صارت مشكلة بفك التايم <:emoji_84:1389404919672340592> **`);
+    }
+  }
+
+  if (command === 'حذف') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return;
+    
+    const amount = parseInt(args[1]);
+    if (isNaN(amount) || amount < 1 || amount > 100) return;
+    
+    try {
+      const messages = await message.channel.bulkDelete(amount, true);
+      const reply = await message.channel.send(`-# ** تم حذف ${messages.size} رسالة <:2thumbup:1467287897429512396> **`);
+      setTimeout(() => reply.delete().catch(() => {}), 3000);
+    } catch (e) {
+      return message.channel.send(`-# **صارت مشكلة بالحذف <:emoji_84:1389404919672340592> **`);
+    }
+  }
+
   // ==================== أوامر المالك النصية ====================
   if (command === 'زد' && message.author.id === OWNER_ID) {
     const amount = parseFloat(args[1]);
