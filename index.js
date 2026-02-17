@@ -1297,17 +1297,16 @@ client.on('interactionCreate', async (i) => {
 });
 
 // ==================== 🚫 عند إضافة البوت لسيرفر جديد ====================
+// ==================== 🚫 عند إضافة البوت لسيرفر جديد ====================
 client.on('guildCreate', async (guild) => {
   const globalSettings = await getGlobalSettings();
   const subscription = globalSettings.subscriptions.find(s => s.guildId === guild.id);
   
   if (!subscription || subscription.status !== 'active') {
-    const channel = guild.channels.cache.find(ch => 
-      ch.type === ChannelType.GuildText && 
-      ch.permissionsFor(guild.members.me).has(PermissionsBitField.Flags.SendMessages)
-    );
-
-    if (channel) {
+    // ✅ محاولة إرسال رسالة خاصة لمالك السيرفر
+    try {
+      const owner = await client.users.fetch(guild.ownerId);
+      
       const embed = new EmbedBuilder()
         .setColor(0x2b2d31)
         .setDescription(
@@ -1315,7 +1314,18 @@ client.on('guildCreate', async (guild) => {
           "-# **البوت سوف يخرج نفسه من السيرفر في غضون ساعة <:emoji_32:1471962578895769611> **"
         );
       
-      await channel.send({ embeds: [embed] });
+      await owner.send({ embeds: [embed] });
+      
+    } catch (error) {
+      // ❌ إذا ما فتح الخاص، نرسل في الشات العام كحل بديل (احتياطي)
+      const channel = guild.channels.cache.find(ch => 
+        ch.type === ChannelType.GuildText && 
+        ch.permissionsFor(guild.members.me).has(PermissionsBitField.Flags.SendMessages)
+      );
+
+      if (channel) {
+        await channel.send({ embeds: [embed] });
+      }
     }
     
     setTimeout(() => guild.leave(), 3600000);
