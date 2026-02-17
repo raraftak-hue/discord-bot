@@ -349,7 +349,6 @@ const ownerCommands = [
             required: false,
             choices: [
               { name: 'الكل', value: 'all' },
-              { name: 'كلمات محددة', value: 'words' },
               { name: 'صور', value: 'images' },
               { name: 'روابط', value: 'links' },
               { name: 'ملفات', value: 'files' }
@@ -739,8 +738,19 @@ client.once('ready', async () => {
 // ==================== 📝 معالج الرسائل ====================
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
+  
   const globalSettings = await getGlobalSettings();
-  if (!globalSettings.allowedGuilds.includes(message.guild.id)) return;
+  const subscription = globalSettings.subscriptions.find(s => s.guildId === message.guild.id);
+
+  if (!globalSettings.allowedGuilds.includes(message.guild.id)) {
+    if (subscription && subscription.status === 'active') {
+      globalSettings.allowedGuilds.push(message.guild.id);
+      await globalSettings.save();
+      console.log(`✅ تمت إضافة السيرفر ${message.guild.name} تلقائياً للقائمة المسموحة`);
+    } else {
+      return;
+    }
+  }
   
   const args = message.content.trim().split(/\s+/);
   const firstWord = args[0];
@@ -764,8 +774,7 @@ client.on('messageCreate', async (message) => {
     let membersMsg = '';
     
     if (prefix) {
-      membersMsg = `-# **${prefix}دنانير، ${prefix}تحويل، ${prefix}اغنياء، ${prefix}سجل**\n` +
-                   `-# **(البريفكس المفعل: \`${prefix}\`)**`;
+      membersMsg = `-# **${prefix}دنانير، ${prefix}تحويل، ${prefix}اغنياء، ${prefix}سجل**`;
     } else {
       membersMsg = `-# **دنانير، تحويل، اغنياء، سجل**`;
     }
@@ -773,10 +782,10 @@ client.on('messageCreate', async (message) => {
     const embed = new EmbedBuilder()
       .setColor(0x2b2d31)
       .setDescription(
-        `**Members <:emoji_32:1471962578895769611>**\n${membersMsg}\n\n` +
-        `**Mods <:emoji_38:1470920843398746215>**\n` +
-        `-# **/wel, /tic, /give, /pre, /emb**\n` +
-        `-# **${prefix ? prefix : ''}تايم، ${prefix ? prefix : ''}طرد، ${prefix ? prefix : ''}حذف، ${prefix ? prefix : ''}ارقام، ${prefix ? prefix : ''}ايقاف**`
+        `** members<:emoji_32:1471962578895769611> **\n${membersMsg}\n\n` +
+        `** Mods <:emoji_38:1470920843398746215>**\n` +
+        `-# ** wel, tic, give,pre,emb**\n` +
+        `-# ** text -  تايم، طرد، حذف، ارقام، ايقاف**`
       );
     return message.channel.send({ embeds: [embed] });
   }
@@ -1374,7 +1383,6 @@ client.on('interactionCreate', async (i) => {
         let message = `**رومات الحذف التلقائي <:new_emoji:1388436089584226387> **\n\n`;
         const filterTypes = { 
           'all': 'جميع الرسائل', 
-          'words': 'كلمات محددة', 
           'images': 'الصور', 
           'links': 'الروابط', 
           'files': 'الملفات' 
