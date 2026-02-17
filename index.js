@@ -153,7 +153,9 @@ function calculateTax(balance, amount) {
   if (balance >= 501 && balance <= 1000) return amount * 0.25;
   if (balance > 1000) return amount * 0.30;
   return 0;
-}// ==================== 📋 الأوامر المختصرة ====================
+}
+
+// ==================== 📋 الأوامر المختصرة ====================
 const slashCommands = [
   { name: 'help', description: 'عرض جميع الأوامر' },
   { name: 'bal', description: 'عرض الرصيد' },
@@ -459,11 +461,13 @@ async function startNextTurn(channel, msgId, guildId) {
   }, 15000);
   
   game.timer = timer;
-}// ==================== 📜 دالة تنسيق السجل ====================
+}
+
+// ==================== 📜 دالة تنسيق السجل المعدلة ====================
 async function formatHistory(history) {
   if (!history || history.length === 0) return "-# **ما عندك أي عمليات سابقة <:emoji_32:1471962578895769611>**";
   
-  const filtered = history.slice(-5).reverse();
+  const filtered = history.slice(-3).reverse();
   const lines = [];
 
   for (const h of filtered) {
@@ -471,12 +475,24 @@ async function formatHistory(history) {
     const dateStr = `${date.getDate()}-${date.getMonth() + 1}`;
 
     if (h.type === 'TRANSFER_SEND') {
-      const target = h.targetName || 'مستخدم';
-      lines.push(`-# **تحويل الى ${target} في ${dateStr} <:emoji_41:1471619709936996406>**`);
+      let targetName = 'مستخدم';
+      try {
+        if (h.targetUser) {
+          const user = await client.users.fetch(h.targetUser).catch(() => null);
+          if (user) targetName = user.username;
+        }
+      } catch (e) {}
+      lines.push(`-# **تحويل الى ${targetName} في ${dateStr} <:emoji_41:1471619709936996406>**`);
     } 
     else if (h.type === 'TRANSFER_RECEIVE') {
-      const target = h.targetName || 'مستخدم';
-      lines.push(`-# **استلام من ${target} في ${dateStr} <:emoji_41:1471983856440836109>**`);
+      let targetName = 'مستخدم';
+      try {
+        if (h.targetUser) {
+          const user = await client.users.fetch(h.targetUser).catch(() => null);
+          if (user) targetName = user.username;
+        }
+      } catch (e) {}
+      lines.push(`-# **استلام من ${targetName} في ${dateStr} <:emoji_41:1471983856440836109>**`);
     } 
     else if (h.type === 'WEEKLY_TAX') {
       lines.push(`-# **خصم زكاة 2.5% = ${Math.abs(h.amount)} في ${dateStr} <:emoji_40:1471983905430311074>**`);
@@ -672,7 +688,9 @@ client.once('ready', async () => {
     
     console.log(`✅ تم خصم الزكاة من ${users.length} عضو بمجموع ${totalTax.toFixed(2)} دينار`);
   });
-});// ==================== 📝 معالج الرسائل ====================
+});
+
+// ==================== 📝 معالج الرسائل ====================
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
   const globalSettings = await getGlobalSettings();
@@ -859,16 +877,20 @@ client.on('interactionCreate', async (i) => {
 
     // ==================== قائمة الأوامر ====================
     if (commandName === 'help') {
-      const helpMsg = `-# **bal - عرض الرصيد**\n` +
-                      `-# **pay - تحويل أموال**\n` +
-                      `-# **top - قائمة الأغنياء**\n` +
-                      `-# **hist - سجل المعاملات**\n` +
-                      `-# **help - عرض الأوامر**\n` +
-                      `-# دنانير، تحويل، اغنياء، سجل\n\n` +
-                      `**أوامر الإدارة <:emoji_38:1470920843398746215>**\n` +
-                      `-# wel, tic, num, give\n` +
-                      `-# تايم، طرد، حذف، ارقام، ايقاف`;
-      return i.reply({ content: helpMsg, ephemeral: true });
+      const embed = new EmbedBuilder()
+        .setColor(0x2b2d31)
+        .setDescription(
+          `-# **bal - عرض الرصيد**\n` +
+          `-# **pay - تحويل أموال**\n` +
+          `-# **top - قائمة الأغنياء**\n` +
+          `-# **hist - سجل المعاملات**\n` +
+          `-# **help - عرض الأوامر**\n` +
+          `-# **text - دنانير، تحويل، اغنياء، سجل**\n\n` +
+          `**Mods <:emoji_38:1470920843398746215>**\n` +
+          `-# **wel, tic, num, give**\n` +
+          `-# **text - تايم، طرد، حذف، ارقام، ايقاف**`
+        );
+      return i.reply({ embeds: [embed], ephemeral: true });
     }
 
     if (commandName === 'bal') {
@@ -914,8 +936,8 @@ client.on('interactionCreate', async (i) => {
 
     if (commandName === 'hist') {
       const target = options.getUser('user') || user;
-      const userData = await getUserData(target.id);
-      const historyText = await formatHistory(userData.history);
+      const targetData = await getUserData(target.id);
+      const historyText = await formatHistory(targetData.history);
       const embed = new EmbedBuilder().setDescription(`**السجل الخاص بـ ${target.username} <:emoji_41:1471619709936996406>**\n\n${historyText}`).setColor(0x2b2d31);
       return i.reply({ embeds: [embed] });
     }
@@ -1162,6 +1184,11 @@ client.on('interactionCreate', async (i) => {
       
       if (sub === 'remove') {
         const serverId = options.getString('id');
+        
+        const subscription = settings.subscriptions.find(s => s.guildId === serverId);
+        if (!subscription) {
+          return i.reply({ content: `-# ** البوت غير متواجد في هذا السيرفر <:2thumbup:1467287897429512396> **`, ephemeral: true });
+        }
         
         settings.subscriptions = settings.subscriptions.filter(s => s.guildId !== serverId);
         settings.allowedGuilds = settings.allowedGuilds.filter(id => id !== serverId);
