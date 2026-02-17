@@ -806,6 +806,7 @@ client.on('messageCreate', async (message) => {
     return message.channel.send(`-# **رصيدك الحالي ${userData.balance} و اخر عملية تحويل تلقيتها بـ ${lastIn.amount} <:emoji_41:1471619709936996406> **`);
   }
 
+  // ==================== نظام التحويل الأصلي (رجع زي ما كان) ====================
   if (command === 'تحويل') {
     const target = message.mentions.users.first();
     const amount = parseFloat(args.find(a => !isNaN(a) && a.includes('.') ? parseFloat(a) : parseInt(a)));
@@ -841,54 +842,42 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
+  // ==================== معالج التأكيد الأصلي (رجع زي ما كان) ====================
   if (command === 'تأكيد') {
-    let foundKey = null;
-    let foundData = null;
+    const pending = Array.from(pendingTransfers.entries()).find(([key, data]) => 
+      key.startsWith(message.guild.id) && data.senderId === message.author.id && data.channelId === message.channel.id
+    );
+
+    if (!pending) return;
     
-    for (const [key, data] of pendingTransfers.entries()) {
-      const [guildId, msgId] = key.split('-');
-      if (guildId === message.guild.id && 
-          data.senderId === message.author.id && 
-          data.channelId === message.channel.id) {
-        foundKey = key;
-        foundData = data;
-        break;
-      }
-    }
+    const [key, data] = pending;
+    const sender = await getUserData(data.senderId);
+    const target = await getUserData(data.targetId);
     
-    if (!foundKey || !foundData) {
-      return message.channel.send(`-# **ما في عملية تحويل معلقة لك**`);
-    }
-    
-    const sender = await getUserData(foundData.senderId);
-    const target = await getUserData(foundData.targetId);
-    
-    if (sender.balance < foundData.totalAmount) {
-      pendingTransfers.delete(foundKey);
+    if (sender.balance < data.totalAmount) {
+      pendingTransfers.delete(key);
       return message.channel.send(`-# **رصيدك ما يكفي الحين يا فقير <:emoji_464:1388211597197050029>**`);
     }
     
-    sender.balance = parseFloat((sender.balance - foundData.totalAmount).toFixed(2));
-    target.balance = parseFloat((target.balance + foundData.amount).toFixed(2));
+    sender.balance = parseFloat((sender.balance - data.totalAmount).toFixed(2));
+    target.balance = parseFloat((target.balance + data.amount).toFixed(2));
     
-    sender.history.push({ type: 'TRANSFER_SEND', amount: -foundData.amount, targetUser: foundData.targetId, targetName: target.username, date: new Date() });
-    target.history.push({ type: 'TRANSFER_RECEIVE', amount: foundData.amount, targetUser: foundData.senderId, targetName: sender.username, date: new Date() });
+    sender.history.push({ type: 'TRANSFER_SEND', amount: -data.amount, targetUser: data.targetId, targetName: target.username, date: new Date() });
+    target.history.push({ type: 'TRANSFER_RECEIVE', amount: data.amount, targetUser: data.senderId, targetName: sender.username, date: new Date() });
     
     await sender.save(); 
     await target.save();
-    transferCooldowns.set(foundData.senderId, Date.now());
+    transferCooldowns.set(data.senderId, Date.now());
     
-    try {
-      const confirmMsg = await message.channel.messages.fetch(foundData.msgId).catch(() => null);
-      if (confirmMsg) {
-        await confirmMsg.edit({ 
-          content: `-# **تم تحويل ${foundData.amount} لـ <@${foundData.targetId}> رصيدك الآن ${sender.balance} <a:moneywith_:1470458218953179237>**`, 
-          components: [] 
-        }).catch(() => { });
-      }
-    } catch (e) {}
+    const confirmMsg = await message.channel.messages.fetch(data.msgId).catch(() => null);
+    if (confirmMsg) {
+      await confirmMsg.edit({ 
+        content: `-# **تم تحويل ${data.amount} لـ <@${data.targetId}> رصيدك الآن ${sender.balance} <a:moneywith_:1470458218953179237>**`, 
+        components: [] 
+      }).catch(() => { });
+    }
     
-    pendingTransfers.delete(foundKey);
+    pendingTransfers.delete(key);
     try { await message.delete(); } catch (e) { }
     return;
   }
@@ -1073,6 +1062,7 @@ client.on('interactionCreate', async (i) => {
       return i.reply({ content: `-# **رصيد <@${target.id}> الحالي ${data.balance} و اخر عملية تحويل تلقاها بـ ${lastIn.amount} <:emoji_41:1471619709936996406> **` });
     }
 
+    // ==================== نظام pay الأصلي (رجع زي ما كان) ====================
     if (commandName === 'pay') {
       const target = options.getUser('user');
       const amount = options.getInteger('amount');
