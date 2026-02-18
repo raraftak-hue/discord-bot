@@ -245,6 +245,25 @@ const slashCommands = [
         type: 1
       }
     ]
+  },
+  // أوامر whisper (جديد)
+  {
+    name: 'whisper',
+    description: 'إرسال همسة لشخص معين (يشوفها فقط هو)',
+    options: [
+      {
+        name: 'user',
+        description: 'الشخص اللي تبي ترسل له الهمسة',
+        type: 6, // USER type
+        required: true
+      },
+      {
+        name: 'message',
+        description: 'الهمسة',
+        type: 3, // STRING type
+        required: true
+      }
+    ]
   }
 ];
 
@@ -302,7 +321,7 @@ client.on('messageCreate', async (message) => {
       .setDescription(
         `** members<:emoji_32:1471962578895769611> **\n-# ** text - ${membersMsg}**\n\n` +
         `** Mods <:emoji_38:1470920843398746215>**\n` +
-        `-# ** wel, tic, give, pre, emb, points**\n` +
+        `-# ** wel, tic, give, pre, emb, points, whisper**\n` +
         `-# ** text -  تايم، طرد، حذف، ارقام، ايقاف**`
       );
     await message.channel.send({ embeds: [embed] });
