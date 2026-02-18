@@ -14,9 +14,11 @@ const PointsSettingsSchema = new mongoose.Schema({
   guildId: String,
   enabled: { type: Boolean, default: false },
   rewardPerPoint: { type: Number, default: 0 },
+  pointsPerReward: { type: Number, default: 1 },
   channelId: { type: String, default: null },
   customMessage: { type: String, default: 'مبروك {user} وصلت {points} نقطة' },
-  lastMessage: { type: Map, of: Date, default: new Map() }
+  lastMessage: { type: Map, of: Date, default: new Map() },
+  funded: { type: Boolean, default: false }
 });
 
 const Points = mongoose.model('Points', PointsSchema);
@@ -43,31 +45,74 @@ function calculatePointsFromMessages(totalMessages) {
   return { points, remainingMessages };
 }
 
-// ==================== onMessage (للرسائل العادية) ====================
+// ==================== onMessage ====================
 async function onMessage(client, message) {
   if (message.author.bot || !message.guild) return;
 
-  // نظام زيادة النقاط تلقائياً
   const settings = await PointsSettings.findOne({ guildId: message.guild.id });
-  if (settings && settings.enabled) {
-    let pointsData = await Points.findOne({ guildId: message.guild.id, userId: message.author.id });
-    if (!pointsData) {
-      pointsData = new Points({ guildId: message.guild.id, userId: message.author.id });
+  if (!settings || !settings.enabled || !settings.funded) return;
+
+  let pointsData = await Points.findOne({ guildId: message.guild.id, userId: message.author.id });
+  if (!pointsData) {
+    pointsData = new Points({ guildId: message.guild.id, userId: message.author.id });
+  }
+  
+  pointsData.messages += 1;
+  pointsData.xp += 1;
+  
+  const { points: newPoints } = calculatePointsFromMessages(pointsData.messages);
+  
+  if (newPoints > pointsData.points) {
+    const pointsGained = newPoints - pointsData.points;
+    pointsData.points = newPoints;
+    
+    if (settings.rewardPerPoint > 0 && settings.pointsPerReward > 0) {
+      const rewardAmount = Math.floor(pointsGained / settings.pointsPerReward) * settings.rewardPerPoint;
+      
+      if (rewardAmount > 0) {
+        const User = mongoose.model('User');
+        const ownerData = await User.findOne({ userId: message.guild.ownerId });
+        
+        if (ownerData && ownerData.balance >= rewardAmount) {
+          ownerData.balance -= rewardAmount;
+          await ownerData.save();
+          
+          let userData = await User.findOne({ userId: message.author.id });
+          if (!userData) userData = new User({ userId: message.author.id });
+          userData.balance += rewardAmount;
+          
+          userData.history.push({ 
+            type: 'POINTS_REWARD', 
+            amount: rewardAmount, 
+            date: new Date() 
+          });
+          
+          await userData.save();
+        }
+      }
     }
     
-    pointsData.messages += 1;
-    pointsData.xp += 1;
+    let pointsMessage = settings.customMessage || 'مبروك {user} وصلت {points} نقطة';
+    pointsMessage = pointsMessage.replace('{user}', `<@${message.author.id}>`);
+    pointsMessage = pointsMessage.replace('{points}', newPoints);
+    pointsMessage = `-# ** ${pointsMessage} <:emoji_32:1471962578895769611> **`;
     
-    const { points: newPoints } = calculatePointsFromMessages(pointsData.messages);
-    
-    if (newPoints > pointsData.points) {
-      pointsData.points = newPoints;
-      await pointsData.save();
+    if (settings.channelId) {
+      const pointsChannel = message.guild.channels.cache.get(settings.channelId);
+      if (pointsChannel) {
+        pointsChannel.send(pointsMessage).catch(() => {});
+      } else {
+        message.channel.send(pointsMessage).catch(() => {});
+      }
+    } else {
+      message.channel.send(pointsMessage).catch(() => {});
     }
+    
+    await pointsData.save();
   }
 }
 
-// ==================== معالج الأوامر النصية ====================
+// ==================== handleTextCommand ====================
 async function handleTextCommand(client, message, command, args, prefix) {
   if (command === 'نقاطي') {
     const pointsData = await Points.findOne({ 
@@ -84,16 +129,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
     const requiredForNext = getRequiredMessages(pointsData.points);
     const remaining = requiredForNext - remainingMessages;
     
-    const pointsSettings = await PointsSettings.findOne({ guildId: message.guild.id });
-    
-    let replyMsg = `-# ** نقاطك حالياً ${pointsData.points} و باقيلك ${remaining} رسالة عشان تزيد نقطة`;
-    
-    if (pointsSettings && pointsSettings.rewardPerPoint && pointsSettings.rewardPerPoint > 0) {
-      const totalEarned = pointsData.points * pointsSettings.rewardPerPoint;
-      replyMsg += ` (كسبت ${totalEarned} دينار)`;
-    }
-    
-    replyMsg += ` <:emoji_32:1471962578895769611> **`;
+    let replyMsg = `-# ** نقاطك حالياً ${pointsData.points} و باقيلك ${remaining} رسالة عشان تزيد نقطة <:emoji_32:1471962578895769611> **`;
     
     await message.channel.send(replyMsg);
     return true;
@@ -109,10 +145,20 @@ async function handleTextCommand(client, message, command, args, prefix) {
       return true;
     }
     
+    const settings = await PointsSettings.findOne({ guildId: message.guild.id });
+    const rewardPerPoint = settings?.rewardPerPoint || 0;
+    
     let leaderboardText = '';
-    topPoints.forEach((entry, idx) => {
-      leaderboardText += `-# ** الخليفة <@${entry.userId}> ${entry.points} نقطة**\n`;
-    });
+    
+    for (const entry of topPoints) {
+      const earnedMoney = Math.floor(entry.points * rewardPerPoint);
+      
+      if (earnedMoney > 0) {
+        leaderboardText += `-# ** الخليفة <@${entry.userId}> ${entry.points} نقاط و كسبت ${earnedMoney} دينار **\n`;
+      } else {
+        leaderboardText += `-# ** الخليفة <@${entry.userId}> ${entry.points} نقاط **\n`;
+      }
+    }
     
     const embed = new EmbedBuilder()
       .setDescription(`**خلفاء السبع ليالِ <:emoji_52:1473620889349128298>**\n\n${leaderboardText}`)
@@ -128,7 +174,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
 // ==================== onInteraction ====================
 async function onInteraction(client, interaction) {
   if (!interaction.isChatInputCommand()) return false;
-  const { commandName, options } = interaction;
+  const { commandName, options, guild, user } = interaction;
 
   if (commandName === 'points') {
     const sub = options.getSubcommand();
@@ -136,23 +182,21 @@ async function onInteraction(client, interaction) {
     if (sub === 'setup') {
       const channel = options.getChannel('channel');
       const customMessage = options.getString('message');
-      const reward = options.getInteger('reward');
       
-      let settings = await PointsSettings.findOne({ guildId: interaction.guild.id });
+      let settings = await PointsSettings.findOne({ guildId: guild.id });
       
       if (!settings) {
         settings = new PointsSettings({
-          guildId: interaction.guild.id,
+          guildId: guild.id,
           enabled: true,
+          funded: false,
           channelId: channel?.id || null,
-          customMessage: customMessage || 'مبروك {user} وصلت {points} نقطة',
-          rewardPerPoint: reward || 0
+          customMessage: customMessage || 'مبروك {user} وصلت {points} نقطة'
         });
       } else {
         settings.enabled = true;
         if (channel) settings.channelId = channel.id;
         if (customMessage) settings.customMessage = customMessage;
-        if (reward !== null) settings.rewardPerPoint = reward;
       }
       
       await settings.save();
@@ -160,14 +204,69 @@ async function onInteraction(client, interaction) {
       let replyMsg = `-# ** تم تفعيل نظام النقاط في السيرفر <:new_emoji:1388436089584226387> **`;
       if (channel) replyMsg += `\n-# **📢 الروم: <#${channel.id}>**`;
       if (customMessage) replyMsg += `\n-# **📝 الرسالة: ${customMessage}**`;
-      if (reward) replyMsg += `\n-# **💰 المكافأة: ${reward} دينار لكل نقطة**`;
+      replyMsg += `\n-# **⚠️ النظام غير ممول، استخدم /points fund لتمويله**`;
       
       await interaction.reply({ content: replyMsg, ephemeral: true });
       return true;
     }
     
+    if (sub === 'fund') {
+      if (user.id !== guild.ownerId) {
+        await interaction.reply({ content: `-# ** فقط مالك السيرفر يستطيع تمويل النظام <:emoji_84:1389404919672340592> **`, ephemeral: true });
+        return true;
+      }
+      
+      const amount = options.getInteger('amount');
+      const pointsPerReward = options.getInteger('points');
+      
+      if (!amount || amount <= 0 || !pointsPerReward || pointsPerReward <= 0) {
+        await interaction.reply({ content: `-# ** القيمة غير صحيحة <:__:1467633552408576192> **`, ephemeral: true });
+        return true;
+      }
+      
+      const rewardPerPoint = 1 / pointsPerReward;
+      
+      const User = mongoose.model('User');
+      const ownerData = await User.findOne({ userId: user.id });
+      
+      if (!ownerData || ownerData.balance < amount) {
+        await interaction.reply({ content: `-# ** رصيدك ما يكفي يا فقير <:emoji_464:1388211597197050029> **`, ephemeral: true });
+        return true;
+      }
+      
+      ownerData.balance -= amount;
+      ownerData.history.push({ 
+        type: 'POINTS_FUND', 
+        amount: -amount, 
+        date: new Date() 
+      });
+      await ownerData.save();
+      
+      let settings = await PointsSettings.findOne({ guildId: guild.id });
+      if (!settings) {
+        settings = new PointsSettings({
+          guildId: guild.id,
+          enabled: true,
+          funded: true,
+          rewardPerPoint: rewardPerPoint,
+          pointsPerReward: pointsPerReward
+        });
+      } else {
+        settings.funded = true;
+        settings.rewardPerPoint = rewardPerPoint;
+        settings.pointsPerReward = pointsPerReward;
+      }
+      await settings.save();
+      
+      await interaction.reply({ 
+        content: `-# **تم تمويل نظام النقاط بـ ${amount} دينار لكل ${pointsPerReward} نقاط <:2thumbup:1467287897429512396> **`, 
+        ephemeral: true 
+      });
+      return true;
+    }
+    
     if (sub === 'disable') {
-      let settings = await PointsSettings.findOne({ guildId: interaction.guild.id });
+      let settings = await PointsSettings.findOne({ guildId: guild.id });
       if (settings) {
         settings.enabled = false;
         await settings.save();
@@ -180,32 +279,39 @@ async function onInteraction(client, interaction) {
     }
     
     if (sub === 'enable') {
-      let settings = await PointsSettings.findOne({ guildId: interaction.guild.id });
+      let settings = await PointsSettings.findOne({ guildId: guild.id });
       if (settings) {
         settings.enabled = true;
         await settings.save();
       } else {
         settings = new PointsSettings({
-          guildId: interaction.guild.id,
-          enabled: true
+          guildId: guild.id,
+          enabled: true,
+          funded: false
         });
         await settings.save();
       }
-      await interaction.reply({ 
-        content: `-# **تم تشغيل نظام النقاط <:new_emoji:1388436089584226387> **`, 
-        ephemeral: true 
-      });
+      
+      let replyMsg = `-# **تم تشغيل نظام النقاط <:new_emoji:1388436089584226387> **`;
+      if (!settings.funded) {
+        replyMsg += `\n-# **⚠️ النظام غير ممول، استخدم /points fund لتمويله**`;
+      }
+      
+      await interaction.reply({ content: replyMsg, ephemeral: true });
       return true;
     }
     
     if (sub === 'reset') {
-      await Points.deleteMany({ guildId: interaction.guild.id });
-      let settings = await PointsSettings.findOne({ guildId: interaction.guild.id });
+      await Points.deleteMany({ guildId: guild.id });
+      let settings = await PointsSettings.findOne({ guildId: guild.id });
       if (settings) {
         settings.enabled = true;
+        settings.funded = false;
         settings.rewardPerPoint = 0;
+        settings.pointsPerReward = 1;
         await settings.save();
       }
+      
       await interaction.reply({ 
         content: `-# **تم اعادة تعيين نظام النقاط <:2thumbup:1467287897429512396> **`, 
         ephemeral: true 
@@ -217,7 +323,6 @@ async function onInteraction(client, interaction) {
   return false;
 }
 
-// ==================== تصدير النظام ====================
 module.exports = {
   onMessage,
   handleTextCommand,
