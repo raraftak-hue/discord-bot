@@ -139,7 +139,7 @@ const slashCommands = [
       { name: 'timestamp', description: 'إضافة وقت', type: 5, required: false }
     ]
   },
-  // أوامر points
+  // أوامر points (محدثة)
   {
     name: 'points',
     description: 'نظام النقاط',
@@ -147,15 +147,23 @@ const slashCommands = [
     options: [
       {
         name: 'setup',
-        description: 'إعداد نظام النقاط',
+        description: 'تفعيل نظام النقاط',
         type: 1,
         options: [
-          { name: 'channel', description: 'روم التهنئة', type: 7, required: false },
-          { name: 'message', description: 'رسالة التهنئة ({user}, {points})', type: 3, required: false },
-          { name: 'reward', description: 'المكافأة المالية لكل نقطة', type: 4, required: false }
+          { name: 'channel', description: 'روم التهنئة (اختياري)', type: 7, required: false, channel_types: [0] },
+          { name: 'message', description: 'رسالة التهنئة ({user}, {points})', type: 3, required: false }
         ]
       },
-      { name: 'disable', description: 'إيقاف نظام النقاط', type: 1 },
+      {
+        name: 'fund',
+        description: 'تمويل نظام النقاط (للمالك فقط)',
+        type: 1,
+        options: [
+          { name: 'amount', description: 'كمية الدنانير', type: 4, required: true, min_value: 1 },
+          { name: 'points', description: 'كم نقطة لكل دينار', type: 4, required: true, min_value: 1 }
+        ]
+      },
+      { name: 'disable', description: 'إطفاء نظام النقاط', type: 1 },
       { name: 'enable', description: 'تشغيل نظام النقاط', type: 1 },
       { name: 'reset', description: 'تصفير جميع النقاط', type: 1 }
     ]
@@ -269,12 +277,10 @@ client.on('messageCreate', async (message) => {
   }
   
   // ===== معالجة الأوامر النصية =====
-  // نحتاج Settings من أجل prefix
   const Settings = mongoose.model('Settings');
   const settings = await Settings.findOne({ guildId: message.guild.id });
   const prefix = settings?.prefix || '';
   
-  // إذا في prefix والرسالة ما تبدأ به، نوقف
   if (prefix && !message.content.startsWith(prefix)) return;
   
   const args = message.content.trim().split(/\s+/);
