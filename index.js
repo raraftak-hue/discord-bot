@@ -139,14 +139,12 @@ const slashCommands = [
       { name: 'timestamp', description: 'إضافة وقت', type: 5, required: false }
     ]
   },
-  // أوامر points
-    // أوامر points (مبسطة)
-{
-  name: 'points',
-  description: 'نظام النقاط - عرض الحالة والتحكم بالأزرار',
-  default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
-  options: [] // ما فيه أي أوامر فرعية
-}
+  // أوامر points (مبسطة)
+  {
+    name: 'points',
+    description: 'نظام النقاط - عرض الحالة والتحكم بالأزرار',
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString()
+  },
   // أوامر sub
   {
     name: 'sub',
