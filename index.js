@@ -4,6 +4,7 @@ const { REST, Routes } = require('discord.js');
 const express = require('express');
 const mongoose = require('mongoose');
 const cron = require('node-cron');
+const pointsSystem = require('./pointsSystem.js'); // 👈 نظام النقاط المنفصل
 const app = express();
 
 // ==================== 🔒 الإعدادات والربط 🔒 ====================
@@ -283,6 +284,56 @@ const slashCommands = [
         description: 'ختم وقت',
         type: 5,
         required: false
+      }
+    ]
+  },
+  // ==================== أوامر نظام النقاط ====================
+  {
+    name: 'points',
+    description: 'نظام النقاط',
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+    options: [
+      {
+        name: 'setup',
+        description: 'تفعيل نظام النقاط',
+        type: 1,
+        options: [
+          {
+            name: 'channel',
+            description: 'روم التهنئة (اختياري)',
+            type: 7,
+            required: false,
+            channel_types: [0]
+          },
+          {
+            name: 'message',
+            description: 'رسالة التهنئة (استخدم {user} و {points})',
+            type: 3,
+            required: false
+          },
+          {
+            name: 'reward',
+            description: 'المكافأة لكل نقطة (دينار)',
+            type: 4,
+            required: false,
+            min_value: 1
+          }
+        ]
+      },
+      {
+        name: 'disable',
+        description: 'إطفاء نظام النقاط',
+        type: 1
+      },
+      {
+        name: 'enable',
+        description: 'تشغيل نظام النقاط',
+        type: 1
+      },
+      {
+        name: 'reset',
+        description: 'إعادة تعيين نظام النقاط للجميع',
+        type: 1
       }
     ]
   }
@@ -752,6 +803,9 @@ client.on('messageCreate', async (message) => {
     }
   }
   
+  // ==================== نظام النقاط ====================
+  await pointsSystem.handleMessage(message);
+  
   const args = message.content.trim().split(/\s+/);
   const firstWord = args[0];
 
@@ -774,9 +828,9 @@ client.on('messageCreate', async (message) => {
     let membersMsg = '';
     
     if (prefix) {
-      membersMsg = `${prefix}دنانير، ${prefix}تحويل، ${prefix}اغنياء، ${prefix}سجل`;
+      membersMsg = `${prefix}دنانير، ${prefix}تحويل، ${prefix}اغنياء، ${prefix}سجل، ${prefix}نقاطي، ${prefix}نقاط`;
     } else {
-      membersMsg = `دنانير، تحويل، اغنياء، سجل`;
+      membersMsg = `دنانير، تحويل، اغنياء، سجل، نقاطي، نقاط`;
     }
     
     const embed = new EmbedBuilder()
@@ -784,8 +838,8 @@ client.on('messageCreate', async (message) => {
       .setDescription(
         `** members<:emoji_32:1471962578895769611> **\n-# ** text - ${membersMsg}**\n\n` +
         `** Mods <:emoji_38:1470920843398746215>**\n` +
-        `-# ** wel, tic, give,pre,emb**\n` +
-        `-# ** text -  تايم، تكلم، طرد، حذف، ارقام، ايقاف**`
+        `-# ** wel, tic, give, pre, emb, points**\n` +
+        `-# ** text -  تايم، طرد، حذف، ارقام، ايقاف**`
       );
     return message.channel.send({ embeds: [embed] });
   }
@@ -886,6 +940,15 @@ client.on('messageCreate', async (message) => {
     return message.channel.send({ embeds: [embed] });
   }
 
+  // ==================== أوامر نظام النقاط النصية ====================
+  if (command === 'نقاطي') {
+    return pointsSystem.myPointsCommand(message, prefix);
+  }
+
+  if (command === 'نقاط') {
+    return pointsSystem.pointsLeaderboardCommand(message);
+  }
+
   if (command === 'ارقام') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
     for (const [key, game] of activeNumberGames.entries()) {
@@ -929,7 +992,7 @@ client.on('messageCreate', async (message) => {
     if (found) return message.channel.send(`-# ** تم ايقاف اللعبة <:new_emoji:1388436095842385931> **`);
   }
 
-  // ==================== أوامر المشرفين النصية الجديدة ====================
+  // ==================== أوامر المشرفين النصية ====================
   if (command === 'طرد') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.KickMembers)) return;
     
@@ -1046,40 +1109,40 @@ client.on('messageCreate', async (message) => {
   }
 
   if (command === 'سحب' && message.author.id === OWNER_ID) {
-  const target = message.mentions.users.first() || message.author;
-  
-  let amount;
-  if (message.mentions.users.first()) {
-    amount = parseFloat(args[2]);
-  } else {
-    amount = parseFloat(args[1]);
+    const target = message.mentions.users.first() || message.author;
+    
+    let amount;
+    if (message.mentions.users.first()) {
+      amount = parseFloat(args[2]);
+    } else {
+      amount = parseFloat(args[1]);
+    }
+    
+    if (isNaN(amount) || amount <= 0) return message.channel.send(`-# **القيمة غير صحيحه <:__:1467633552408576192> **`);
+    
+    const targetData = await getUserData(target.id);
+    
+    if (targetData.balance < amount) {
+      return message.channel.send(`-# **العضو ما معه ذي الكمية saybu <:emoji_84:1389404919672340592> **`);
+    }
+    
+    targetData.balance = parseFloat((targetData.balance - amount).toFixed(2));
+    targetData.history.push({ 
+      type: 'OWNER_REMOVE', 
+      amount: -amount, 
+      targetUser: message.author.id,
+      targetName: message.author.username,
+      date: new Date() 
+    });
+    
+    await targetData.save();
+    
+    if (target.id === message.author.id) {
+      return message.channel.send(`-# **تم سحب ${amount} دينار من حسابك <:emoji_41:1471619709936996406> **`);
+    } else {
+      return message.channel.send(`-# **تم سحب ${amount} دينار من ${target.username} <:emoji_41:1471619709936996406> **`);
+    }
   }
-  
-  if (isNaN(amount) || amount <= 0) return message.channel.send(`-# **القيمة غير صحيحه <:__:1467633552408576192> **`);
-  
-  const targetData = await getUserData(target.id);
-  
-  if (targetData.balance < amount) {
-    return message.channel.send(`-# **العضو ما معه ذي الكمية saybu <:emoji_84:1389404919672340592> **`);
-  }
-  
-  targetData.balance = parseFloat((targetData.balance - amount).toFixed(2));
-  targetData.history.push({ 
-    type: 'OWNER_REMOVE', 
-    amount: -amount, 
-    targetUser: message.author.id,
-    targetName: message.author.username,
-    date: new Date() 
-  });
-  
-  await targetData.save();
-  
-  if (target.id === message.author.id) {
-    return message.channel.send(`-# **تم سحب ${amount} دينار من حسابك <:emoji_41:1471619709936996406> **`);
-  } else {
-    return message.channel.send(`-# **تم سحب ${amount} دينار من ${target.username} <:emoji_41:1471619709936996406> **`);
-  }
-}
 
   // ==================== معالجة التخمينات ====================
   let activeGame = null; 
@@ -1359,6 +1422,89 @@ client.on('interactionCreate', async (i) => {
       await i.deferReply({ ephemeral: true });
       await i.channel.send({ embeds: [embed] });
       await i.editReply({ content: `-# ** تم ارسال الإيمبيد <:2thumbup:1467287897429512396> **` });
+    }
+
+    // ==================== أوامر نظام النقاط السلاش ====================
+    if (commandName === 'points') {
+      const sub = options.getSubcommand();
+      
+      if (sub === 'setup') {
+        const channel = options.getChannel('channel');
+        const customMessage = options.getString('message');
+        const reward = options.getInteger('reward');
+        
+        let settings = await pointsSystem.PointsSettings.findOne({ guildId: i.guild.id });
+        
+        if (!settings) {
+          settings = new pointsSystem.PointsSettings({
+            guildId: i.guild.id,
+            enabled: true,
+            channelId: channel?.id || null,
+            customMessage: customMessage || 'مبروك {user} وصلت {points} نقطة',
+            rewardPerPoint: reward || 0
+          });
+        } else {
+          settings.enabled = true;
+          if (channel) settings.channelId = channel.id;
+          if (customMessage) settings.customMessage = customMessage;
+          if (reward !== null) settings.rewardPerPoint = reward;
+        }
+        
+        await settings.save();
+        
+        let replyMsg = `-# ** تم تفعيل نظام النقاط في السيرفر <:new_emoji:1388436089584226387> **`;
+        if (channel) replyMsg += `\n-# **📢 الروم: <#${channel.id}>**`;
+        if (customMessage) replyMsg += `\n-# **📝 الرسالة: ${customMessage}**`;
+        if (reward) replyMsg += `\n-# **💰 المكافأة: ${reward} دينار لكل نقطة**`;
+        
+        return i.reply({ content: replyMsg, ephemeral: true });
+      }
+      
+      if (sub === 'disable') {
+        let settings = await pointsSystem.PointsSettings.findOne({ guildId: i.guild.id });
+        if (settings) {
+          settings.enabled = false;
+          await settings.save();
+        }
+        return i.reply({ 
+          content: `-# ** تم إطفاء نظام النقاط <:new_emoji:1388436095842385931> **`, 
+          ephemeral: true 
+        });
+      }
+      
+      if (sub === 'enable') {
+        let settings = await pointsSystem.PointsSettings.findOne({ guildId: i.guild.id });
+        if (settings) {
+          settings.enabled = true;
+          await settings.save();
+        } else {
+          settings = new pointsSystem.PointsSettings({
+            guildId: i.guild.id,
+            enabled: true
+          });
+          await settings.save();
+        }
+        return i.reply({ 
+          content: `-# **تم تشغيل نظام النقاط <:new_emoji:1388436089584226387> **`, 
+          ephemeral: true 
+        });
+      }
+      
+      if (sub === 'reset') {
+        await pointsSystem.Points.deleteMany({ guildId: i.guild.id });
+        
+        let settings = await pointsSystem.PointsSettings.findOne({ guildId: i.guild.id });
+        if (settings) {
+          settings.enabled = true;
+          settings.rewardPerPoint = 0;
+          await settings.save();
+        }
+        
+        return i.reply({ 
+          content: `-# **تم اعادة تعيين نظام النقاط <:2thumbup:1467287897429512396> **`, 
+          ephemeral: true 
+        });
+      }
     }
 
     // ==================== أوامر المالك السلاش ====================
