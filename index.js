@@ -140,32 +140,13 @@ const slashCommands = [
     ]
   },
   // أوامر points
-  {
-    name: 'points',
-    description: 'نظام النقاط',
-    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
-    options: [
-      {
-        name: 'status',
-        description: 'عرض حالة نظام النقاط',
-        type: 1
-      },
-      {
-        name: 'fund',
-        description: 'تمويل نظام النقاط',
-        type: 1,
-        options: [
-          { name: 'amount', description: 'كمية الدنانير', type: 4, required: true, min_value: 1 },
-          { name: 'points', description: 'كم نقطة لكل دينار', type: 4, required: true, min_value: 1 }
-        ]
-      },
-      {
-        name: 'reset',
-        description: 'إعادة تعيين جميع النقاط',
-        type: 1
-      }
-    ]
-  },
+    // أوامر points (مبسطة)
+{
+  name: 'points',
+  description: 'نظام النقاط - عرض الحالة والتحكم بالأزرار',
+  default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+  options: [] // ما فيه أي أوامر فرعية
+}
   // أوامر sub
   {
     name: 'sub',
