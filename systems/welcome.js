@@ -37,9 +37,9 @@ async function sendWelcomeMessage(member, settings) {
   const channel = await member.guild.channels.fetch(welcome.channelId).catch(() => null);
   if (!channel) return;
 
-  const finalTitle = welcome.title ? welcome.title.replace('{user}', member.user.username).replace('{server}', member.guild.name) : null;
-  const finalDesc = welcome.description ? welcome.description.replace('{user}', `<@${member.id}>`).replace('{server}', member.guild.name) : `أهلاً بك <@${member.id}> في ${member.guild.name}!`;
-  const color = parseInt(welcome.color.replace('#', ''), 16) || 0x2b2d31;
+  const finalTitle = welcome.title ? welcome.title.replace('{member}', `${member}`) : null;
+  const finalDesc = welcome.description ? welcome.description.replace('{member}', `${member}`) : null;
+  const color = parseInt(welcome.color, 16) || 0x2b2d31;
   const image = welcome.image || null;
 
   const embed = new EmbedBuilder().setColor(color);
@@ -67,7 +67,7 @@ module.exports = {
       const room = options.getChannel('room');
       settings.welcomeSettings.channelId = room.id;
       await settings.save();
-      return interaction.reply({ content: `-# ** تم تعيين روم الترحيب: <#${room.id}> <:2thumbup:1467287897429512396> **`, ephemeral: true });
+      return interaction.reply({ content: `-# ** تم تعيين روم الترحيب <:new_emoji:1388436089584226387> **`, ephemeral: true });
     }
 
     if (sub === 'msg') {
@@ -78,31 +78,29 @@ module.exports = {
 
       if (title) settings.welcomeSettings.title = title;
       if (desc) settings.welcomeSettings.description = desc;
-      if (color) settings.welcomeSettings.color = color;
+      if (color) settings.welcomeSettings.color = color.replace('#', '');
       if (image) settings.welcomeSettings.image = image;
 
       await settings.save();
-      return interaction.reply({ content: `-# ** تم تحديث رسالة الترحيب بنجاح <:2thumbup:1467287897429512396> **`, ephemeral: true });
+      return interaction.reply({ content: `-# ** تم تحديث الاعدادات <:2thumbup:1467287897429512396> **`, ephemeral: true });
     }
 
     if (sub === 'info') {
-      const welcome = settings.welcomeSettings;
       const embed = new EmbedBuilder()
-        .setTitle('إعدادات الترحيب')
-        .addFields(
-          { name: 'الروم', value: welcome.channelId ? `<#${welcome.channelId}>` : 'غير محدد' },
-          { name: 'العنوان', value: welcome.title || 'غير محدد' },
-          { name: 'الوصف', value: welcome.description || 'غير محدد' },
-          { name: 'اللون', value: welcome.color || '2b2d31' },
-          { name: 'الصورة', value: welcome.image || 'لا يوجد' }
-        )
-        .setColor(0x2b2d31);
+        .setColor(0x2b2d31)
+        .setDescription(
+          `**إعدادات الترحيب**\n\n` +
+          `-# **الروم:** ${settings.welcomeSettings.channelId ? `<#${settings.welcomeSettings.channelId}>` : 'غير محدد'}\n` +
+          `-# **اللون:** #${settings.welcomeSettings.color}\n` +
+          `-# **العنوان:** ${settings.welcomeSettings.title || 'غير محدد'}\n` +
+          `-# **الوصف:** ${settings.welcomeSettings.description || 'غير محدد'}`
+        );
       return interaction.reply({ embeds: [embed], ephemeral: true });
     }
 
     if (sub === 'test') {
       await sendWelcomeMessage(interaction.member, settings);
-      return interaction.reply({ content: '✅ تم إرسال رسالة تجريبية!', ephemeral: true });
+      return interaction.reply({ content: `-# **تم ارسال الرسالة <:2thumbup:1467287897429512396> **`, ephemeral: true });
     }
   }
 };
