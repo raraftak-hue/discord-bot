@@ -50,45 +50,19 @@ async function onMessage(client, message) {
   // نظام زيادة النقاط تلقائياً
   const settings = await PointsSettings.findOne({ guildId: message.guild.id });
   if (settings && settings.enabled) {
-    const lastMsgDate = settings.lastMessage.get(message.author.id);
-    const now = new Date();
+    let pointsData = await Points.findOne({ guildId: message.guild.id, userId: message.author.id });
+    if (!pointsData) {
+      pointsData = new Points({ guildId: message.guild.id, userId: message.author.id });
+    }
     
-    if (!lastMsgDate || (now - lastMsgDate) > 5000) {
-      let pointsData = await Points.findOne({ guildId: message.guild.id, userId: message.author.id });
-      if (!pointsData) {
-        pointsData = new Points({ guildId: message.guild.id, userId: message.author.id });
-      }
-      
-      pointsData.messages += 1;
-      const { points: newPoints } = calculatePointsFromMessages(pointsData.messages);
-      
-      if (newPoints > pointsData.points) {
-        pointsData.points = newPoints;
-        
-        // إرسال رسالة التهنئة
-        const channel = settings.channelId ? await message.guild.channels.fetch(settings.channelId).catch(() => null) : message.channel;
-        if (channel) {
-          const msg = settings.customMessage
-            .replace('{user}', `<@${message.author.id}>`)
-            .replace('{points}', newPoints);
-          channel.send(msg).catch(() => {});
-        }
-        
-        // إضافة مكافأة مالية إذا وجدت
-        if (settings.rewardPerPoint > 0) {
-          const User = mongoose.model('User');
-          if (User) {
-            let userData = await User.findOne({ userId: message.author.id });
-            if (!userData) userData = new User({ userId: message.author.id });
-            userData.balance += settings.rewardPerPoint;
-            await userData.save();
-          }
-        }
-      }
-      
+    pointsData.messages += 1;
+    pointsData.xp += 1;
+    
+    const { points: newPoints } = calculatePointsFromMessages(pointsData.messages);
+    
+    if (newPoints > pointsData.points) {
+      pointsData.points = newPoints;
       await pointsData.save();
-      settings.lastMessage.set(message.author.id, now);
-      await settings.save();
     }
   }
 }
