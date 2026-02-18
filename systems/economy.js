@@ -87,144 +87,165 @@ async function formatHistory(client, history) {
   return lines.join('\n');
 }
 
-module.exports = {
-  onMessage: async (client, message) => {
-    if (message.author.bot || !message.guild) return;
-
-    const content = message.content.trim();
-    const args = content.split(/\s+/);
-    const command = args[0];
-
-    if (command === 'فلوس' || command === 'رصيد' || command === 'c' || command === 'credits') {
-      const user = message.mentions.users.first() || message.author;
-      const userData = await getUserData(user.id);
-      
-      if (user.id === message.author.id) {
-        return message.channel.send(`-# **رصيدك الحالي هو ${userData.balance} <a:moneywith_:1470458218953179237>**`);
-      } else {
-        return message.channel.send(`-# **رصيد ${user.username} هو ${userData.balance} <a:moneywith_:1470458218953179237>**`);
-      }
+// ==================== معالج الأوامر النصية ====================
+async function handleTextCommand(client, message, command, args, prefix) {
+  if (command === 'فلوس' || command === 'رصيد' || command === 'c' || command === 'credits') {
+    const user = message.mentions.users.first() || message.author;
+    const userData = await getUserData(user.id);
+    
+    if (user.id === message.author.id) {
+      await message.channel.send(`-# **رصيدك الحالي هو ${userData.balance} <a:moneywith_:1470458218953179237>**`);
+    } else {
+      await message.channel.send(`-# **رصيد ${user.username} هو ${userData.balance} <a:moneywith_:1470458218953179237>**`);
     }
-
-    if ((command === 'تحويل' || command === 't') && args[1]) {
-      const target = message.mentions.users.first();
-      const amountStr = args[2] || args[1];
-      const amount = parseFloat(amountStr);
-
-      if (!target || isNaN(amount) || amount <= 0 || target.id === message.author.id || target.bot) return;
-
-      const senderData = await getUserData(message.author.id);
-      if (senderData.balance < amount) {
-        return message.channel.send(`-# **رصيدك ما يكفي يا طفران <:emoji_32:1471962578895769611>**`);
-      }
-
-      const cooldown = client.transferCooldowns.get(message.author.id);
-      if (cooldown && Date.now() - cooldown < 5000) {
-        return message.channel.send(`-# **اهدا شوي، تقدر تحول كل 5 ثواني <:emoji_38:1470920843398746215>**`);
-      }
-
-      const tax = calculateTax(senderData.balance, amount);
-      const finalAmount = amount - tax;
-      const captcha = Math.floor(1000 + Math.random() * 9000);
-
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('confirm_transfer').setLabel('تأكيد').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('cancel_transfer').setLabel('إلغاء').setStyle(ButtonStyle.Danger)
-      );
-
-      const msg = await message.channel.send({
-        content: `-# **${message.author.username}، أنت على وشك تحويل ${finalAmount} لـ ${target.username} (الضريبة: ${tax})\nاكتب الرقم التالي للتأكيد: \`${captcha}\`**`,
-        components: [row]
-      });
-
-      client.pendingTransfers.set(`${message.guild.id}-${message.author.id}`, {
-        targetId: target.id,
-        amount: finalAmount,
-        tax: tax,
-        captcha: captcha,
-        msgId: msg.id,
-        senderId: message.author.id,
-        timestamp: Date.now()
-      });
-
-      setTimeout(() => {
-        if (client.pendingTransfers.has(`${message.guild.id}-${message.author.id}`)) {
-          client.pendingTransfers.delete(`${message.guild.id}-${message.author.id}`);
-          msg.edit({ content: '-# **انتهى وقت التحويل <:emoji_38:1470920843398746215>**', components: [] }).catch(() => { });
-        }
-      }, 30000);
-    }
-
-    // معالجة كتابة الكابتشا للتحويل
-    const key = `${message.guild.id}-${message.author.id}`;
-    const data = client.pendingTransfers.get(key);
-    if (data && message.content === String(data.captcha)) {
-      const sender = await getUserData(data.senderId);
-      const target = await getUserData(data.targetId);
-      
-      if (sender.balance < (data.amount + data.tax)) {
-        client.pendingTransfers.delete(key);
-        return message.channel.send(`-# **رصيدك نقص فجأة؟ ما تقدر تحول <:emoji_32:1471962578895769611>**`);
-      }
-
-      sender.balance = parseFloat((sender.balance - (data.amount + data.tax)).toFixed(2));
-      target.balance = parseFloat((target.balance + data.amount).toFixed(2));
-      
-      sender.history.push({ type: 'TRANSFER_SEND', amount: -data.amount, targetUser: data.targetId, targetName: target.username, date: new Date() });
-      target.history.push({ type: 'TRANSFER_RECEIVE', amount: data.amount, targetUser: data.senderId, targetName: sender.username, date: new Date() });
-      
-      await sender.save(); 
-      await target.save();
-      client.transferCooldowns.set(data.senderId, Date.now());
-      
-      const confirmMsg = await message.channel.messages.fetch(data.msgId).catch(() => null);
-      if (confirmMsg) {
-        await confirmMsg.edit({ 
-          content: `-# **تم تحويل ${data.amount} لـ <@${data.targetId}> رصيدك الآن ${sender.balance} <a:moneywith_:1470458218953179237>**`, 
-          components: [] 
-        }).catch(() => { });
-      }
-      
-      client.pendingTransfers.delete(key);
-      try { await message.delete(); } catch (e) { }
-      return;
-    }
-
-    if (command === 'اغنياء') {
-      const topUsers = await User.find().sort({ balance: -1 }).limit(5);
-      const topMsg = topUsers.map((u, idx) => `-# **\u200F${idx + 1}. \u202B<@${u.userId}>\u202C - ${u.balance} دينار**`).join('\n');
-      const embed = new EmbedBuilder().setDescription(`**الطبقة الارستقراطية <:y_coroa:1404576666105417871>**\n\n${topMsg}`).setColor(0x2b2d31);
-      return message.channel.send({ embeds: [embed] });
-    }
-
-    if (command === 'سجل') {
-      const user = message.mentions.users.first() || message.author;
-      const userData = await getUserData(user.id);
-      const historyText = await formatHistory(client, userData.history);
-      const embed = new EmbedBuilder().setDescription(`**السجل الخاص بـ ${user.username} <:emoji_41:1471619709936996406>**\n\n${historyText}`).setColor(0x2b2d31);
-      return message.channel.send({ embeds: [embed] });
-    }
-  },
-
-  onInteraction: async (client, interaction) => {
-    if (!interaction.isButton()) return;
-
-    if (interaction.customId === 'confirm_transfer' || interaction.customId === 'cancel_transfer') {
-      const key = `${interaction.guild.id}-${interaction.user.id}`;
-      const data = client.pendingTransfers.get(key);
-
-      if (!data || data.msgId !== interaction.message.id) {
-        return interaction.reply({ content: '-# **هذا الزر مو لك أو انتهت صلاحيته <:emoji_38:1470920843398746215>**', ephemeral: true });
-      }
-
-      if (interaction.customId === 'cancel_transfer') {
-        client.pendingTransfers.delete(key);
-        await interaction.message.edit({ content: '-# **تم إلغاء عملية التحويل <:emoji_38:1470920843398746215>**', components: [] }).catch(() => { });
-        return interaction.reply({ content: '-# **تم الإلغاء بنجاح**', ephemeral: true });
-      }
-      
-      // زر التأكيد يوجه المستخدم لكتابة الكابتشا
-      return interaction.reply({ content: `-# **اكتب الرقم \`${data.captcha}\` في الشات للتأكيد**`, ephemeral: true });
-    }
+    return true;
   }
+
+  if ((command === 'تحويل' || command === 't') && args[1]) {
+    const target = message.mentions.users.first();
+    const amountStr = args[2] || args[1];
+    const amount = parseFloat(amountStr);
+
+    if (!target || isNaN(amount) || amount <= 0 || target.id === message.author.id || target.bot) return true;
+
+    const senderData = await getUserData(message.author.id);
+    if (senderData.balance < amount) {
+      await message.channel.send(`-# **رصيدك ما يكفي يا طفران <:emoji_32:1471962578895769611>**`);
+      return true;
+    }
+
+    const cooldown = client.transferCooldowns.get(message.author.id);
+    if (cooldown && Date.now() - cooldown < 5000) {
+      await message.channel.send(`-# **اهدا شوي، تقدر تحول كل 5 ثواني <:emoji_38:1470920843398746215>**`);
+      return true;
+    }
+
+    const tax = calculateTax(senderData.balance, amount);
+    const finalAmount = amount - tax;
+    const captcha = Math.floor(1000 + Math.random() * 9000);
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('confirm_transfer').setLabel('تأكيد').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('cancel_transfer').setLabel('إلغاء').setStyle(ButtonStyle.Danger)
+    );
+
+    const msg = await message.channel.send({
+      content: `-# **${message.author.username}، أنت على وشك تحويل ${finalAmount} لـ ${target.username} (الضريبة: ${tax})\nاكتب الرقم التالي للتأكيد: \`${captcha}\`**`,
+      components: [row]
+    });
+
+    client.pendingTransfers.set(`${message.guild.id}-${message.author.id}`, {
+      targetId: target.id,
+      amount: finalAmount,
+      tax: tax,
+      captcha: captcha,
+      msgId: msg.id,
+      senderId: message.author.id,
+      timestamp: Date.now()
+    });
+
+    setTimeout(() => {
+      if (client.pendingTransfers.has(`${message.guild.id}-${message.author.id}`)) {
+        client.pendingTransfers.delete(`${message.guild.id}-${message.author.id}`);
+        msg.edit({ content: '-# **انتهى وقت التحويل <:emoji_38:1470920843398746215>**', components: [] }).catch(() => { });
+      }
+    }, 30000);
+    return true;
+  }
+
+  // معالجة كتابة الكابتشا للتحويل
+  const key = `${message.guild.id}-${message.author.id}`;
+  const data = client.pendingTransfers.get(key);
+  if (data && message.content === String(data.captcha)) {
+    const sender = await getUserData(data.senderId);
+    const target = await getUserData(data.targetId);
+    
+    if (sender.balance < (data.amount + data.tax)) {
+      client.pendingTransfers.delete(key);
+      await message.channel.send(`-# **رصيدك نقص فجأة؟ ما تقدر تحول <:emoji_32:1471962578895769611>**`);
+      return true;
+    }
+
+    sender.balance = parseFloat((sender.balance - (data.amount + data.tax)).toFixed(2));
+    target.balance = parseFloat((target.balance + data.amount).toFixed(2));
+    
+    sender.history.push({ type: 'TRANSFER_SEND', amount: -data.amount, targetUser: data.targetId, targetName: target.username, date: new Date() });
+    target.history.push({ type: 'TRANSFER_RECEIVE', amount: data.amount, targetUser: data.senderId, targetName: sender.username, date: new Date() });
+    
+    await sender.save(); 
+    await target.save();
+    client.transferCooldowns.set(data.senderId, Date.now());
+    
+    const confirmMsg = await message.channel.messages.fetch(data.msgId).catch(() => null);
+    if (confirmMsg) {
+      await confirmMsg.edit({ 
+        content: `-# **تم تحويل ${data.amount} لـ <@${data.targetId}> رصيدك الآن ${sender.balance} <a:moneywith_:1470458218953179237>**`, 
+        components: [] 
+      }).catch(() => { });
+    }
+    
+    client.pendingTransfers.delete(key);
+    try { await message.delete(); } catch (e) { }
+    return true;
+  }
+
+  if (command === 'اغنياء') {
+    const topUsers = await User.find().sort({ balance: -1 }).limit(5);
+    const topMsg = topUsers.map((u, idx) => `-# **\u200F${idx + 1}. \u202B<@${u.userId}>\u202C - ${u.balance} دينار**`).join('\n');
+    const embed = new EmbedBuilder().setDescription(`**الطبقة الارستقراطية <:y_coroa:1404576666105417871>**\n\n${topMsg}`).setColor(0x2b2d31);
+    await message.channel.send({ embeds: [embed] });
+    return true;
+  }
+
+  if (command === 'سجل') {
+    const user = message.mentions.users.first() || message.author;
+    const userData = await getUserData(user.id);
+    const historyText = await formatHistory(client, userData.history);
+    const embed = new EmbedBuilder().setDescription(`**السجل الخاص بـ ${user.username} <:emoji_41:1471619709936996406>**\n\n${historyText}`).setColor(0x2b2d31);
+    await message.channel.send({ embeds: [embed] });
+    return true;
+  }
+
+  return false;
+}
+
+// ==================== onMessage (للرسائل العادية) ====================
+async function onMessage(client, message) {
+  // هذا النظام ما يحتاج معالجة رسائل عادية
+  return;
+}
+
+// ==================== onInteraction ====================
+async function onInteraction(client, interaction) {
+  if (!interaction.isButton()) return false;
+
+  if (interaction.customId === 'confirm_transfer' || interaction.customId === 'cancel_transfer') {
+    const key = `${interaction.guild.id}-${interaction.user.id}`;
+    const data = client.pendingTransfers.get(key);
+
+    if (!data || data.msgId !== interaction.message.id) {
+      await interaction.reply({ content: '-# **هذا الزر مو لك أو انتهت صلاحيته <:emoji_38:1470920843398746215>**', ephemeral: true });
+      return true;
+    }
+
+    if (interaction.customId === 'cancel_transfer') {
+      client.pendingTransfers.delete(key);
+      await interaction.message.edit({ content: '-# **تم إلغاء عملية التحويل <:emoji_38:1470920843398746215>**', components: [] }).catch(() => { });
+      await interaction.reply({ content: '-# **تم الإلغاء بنجاح**', ephemeral: true });
+      return true;
+    }
+    
+    // زر التأكيد يوجه المستخدم لكتابة الكابتشا
+    await interaction.reply({ content: `-# **اكتب الرقم \`${data.captcha}\` في الشات للتأكيد**`, ephemeral: true });
+    return true;
+  }
+  
+  return false;
+}
+
+// ==================== تصدير النظام ====================
+module.exports = {
+  onMessage,
+  handleTextCommand,
+  onInteraction
 };
