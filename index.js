@@ -1,10 +1,9 @@
-// ==================== 🤖 البوت المتكامل - النسخة النهائية 🤖 ====================
+// ==================== 🤖 البوت المتكامل - النسخة النهائية (ملف واحد) 🤖 ====================
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionsBitField } = require('discord.js');
 const { REST, Routes } = require('discord.js');
 const express = require('express');
 const mongoose = require('mongoose');
 const cron = require('node-cron');
-const pointsSystem = require('./pointsSystem.js'); // 👈 نظام النقاط المنفصل
 const app = express();
 
 // ==================== 🔒 الإعدادات والربط 🔒 ====================
@@ -97,12 +96,32 @@ const GiveawaySchema = new mongoose.Schema({
   ended: { type: Boolean, default: false }
 });
 
+// ==================== 🎯 نظام النقاط Schemas ====================
+const PointsSchema = new mongoose.Schema({
+  guildId: String,
+  userId: String,
+  xp: { type: Number, default: 0 },
+  points: { type: Number, default: 0 },
+  messages: { type: Number, default: 0 }
+});
+
+const PointsSettingsSchema = new mongoose.Schema({
+  guildId: String,
+  enabled: { type: Boolean, default: false },
+  rewardPerPoint: { type: Number, default: 0 },
+  channelId: { type: String, default: null },
+  customMessage: { type: String, default: 'مبروك {user} وصلت {points} نقطة' },
+  lastMessage: { type: Map, of: Date, default: new Map() }
+});
+
 const User = mongoose.model('User', UserSchema);
 const Settings = mongoose.model('Settings', SettingsSchema);
 const GlobalSettings = mongoose.model('GlobalSettings', GlobalSettingsSchema);
 const TicketSettings = mongoose.model('TicketSettings', TicketSettingsSchema);
 const AutoDelete = mongoose.model('AutoDeleteChannel', AutoDeleteChannelSchema);
 const Giveaway = mongoose.model('Giveaway', GiveawaySchema);
+const Points = mongoose.model('Points', PointsSchema);
+const PointsSettings = mongoose.model('PointsSettings', PointsSettingsSchema);
 
 // ==================== 🔧 الدوال المساعدة ====================
 async function getGlobalSettings() {
@@ -147,6 +166,29 @@ async function getTicketSettings(guildId) {
 
 async function getAutoDeleteChannels(guildId) {
   return await AutoDelete.find({ guildId });
+}
+
+// ==================== 🎯 دوال نظام النقاط المساعدة ====================
+function getRequiredMessages(points) {
+  if (points < 5) return 5;           // النقاط 0-4: 5 رسائل
+  else if (points < 15) return 10;    // النقاط 5-14: 10 رسائل
+  else if (points < 30) return 20;    // النقاط 15-29: 20 رسالة
+  else if (points < 50) return 35;    // النقاط 30-49: 35 رسالة
+  else if (points < 75) return 55;    // النقاط 50-74: 55 رسالة
+  else if (points < 100) return 80;   // النقاط 75-99: 80 رسالة
+  else return 100;                     // بعد 100 نقطة: 100 رسالة
+}
+
+function calculatePointsFromMessages(totalMessages) {
+  let points = 0;
+  let remainingMessages = totalMessages;
+  
+  while (remainingMessages >= getRequiredMessages(points)) {
+    remainingMessages -= getRequiredMessages(points);
+    points++;
+  }
+  
+  return { points, remainingMessages };
 }
 
 // ==================== 💰 حساب الضريبة ====================
@@ -804,7 +846,61 @@ client.on('messageCreate', async (message) => {
   }
   
   // ==================== نظام النقاط ====================
-  await pointsSystem.handleMessage(message);
+  if (!message.author.bot) {
+    const pointsSettings = await PointsSettings.findOne({ guildId: message.guild.id });
+    
+    if (pointsSettings && pointsSettings.enabled) {
+      let pointsData = await Points.findOne({ 
+        guildId: message.guild.id, 
+        userId: message.author.id 
+      });
+      
+      if (!pointsData) {
+        pointsData = new Points({
+          guildId: message.guild.id,
+          userId: message.author.id,
+          xp: 0,
+          points: 0,
+          messages: 0
+        });
+      }
+      
+      pointsData.messages += 1;
+      pointsData.xp += 1;
+      
+      const { points: newPoints } = calculatePointsFromMessages(pointsData.messages);
+      
+      if (newPoints > pointsData.points) {
+        const pointsGained = newPoints - pointsData.points;
+        
+        let pointsMessage = pointsSettings.customMessage || 'مبروك {user} وصلت {points} نقطة';
+        pointsMessage = pointsMessage.replace('{user}', message.author.username);
+        pointsMessage = pointsMessage.replace('{points}', newPoints);
+        
+        if (pointsSettings.rewardPerPoint && pointsSettings.rewardPerPoint > 0) {
+          const reward = pointsGained * pointsSettings.rewardPerPoint;
+          pointsMessage += ` و كسبت ${reward} دينار`;
+        }
+        
+        pointsMessage = `-# ** ${pointsMessage} <:emoji_32:1471962578895769611> **`;
+        
+        if (pointsSettings.channelId) {
+          const pointsChannel = message.guild.channels.cache.get(pointsSettings.channelId);
+          if (pointsChannel) {
+            pointsChannel.send(pointsMessage).catch(() => {});
+          } else {
+            message.channel.send(pointsMessage).catch(() => {});
+          }
+        } else {
+          message.channel.send(pointsMessage).catch(() => {});
+        }
+        
+        pointsData.points = newPoints;
+      }
+      
+      await pointsData.save();
+    }
+  }
   
   const args = message.content.trim().split(/\s+/);
   const firstWord = args[0];
@@ -942,11 +1038,53 @@ client.on('messageCreate', async (message) => {
 
   // ==================== أوامر نظام النقاط النصية ====================
   if (command === 'نقاطي') {
-    return pointsSystem.myPointsCommand(message, prefix);
+    const pointsData = await Points.findOne({ 
+      guildId: message.guild.id, 
+      userId: message.author.id 
+    });
+    
+    if (!pointsData) {
+      return message.channel.send(`-# **ما عندك نقاط، اكتب شوية رسايل <:emoji_32:1471962578895769611>**`);
+    }
+    
+    const { remainingMessages } = calculatePointsFromMessages(pointsData.messages);
+    const requiredForNext = getRequiredMessages(pointsData.points);
+    const remaining = requiredForNext - remainingMessages;
+    
+    const pointsSettings = await PointsSettings.findOne({ guildId: message.guild.id });
+    
+    let replyMsg = `-# ** نقاطك حالياً ${pointsData.points} و باقيلك ${remaining} رسالة عشان تزيد نقطة`;
+    
+    if (pointsSettings && pointsSettings.rewardPerPoint && pointsSettings.rewardPerPoint > 0) {
+      const totalEarned = pointsData.points * pointsSettings.rewardPerPoint;
+      replyMsg += ` (كسبت ${totalEarned} دينار)`;
+    }
+    
+    replyMsg += ` <:emoji_32:1471962578895769611> **`;
+    
+    return message.channel.send(replyMsg);
   }
 
   if (command === 'نقاط') {
-    return pointsSystem.pointsLeaderboardCommand(message);
+    const topPoints = await Points.find({ guildId: message.guild.id })
+      .sort({ points: -1 })
+      .limit(5);
+    
+    if (topPoints.length === 0) {
+      return message.channel.send(`-# **ما في نقاط مسجلة يا خليفة <:emoji_52:1473620889349128298>**`);
+    }
+    
+    let leaderboardText = '';
+    
+    topPoints.forEach((entry, idx) => {
+      leaderboardText += `-# ** الخليفة <@${entry.userId}> ${entry.points} نقطة**\n`;
+    });
+    
+    const embed = new EmbedBuilder()
+      .setDescription(`**خلفاء السبع ليالِ <:emoji_52:1473620889349128298>**\n\n${leaderboardText}`)
+      .setColor(0x2b2d31);
+    
+    return message.channel.send({ embeds: [embed] });
   }
 
   if (command === 'ارقام') {
@@ -1433,10 +1571,10 @@ client.on('interactionCreate', async (i) => {
         const customMessage = options.getString('message');
         const reward = options.getInteger('reward');
         
-        let settings = await pointsSystem.PointsSettings.findOne({ guildId: i.guild.id });
+        let settings = await PointsSettings.findOne({ guildId: i.guild.id });
         
         if (!settings) {
-          settings = new pointsSystem.PointsSettings({
+          settings = new PointsSettings({
             guildId: i.guild.id,
             enabled: true,
             channelId: channel?.id || null,
@@ -1461,7 +1599,7 @@ client.on('interactionCreate', async (i) => {
       }
       
       if (sub === 'disable') {
-        let settings = await pointsSystem.PointsSettings.findOne({ guildId: i.guild.id });
+        let settings = await PointsSettings.findOne({ guildId: i.guild.id });
         if (settings) {
           settings.enabled = false;
           await settings.save();
@@ -1473,12 +1611,12 @@ client.on('interactionCreate', async (i) => {
       }
       
       if (sub === 'enable') {
-        let settings = await pointsSystem.PointsSettings.findOne({ guildId: i.guild.id });
+        let settings = await PointsSettings.findOne({ guildId: i.guild.id });
         if (settings) {
           settings.enabled = true;
           await settings.save();
         } else {
-          settings = new pointsSystem.PointsSettings({
+          settings = new PointsSettings({
             guildId: i.guild.id,
             enabled: true
           });
@@ -1491,9 +1629,9 @@ client.on('interactionCreate', async (i) => {
       }
       
       if (sub === 'reset') {
-        await pointsSystem.Points.deleteMany({ guildId: i.guild.id });
+        await Points.deleteMany({ guildId: i.guild.id });
         
-        let settings = await pointsSystem.PointsSettings.findOne({ guildId: i.guild.id });
+        let settings = await PointsSettings.findOne({ guildId: i.guild.id });
         if (settings) {
           settings.enabled = true;
           settings.rewardPerPoint = 0;
