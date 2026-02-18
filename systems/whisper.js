@@ -71,10 +71,10 @@ module.exports = {
         guildId: interaction.guild.id
       });
 
-      // حذف الهمسة بعد 30 ثانية ⏱️
+      // حذف الهمسة من الذاكرة بعد 30 ثانية
       setTimeout(() => {
         whispers.delete(whisperId);
-      }, 30000); // 30 ثانية
+      }, 30000);
 
       // زر العرض (رصاصي)
       const row = new ActionRowBuilder().addComponents(
@@ -85,10 +85,15 @@ module.exports = {
       );
 
       // رسالة عامة
-      await interaction.channel.send({
+      const whisperMessage = await interaction.channel.send({
         content: `-# ** يـ ${target} تلقيت همسة من ${interaction.user} <:emoji_32:1471962578895769611> **`,
         components: [row]
       });
+
+      // حذف الرسالة من الشات بعد 30 ثانية ⏱️
+      setTimeout(() => {
+        whisperMessage.delete().catch(() => {});
+      }, 30000);
 
       await interaction.reply({ 
         content: `-# **تم إرسال الهمسة بنجاح <:2thumbup:1467287897429512396>**`, 
