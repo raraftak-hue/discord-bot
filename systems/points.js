@@ -1,4 +1,4 @@
-const { EmbedBuilder, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { EmbedBuilder, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ChannelSelectMenuBuilder, ChannelType } = require('discord.js');
 const mongoose = require('mongoose');
 
 // ==================== 📊 Schemas ====================
@@ -20,7 +20,8 @@ const PointsSettingsSchema = new mongoose.Schema({
   lastMessage: { type: Map, of: Date, default: new Map() },
   funded: { type: Boolean, default: false },
   treasury: { type: Number, default: 0 },
-  totalFunded: { type: Number, default: 0 }
+  totalFunded: { type: Number, default: 0 },
+  lastFundAmount: { type: Number, default: 0 }
 });
 
 const Points = mongoose.model('Points', PointsSchema);
@@ -194,7 +195,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
 
 // ==================== onInteraction ====================
 async function onInteraction(client, interaction) {
-  if (!interaction.isChatInputCommand() && !interaction.isButton() && !interaction.isModalSubmit()) return false;
+  if (!interaction.isChatInputCommand() && !interaction.isButton() && !interaction.isModalSubmit() && !interaction.isChannelSelectMenu()) return false;
   
   // ===== أمر السلاش الرئيسي =====
   if (interaction.isChatInputCommand() && interaction.commandName === 'points') {
@@ -207,6 +208,7 @@ async function onInteraction(client, interaction) {
         funded: false,
         treasury: 0,
         totalFunded: 0,
+        lastFundAmount: 0,
         rewardPerPoint: 0,
         pointsPerReward: 1
       });
@@ -214,11 +216,10 @@ async function onInteraction(client, interaction) {
     }
     
     const statusText = settings.enabled ? 'مفعل' : 'غير مفعل';
-    const fundedText = settings.funded && settings.treasury > 0 ? 'يوجد' : 'لا يوجد';
-    const fundedAmount = settings.totalFunded || 0;
+    const lastFund = settings.lastFundAmount || 0;
     
     const description = `**حالة النضام <:new_emoji:1388436089584226387>**\n\n` +
-      `-# ** النظام ${statusText} و ${fundedText} تمويل بقيمة ${fundedAmount} دينار و الخزينة متبقي فيها ${settings.treasury} دينار <:2thumbup:1467287897429512396> **`;
+      `-# ** النظام ${statusText} و الخزينة فيها ${settings.treasury} و اخر تمويل تم اضافته كان بـ ${lastFund} دينار <:emoji_41:1471619709936996406> **`;
     
     const embed = new EmbedBuilder()
       .setDescription(description)
@@ -256,11 +257,10 @@ async function onInteraction(client, interaction) {
         await settings.save();
         
         const statusText = settings.enabled ? 'مفعل' : 'غير مفعل';
-        const fundedText = settings.funded && settings.treasury > 0 ? 'يوجد' : 'لا يوجد';
-        const fundedAmount = settings.totalFunded || 0;
+        const lastFund = settings.lastFundAmount || 0;
         
         const description = `**حالة النضام <:new_emoji:1388436089584226387>**\n\n` +
-          `-# ** النظام ${statusText} و ${fundedText} تمويل بقيمة ${fundedAmount} دينار و الخزينة متبقي فيها ${settings.treasury} دينار <:2thumbup:1467287897429512396> **`;
+          `-# ** النظام ${statusText} و الخزينة فيها ${settings.treasury} و اخر تمويل تم اضافته كان بـ ${lastFund} دينار <:emoji_41:1471619709936996406> **`;
         
         const embed = new EmbedBuilder()
           .setDescription(description)
@@ -336,6 +336,7 @@ async function onInteraction(client, interaction) {
         settings.funded = false;
         settings.treasury = 0;
         settings.totalFunded = 0;
+        settings.lastFundAmount = 0;
         settings.rewardPerPoint = 0;
         settings.pointsPerReward = 1;
         await settings.save();
@@ -349,14 +350,26 @@ async function onInteraction(client, interaction) {
     }
     
     if (interaction.customId === 'points_settings') {
+      let settings = await PointsSettings.findOne({ guildId: interaction.guild.id });
+      const channelMention = settings?.channelId ? `<#${settings.channelId}>` : 'غير محدد';
+      const currentMessage = settings?.customMessage || 'مبروك {user} وصلت {points} نقطة';
+      
+      const embed = new EmbedBuilder()
+        .setTitle('الإعدادات')
+        .setDescription(
+          `-# ** الرسالة الحالية هي ${currentMessage} **\n` +
+          `-# ** روم الرسالة الحالي هو ${channelMention}**`
+        )
+        .setColor(0x2b2d31);
+      
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-          .setCustomId('set_channel')
-          .setLabel('تغيير روم التهنئة')
+          .setCustomId('change_message')
+          .setLabel('تغيير الرسالة')
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
-          .setCustomId('set_message')
-          .setLabel('تغيير رسالة التهنئة')
+          .setCustomId('change_channel')
+          .setLabel('تغيير الروم')
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId('back_to_main')
@@ -364,24 +377,11 @@ async function onInteraction(client, interaction) {
           .setStyle(ButtonStyle.Secondary)
       );
       
-      await interaction.reply({ 
-        content: '⚙️ **إعدادات نظام النقاط**\nاختر ما تريد تعديله:', 
-        components: [row], 
-        ephemeral: true 
-      });
+      await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
       return true;
     }
 
-    if (interaction.customId === 'set_channel') {
-      // مؤقتاً نستخدم أمر points-setup
-      await interaction.reply({ 
-        content: `-# ** استخدم الأمر /points-setup channel:#الروم مؤقتاً لحين تطوير الواجهة **`, 
-        ephemeral: true 
-      });
-      return true;
-    }
-
-    if (interaction.customId === 'set_message') {
+    if (interaction.customId === 'change_message') {
       const modal = new ModalBuilder()
         .setCustomId('message_modal')
         .setTitle('تغيير رسالة التهنئة');
@@ -400,12 +400,45 @@ async function onInteraction(client, interaction) {
       return true;
     }
 
+    if (interaction.customId === 'change_channel') {
+      const row = new ActionRowBuilder().addComponents(
+        new ChannelSelectMenuBuilder()
+          .setCustomId('channel_select')
+          .setPlaceholder('اختر روم التهنئة')
+          .setChannelTypes([ChannelType.GuildText])
+      );
+      
+      await interaction.reply({ 
+        content: 'اختر الروم الجديد:', 
+        components: [row], 
+        ephemeral: true 
+      });
+      return true;
+    }
+
     if (interaction.customId === 'back_to_main') {
       // نرجع للقائمة الرئيسية
       const cmdInteraction = interaction;
       cmdInteraction.commandName = 'points';
       return onInteraction(client, cmdInteraction);
     }
+  }
+  
+  // ===== معالج اختيار الروم =====
+  if (interaction.isChannelSelectMenu() && interaction.customId === 'channel_select') {
+    const channelId = interaction.values[0];
+    let settings = await PointsSettings.findOne({ guildId: interaction.guild.id });
+    
+    if (settings) {
+      settings.channelId = channelId;
+      await settings.save();
+      
+      await interaction.reply({ 
+        content: `-# ** تم تعيين روم التهنئة إلى <#${channelId}> بنجاح <:2thumbup:1467287897429512396> **`, 
+        ephemeral: true 
+      });
+    }
+    return true;
   }
   
   // ===== معالج Modal التمويل =====
@@ -458,6 +491,7 @@ async function onInteraction(client, interaction) {
         funded: true,
         treasury: amount,
         totalFunded: amount,
+        lastFundAmount: amount,
         rewardPerPoint: rewardPerPoint,
         pointsPerReward: pointsPerReward
       });
@@ -465,15 +499,49 @@ async function onInteraction(client, interaction) {
       settings.funded = true;
       settings.treasury = (settings.treasury || 0) + amount;
       settings.totalFunded = (settings.totalFunded || 0) + amount;
+      settings.lastFundAmount = amount;
       settings.rewardPerPoint = rewardPerPoint;
       settings.pointsPerReward = pointsPerReward;
     }
     await settings.save();
     
+    // تحديث الرسالة الرئيسية
+    const statusText = settings.enabled ? 'مفعل' : 'غير مفعل';
+    const lastFund = settings.lastFundAmount || 0;
+    
+    const description = `**حالة النضام <:new_emoji:1388436089584226387>**\n\n` +
+      `-# ** النظام ${statusText} و الخزينة فيها ${settings.treasury} و اخر تمويل تم اضافته كان بـ ${lastFund} دينار <:emoji_41:1471619709936996406> **`;
+    
+    const embed = new EmbedBuilder()
+      .setDescription(description)
+      .setColor(0x2b2d31);
+    
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('points_toggle')
+        .setLabel(settings.enabled ? 'تعطيل' : 'تفعيل')
+        .setStyle(settings.enabled ? ButtonStyle.Danger : ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId('points_fund')
+        .setLabel('تمويل')
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId('points_reset')
+        .setLabel('إعادة تعيين')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId('points_settings')
+        .setLabel('إعدادات')
+        .setStyle(ButtonStyle.Secondary)
+    );
+    
     await interaction.reply({ 
       content: `-# **تم تمويل نظام النقاط بـ ${amount} دينار لكل ${pointsPerReward} نقاط و الخزينة فيها ${settings.treasury} دينار <:2thumbup:1467287897429512396> **`, 
       ephemeral: true 
     });
+    
+    // تحديث الرسالة الأصلية للمستخدم
+    await interaction.message?.edit({ embeds: [embed], components: [row] }).catch(() => {});
     return true;
   }
 
@@ -485,8 +553,36 @@ async function onInteraction(client, interaction) {
     if (settings) {
       settings.customMessage = newMessage;
       await settings.save();
+      
+      // تحديث رسالة الإعدادات
+      const channelMention = settings?.channelId ? `<#${settings.channelId}>` : 'غير محدد';
+      
+      const embed = new EmbedBuilder()
+        .setTitle('الإعدادات')
+        .setDescription(
+          `-# ** الرسالة الحالية هي ${newMessage} **\n` +
+          `-# ** روم الرسالة الحالي هو ${channelMention}**`
+        )
+        .setColor(0x2b2d31);
+      
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('change_message')
+          .setLabel('تغيير الرسالة')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId('change_channel')
+          .setLabel('تغيير الروم')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId('back_to_main')
+          .setLabel('🔙 رجوع')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      
       await interaction.reply({ 
-        content: `-# ** تم تحديث رسالة التهنئة بنجاح <:2thumbup:1467287897429512396> **`, 
+        embeds: [embed], 
+        components: [row], 
         ephemeral: true 
       });
     }
