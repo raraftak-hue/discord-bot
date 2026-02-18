@@ -318,13 +318,26 @@ client.on('messageCreate', async (message) => {
 });
 
 client.on('interactionCreate', async (interaction) => {
-  for (const system of client.systems.values()) {
+  console.log(`📢 أمر سلاش: ${interaction.commandName}`);
+  
+  for (const [name, system] of client.systems) {
     if (system.onInteraction) {
       try {
+        console.log(`🔍 جرب في نظام: ${name}`);
         const handled = await system.onInteraction(client, interaction);
-        if (handled === true) return;
-      } catch (e) { console.error(e); }
+        if (handled) {
+          console.log(`✅ نظام ${name} تعامل مع الأمر`);
+          return;
+        }
+      } catch (e) { 
+        console.error(`❌ خطأ في نظام ${name}:`, e); 
+      }
     }
+  }
+  
+  console.log(`❌ ما في نظام تعامل مع: ${interaction.commandName}`);
+  if (!interaction.replied) {
+    await interaction.reply({ content: '❌ الأمر مو شغال حالياً', ephemeral: true });
   }
 });
 
