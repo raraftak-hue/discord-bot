@@ -211,8 +211,12 @@ async function onInteraction(client, interaction) {
     }
     
     if (sub === 'fund') {
+      // التأكد أن المستخدم هو مالك السيرفر
       if (user.id !== guild.ownerId) {
-        await interaction.reply({ content: `-# ** فقط مالك السيرفر يستطيع تمويل النظام <:emoji_84:1389404919672340592> **`, ephemeral: true });
+        await interaction.reply({ 
+          content: `-# ** فقط مالك السيرفر يستطيع تمويل النظام <:emoji_84:1389404919672340592> **`, 
+          ephemeral: true 
+        });
         return true;
       }
       
@@ -220,7 +224,10 @@ async function onInteraction(client, interaction) {
       const pointsPerReward = options.getInteger('points');
       
       if (!amount || amount <= 0 || !pointsPerReward || pointsPerReward <= 0) {
-        await interaction.reply({ content: `-# ** القيمة غير صحيحة <:__:1467633552408576192> **`, ephemeral: true });
+        await interaction.reply({ 
+          content: `-# ** القيمة غير صحيحة <:__:1467633552408576192> **`, 
+          ephemeral: true 
+        });
         return true;
       }
       
@@ -229,11 +236,16 @@ async function onInteraction(client, interaction) {
       const User = mongoose.model('User');
       const ownerData = await User.findOne({ userId: user.id });
       
+      // التحقق من الرصيد
       if (!ownerData || ownerData.balance < amount) {
-        await interaction.reply({ content: `-# ** رصيدك ما يكفي يا فقير <:emoji_464:1388211597197050029> **`, ephemeral: true });
+        await interaction.reply({ 
+          content: `-# ** ما عندك ذي الكمية من الدنانير لتمويل النظام <:emoji_38:1401773302619439147> **`, 
+          ephemeral: true 
+        });
         return true;
       }
       
+      // خصم المبلغ من مالك السيرفر
       ownerData.balance -= amount;
       ownerData.history.push({ 
         type: 'POINTS_FUND', 
@@ -242,6 +254,7 @@ async function onInteraction(client, interaction) {
       });
       await ownerData.save();
       
+      // تحديث إعدادات النظام
       let settings = await PointsSettings.findOne({ guildId: guild.id });
       if (!settings) {
         settings = new PointsSettings({
