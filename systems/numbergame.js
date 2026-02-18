@@ -107,101 +107,142 @@ async function startNumberGameAfterDelay(client, msg, gameData, guildId) {
   }, 20000);
 }
 
-module.exports = {
-  onMessage: async (client, message) => {
-    if (message.author.bot || !message.guild) return;
+// ==================== onMessage (للرسائل العادية) ====================
+async function onMessage(client, message) {
+  if (message.author.bot || !message.guild) return;
 
-    const content = message.content.trim();
-    const args = content.split(/\s+/);
-    const command = args[0];
+  // معالجة التخمين أثناء اللعبة
+  for (const [key, game] of client.activeNumberGames.entries()) {
+    if (key.startsWith(message.guild.id) && game.started && !game.winner) {
+      if (game.currentTurn === message.author.id && game.canGuess?.get(message.author.id)) {
+        const guess = parseInt(message.content);
+        if (isNaN(guess)) return;
 
-    if (command === 'ارقام') {
-      if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
-      for (const [key, game] of client.activeNumberGames.entries()) {
-        if (key.startsWith(message.guild.id)) {
-          const msg = await message.channel.messages.fetch(key.split('-')[1]).catch(() => null);
-          if (msg && !game.started) return message.channel.send(`-# **في لعبة شغالة يـ عبد خلها تخلص <:emoji_38:1470920843398746215> **`);
+        game.canGuess.set(message.author.id, false);
+        if (game.timer) { clearTimeout(game.timer); game.timer = null; }
+
+        const attempts = (game.attempts.get(message.author.id) || 0) + 1;
+        game.attempts.set(message.author.id, attempts);
+        game.guesses.push({ userId: message.author.id, guess });
+
+        if (guess === game.secretNumber) {
+          game.winner = message.author.id;
+          await message.channel.send(`-# **مبروك جابها صح ${getUserTag(client, message.author.id)} الرقم كان ${game.secretNumber} <:emoji_33:1401771703306027008> **`).catch(() => { });
+          client.activeNumberGames.delete(key);
+          return;
+        } else {
+          const hint = guess < game.secretNumber ? 'أكبر' : 'أصغر';
+          await message.channel.send(`-# **خطأ الرقم ${hint} من ${guess} <:emoji_38:1470920843398746215> **`).catch(() => { });
+          
+          game.currentTurnIndex++;
+          setTimeout(() => { startNextTurn(client, message.channel, key.split('-')[1], message.guild.id); }, 3000);
+          return;
         }
       }
-      const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('join_number_game').setLabel('انضم للعبة').setStyle(ButtonStyle.Secondary));
-      const msg = await message.channel.send({ content: `-# **تم بدأ لعبة التخمين مهمتكم رح تكون تخمين الرقم الصحيح من 1 الى 100 <:new_emoji:1388436089584226387> **`, components: [row] }).catch(() => { });
-      client.activeNumberGames.set(`${message.guild.id}-${msg.id}`, { 
-        hostId: message.author.id, 
-        players: [], 
-        attempts: new Map(), 
-        guesses: [], 
-        started: false, 
-        winner: null, 
-        secretNumber: null, 
-        currentTurn: null, 
-        currentTurnIndex: 0, 
-        alivePlayers: [], 
-        timer: null, 
-        canGuess: new Map() 
-      });
-      startNumberGameAfterDelay(client, msg, client.activeNumberGames.get(`${message.guild.id}-${msg.id}`), message.guild.id);
-      return;
-    }
-
-    if (command === 'ايقاف') {
-      if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
-      let found = false;
-      for (const [key, game] of client.activeNumberGames.entries()) {
-        if (key.startsWith(message.guild.id)) {
-          const msg = await message.channel.messages.fetch(key.split('-')[1]).catch(() => null);
-          if (msg) await msg.edit({ content: `-# ** تم ايقاف اللعبة <:new_emoji:1388436095842385931> **`, components: [] }).catch(() => { });
-          if (game.timer) clearTimeout(game.timer);
-          client.activeNumberGames.delete(key); 
-          found = true;
-        }
-      }
-      if (found) return message.channel.send(`-# ** تم ايقاف اللعبة <:new_emoji:1388436095842385931> **`);
-    }
-
-    // معالجة التخمين أثناء اللعبة
-    for (const [key, game] of client.activeNumberGames.entries()) {
-      if (key.startsWith(message.guild.id) && game.started && !game.winner) {
-        if (game.currentTurn === message.author.id && game.canGuess?.get(message.author.id)) {
-          const guess = parseInt(message.content);
-          if (isNaN(guess)) return;
-
-          game.canGuess.set(message.author.id, false);
-          if (game.timer) { clearTimeout(game.timer); game.timer = null; }
-
-          const attempts = (game.attempts.get(message.author.id) || 0) + 1;
-          game.attempts.set(message.author.id, attempts);
-          game.guesses.push({ userId: message.author.id, guess });
-
-          if (guess === game.secretNumber) {
-            game.winner = message.author.id;
-            await message.channel.send(`-# **مبروك جابها صح ${getUserTag(client, message.author.id)} الرقم كان ${game.secretNumber} <:emoji_33:1401771703306027008> **`).catch(() => { });
-            client.activeNumberGames.delete(key);
-            return;
-          } else {
-            const hint = guess < game.secretNumber ? 'أكبر' : 'أصغر';
-            await message.channel.send(`-# **خطأ الرقم ${hint} من ${guess} <:emoji_38:1470920843398746215> **`).catch(() => { });
-            
-            game.currentTurnIndex++;
-            setTimeout(() => { startNextTurn(client, message.channel, key.split('-')[1], message.guild.id); }, 3000);
-            return;
-          }
-        }
-      }
-    }
-  },
-
-  onInteraction: async (client, interaction) => {
-    if (!interaction.isButton()) return;
-
-    if (interaction.customId === 'join_number_game') {
-      const gameKey = `${interaction.guild.id}-${interaction.message.id}`;
-      const game = client.activeNumberGames.get(gameKey);
-      if (!game) return interaction.reply({ content: '❌ اللعبة مو موجودة!', ephemeral: true });
-      if (game.started) return interaction.reply({ content: '❌ اللعبة بدأت خلاص!', ephemeral: true });
-      if (game.players.includes(interaction.user.id)) return interaction.reply({ content: '❌ أنت مسجل أصلاً!', ephemeral: true });
-
-      game.players.push(interaction.user.id);
-      return interaction.reply({ content: '✅ تم تسجيلك في اللعبة!', ephemeral: true });
     }
   }
+}
+
+// ==================== معالج الأوامر النصية ====================
+async function handleTextCommand(client, message, command, args, prefix) {
+  if (command === 'ارقام') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return true;
+    
+    for (const [key, game] of client.activeNumberGames.entries()) {
+      if (key.startsWith(message.guild.id)) {
+        const msg = await message.channel.messages.fetch(key.split('-')[1]).catch(() => null);
+        if (msg && !game.started) {
+          await message.channel.send(`-# **في لعبة شغالة يـ عبد خلها تخلص <:emoji_38:1470920843398746215> **`);
+          return true;
+        }
+      }
+    }
+    
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('join_number_game').setLabel('انضم للعبة').setStyle(ButtonStyle.Secondary)
+    );
+    
+    const msg = await message.channel.send({ 
+      content: `-# **تم بدأ لعبة التخمين مهمتكم رح تكون تخمين الرقم الصحيح من 1 الى 100 <:new_emoji:1388436089584226387> **`, 
+      components: [row] 
+    }).catch(() => { });
+    
+    client.activeNumberGames.set(`${message.guild.id}-${msg.id}`, { 
+      hostId: message.author.id, 
+      players: [], 
+      attempts: new Map(), 
+      guesses: [], 
+      started: false, 
+      winner: null, 
+      secretNumber: null, 
+      currentTurn: null, 
+      currentTurnIndex: 0, 
+      alivePlayers: [], 
+      timer: null, 
+      canGuess: new Map() 
+    });
+    
+    startNumberGameAfterDelay(client, msg, client.activeNumberGames.get(`${message.guild.id}-${msg.id}`), message.guild.id);
+    return true;
+  }
+
+  if (command === 'ايقاف') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return true;
+    
+    let found = false;
+    for (const [key, game] of client.activeNumberGames.entries()) {
+      if (key.startsWith(message.guild.id)) {
+        const msg = await message.channel.messages.fetch(key.split('-')[1]).catch(() => null);
+        if (msg) await msg.edit({ content: `-# ** تم ايقاف اللعبة <:new_emoji:1388436095842385931> **`, components: [] }).catch(() => { });
+        if (game.timer) clearTimeout(game.timer);
+        client.activeNumberGames.delete(key); 
+        found = true;
+      }
+    }
+    
+    if (found) {
+      await message.channel.send(`-# ** تم ايقاف اللعبة <:new_emoji:1388436095842385931> **`);
+    }
+    return true;
+  }
+
+  return false;
+}
+
+// ==================== onInteraction ====================
+async function onInteraction(client, interaction) {
+  if (!interaction.isButton()) return false;
+
+  if (interaction.customId === 'join_number_game') {
+    const gameKey = `${interaction.guild.id}-${interaction.message.id}`;
+    const game = client.activeNumberGames.get(gameKey);
+    
+    if (!game) {
+      await interaction.reply({ content: '❌ اللعبة مو موجودة!', ephemeral: true });
+      return true;
+    }
+    
+    if (game.started) {
+      await interaction.reply({ content: '❌ اللعبة بدأت خلاص!', ephemeral: true });
+      return true;
+    }
+    
+    if (game.players.includes(interaction.user.id)) {
+      await interaction.reply({ content: '❌ أنت مسجل أصلاً!', ephemeral: true });
+      return true;
+    }
+
+    game.players.push(interaction.user.id);
+    await interaction.reply({ content: '✅ تم تسجيلك في اللعبة!', ephemeral: true });
+    return true;
+  }
+
+  return false;
+}
+
+// ==================== تصدير النظام ====================
+module.exports = {
+  onMessage,
+  handleTextCommand,
+  onInteraction
 };
