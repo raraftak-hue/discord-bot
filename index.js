@@ -24,8 +24,28 @@ client.transferCooldowns = new Map();
 client.activeNumberGames = new Map();
 client.systems = new Map();
 
-// تعريف الأوامر (نفس الأوامر الأصلية)
+// ==================== الاتصال بقاعدة البيانات ====================
+mongoose.connect(MONGO_URI)
+  .then(() => console.log('✅ متصل بـ MongoDB بنجاح!'))
+  .catch(err => console.error('❌ فشل الاتصال بـ MongoDB:', err));
+
+// ==================== تحميل الأنظمة ====================
+const systemsPath = path.join(__dirname, 'systems');
+const systemFiles = fs.readdirSync(systemsPath).filter(file => file.endsWith('.js'));
+
+for (const file of systemFiles) {
+  try {
+    const system = require(path.join(systemsPath, file));
+    client.systems.set(file.replace('.js', ''), system);
+    console.log(`📦 تم تحميل نظام: ${file}`);
+  } catch (error) {
+    console.error(`❌ خطأ في تحميل ${file}:`, error.message);
+  }
+}
+
+// ==================== جمع أوامر السلاش ====================
 const slashCommands = [
+  // أوامر wel
   {
     name: 'wel',
     description: 'نظام الترحيب',
@@ -47,6 +67,7 @@ const slashCommands = [
       { name: 'test', description: 'تجربة الرسالة', type: 1 }
     ]
   },
+  // أوامر tic
   {
     name: 'tic',
     description: 'نظام التذاكر',
@@ -67,6 +88,7 @@ const slashCommands = [
       }
     ]
   },
+  // أوامر give
   {
     name: 'give',
     description: 'نظام القيف أوي',
@@ -86,6 +108,7 @@ const slashCommands = [
       }
     ]
   },
+  // أوامر pre
   {
     name: 'pre',
     description: 'تغيير البادئة (اكتب "حذف" عشان تشيلها)',
@@ -101,6 +124,7 @@ const slashCommands = [
       }
     ]
   },
+  // أوامر emb
   {
     name: 'emb',
     description: 'إنشاء إيمبيد',
@@ -115,6 +139,7 @@ const slashCommands = [
       { name: 'timestamp', description: 'إضافة وقت', type: 5, required: false }
     ]
   },
+  // أوامر points
   {
     name: 'points',
     description: 'نظام النقاط',
@@ -135,6 +160,7 @@ const slashCommands = [
       { name: 'reset', description: 'تصفير جميع النقاط', type: 1 }
     ]
   },
+  // أوامر sub
   {
     name: 'sub',
     description: 'إدارة الاشتراكات (للمالك)',
@@ -168,7 +194,9 @@ const slashCommands = [
       }
     ]
   },
+  // أوامر hosting
   { name: 'hosting', description: 'عرض السيرفرات المشتركة (للمالك)', type: 1 },
+  // أوامر auto
   {
     name: 'auto',
     description: 'نظام الحذف التلقائي (للمالك)',
@@ -205,21 +233,7 @@ const slashCommands = [
   }
 ];
 
-mongoose.connect(MONGO_URI)
-  .then(() => console.log('✅ متصل بـ MongoDB بنجاح!'))
-  .catch(err => console.error('❌ فشل الاتصال بـ MongoDB:', err));
-
-// تحميل الأنظمة من مجلد systems
-const systemsPath = path.join(__dirname, 'systems');
-const systemFiles = fs.readdirSync(systemsPath).filter(file => file.endsWith('.js'));
-
-for (const file of systemFiles) {
-  const system = require(path.join(systemsPath, file));
-  client.systems.set(file, system);
-  console.log(`📦 تم تحميل نظام: ${file}`);
-}
-
-// توجيه الأحداث لجميع الأنظمة
+// ==================== الأحداث ====================
 client.once('ready', async () => {
   console.log(`✅ تم تسجيل الدخول بـ ${client.user.tag}`);
   
@@ -231,35 +245,76 @@ client.once('ready', async () => {
 
   // استدعاء onReady في كل نظام
   for (const system of client.systems.values()) {
-    if (system.onReady) await system.onReady(client);
+    if (system.onReady) {
+      try { await system.onReady(client); } catch (e) { console.error(e); }
+    }
   }
 });
 
 client.on('messageCreate', async (message) => {
+  if (message.author.bot || !message.guild) return;
+  
+  // ===== تشغيل onMessage في كل نظام (لأي رسالة) =====
   for (const system of client.systems.values()) {
-    if (system.onMessage) await system.onMessage(client, message);
+    if (system.onMessage) {
+      try { await system.onMessage(client, message); } catch (e) { console.error(e); }
+    }
+  }
+  
+  // ===== معالجة الأوامر النصية =====
+  // نحتاج Settings من أجل prefix
+  const Settings = mongoose.models.Settings;
+  if (!Settings) return;
+  
+  const settings = await Settings.findOne({ guildId: message.guild.id });
+  const prefix = settings?.prefix || '';
+  
+  // إذا في prefix والرسالة ما تبدأ به، نوقف
+  if (prefix && !message.content.startsWith(prefix)) return;
+  
+  const args = message.content.trim().split(/\s+/);
+  const firstWord = args[0];
+  const command = prefix ? firstWord.slice(prefix.length).toLowerCase() : firstWord.toLowerCase();
+  
+  // تمرير الأمر لجميع الأنظمة
+  for (const system of client.systems.values()) {
+    if (system.handleTextCommand) {
+      try {
+        const handled = await system.handleTextCommand(client, message, command, args, prefix);
+        if (handled === true) return;
+      } catch (e) { console.error(e); }
+    }
   }
 });
 
 client.on('interactionCreate', async (interaction) => {
   for (const system of client.systems.values()) {
-    if (system.onInteraction) await system.onInteraction(client, interaction);
+    if (system.onInteraction) {
+      try {
+        const handled = await system.onInteraction(client, interaction);
+        if (handled === true) return;
+      } catch (e) { console.error(e); }
+    }
   }
 });
 
 client.on('guildCreate', async (guild) => {
   for (const system of client.systems.values()) {
-    if (system.onGuildCreate) await system.onGuildCreate(client, guild);
+    if (system.onGuildCreate) {
+      try { await system.onGuildCreate(client, guild); } catch (e) { console.error(e); }
+    }
   }
 });
 
 client.on('guildMemberAdd', async (member) => {
   for (const system of client.systems.values()) {
-    if (system.onGuildMemberAdd) await system.onGuildMemberAdd(client, member);
+    if (system.onGuildMemberAdd) {
+      try { await system.onGuildMemberAdd(client, member); } catch (e) { console.error(e); }
+    }
   }
 });
 
-// Express Server
+// ==================== تشغيل السيرفر ====================
 app.get('/', (req, res) => res.send('Bot is running!'));
 app.listen(3000, () => console.log('🌐 Server is ready!'));
 
