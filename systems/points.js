@@ -248,7 +248,7 @@ async function onInteraction(client, interaction) {
       // خصم المبلغ من مالك السيرفر
       ownerData.balance -= amount;
       ownerData.history.push({ 
-        type: 'POINTS_FUND', 
+        type: '-# ** تمويل نضام النقاط <:emoji_41:1471619709936996406> **', 
         amount: -amount, 
         date: new Date() 
       });
