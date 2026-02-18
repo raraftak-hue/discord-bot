@@ -1,4 +1,4 @@
-const { EmbedBuilder, PermissionsBitField } = require('discord.js');
+const { EmbedBuilder, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const mongoose = require('mongoose');
 
 // ==================== 📊 Schemas ====================
@@ -19,7 +19,8 @@ const PointsSettingsSchema = new mongoose.Schema({
   customMessage: { type: String, default: 'مبروك {user} وصلت {points} نقطة' },
   lastMessage: { type: Map, of: Date, default: new Map() },
   funded: { type: Boolean, default: false },
-  treasury: { type: Number, default: 0 } // خزينة النظام
+  treasury: { type: Number, default: 0 },
+  totalFunded: { type: Number, default: 0 }
 });
 
 const Points = mongoose.model('Points', PointsSchema);
@@ -191,10 +192,7 @@ async function onInteraction(client, interaction) {
   if (commandName === 'points') {
     const sub = options.getSubcommand();
     
-    if (sub === 'setup') {
-      const channel = options.getChannel('channel');
-      const customMessage = options.getString('message');
-      
+    if (sub === 'status') {
       let settings = await PointsSettings.findOne({ guildId: guild.id });
       
       if (!settings) {
@@ -203,28 +201,44 @@ async function onInteraction(client, interaction) {
           enabled: true,
           funded: false,
           treasury: 0,
-          channelId: channel?.id || null,
-          customMessage: customMessage || 'مبروك {user} وصلت {points} نقطة'
+          totalFunded: 0,
+          rewardPerPoint: 0,
+          pointsPerReward: 1
         });
-      } else {
-        settings.enabled = true;
-        if (channel) settings.channelId = channel.id;
-        if (customMessage) settings.customMessage = customMessage;
+        await settings.save();
       }
       
-      await settings.save();
+      const statusText = settings.enabled ? 'مفعل' : 'غير مفعل';
+      const fundedText = settings.funded && settings.treasury > 0 ? 'يوجد' : 'لا يوجد';
+      const fundedAmount = settings.totalFunded || 0;
       
-      let replyMsg = `-# ** تم تفعيل نظام النقاط في السيرفر <:new_emoji:1388436089584226387> **`;
-      if (channel) replyMsg += `\n-# **📢 الروم: <#${channel.id}>**`;
-      if (customMessage) replyMsg += `\n-# **📝 الرسالة: ${customMessage}**`;
-      replyMsg += `\n-# **⚠️ النظام غير ممول، استخدم /points fund لتمويله**`;
+      const description = `**حالة النضام <:new_emoji:1388436089584226387>**\n\n` +
+        `-# ** النظام ${statusText} و ${fundedText} تمويل بقيمة ${fundedAmount} دينار و الخزينة متبقي فيها ${settings.treasury} دينار <:2thumbup:1467287897429512396> **`;
       
-      await interaction.reply({ content: replyMsg, ephemeral: true });
+      const embed = new EmbedBuilder()
+        .setDescription(description)
+        .setColor(0x2b2d31);
+      
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('points_toggle')
+          .setLabel(settings.enabled ? 'تعطيل' : 'تفعيل')
+          .setStyle(settings.enabled ? ButtonStyle.Danger : ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId('points_fund')
+          .setLabel('تمويل')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId('points_reset')
+          .setLabel('إعادة تعيين')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      
+      await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
       return true;
     }
     
     if (sub === 'fund') {
-      // التأكد أن المستخدم هو مالك السيرفر
       if (user.id !== guild.ownerId) {
         await interaction.reply({ 
           content: `-# ** فقط مالك السيرفر يستطيع تمويل النظام <:emoji_84:1389404919672340592> **`, 
@@ -249,7 +263,6 @@ async function onInteraction(client, interaction) {
       const User = mongoose.model('User');
       const ownerData = await User.findOne({ userId: user.id });
       
-      // التحقق من الرصيد
       if (!ownerData || ownerData.balance < amount) {
         await interaction.reply({ 
           content: `-# ** ما عندك ذي الكمية من الدنانير لتمويل النظام <:emoji_38:1401773302619439147> **`, 
@@ -258,7 +271,6 @@ async function onInteraction(client, interaction) {
         return true;
       }
       
-      // خصم المبلغ من مالك السيرفر
       ownerData.balance -= amount;
       ownerData.history.push({ 
         type: 'POINTS_FUND', 
@@ -267,7 +279,6 @@ async function onInteraction(client, interaction) {
       });
       await ownerData.save();
       
-      // تحديث إعدادات النظام (إضافة المبلغ للخزينة)
       let settings = await PointsSettings.findOne({ guildId: guild.id });
       if (!settings) {
         settings = new PointsSettings({
@@ -275,12 +286,14 @@ async function onInteraction(client, interaction) {
           enabled: true,
           funded: true,
           treasury: amount,
+          totalFunded: amount,
           rewardPerPoint: rewardPerPoint,
           pointsPerReward: pointsPerReward
         });
       } else {
         settings.funded = true;
-        settings.treasury += amount; // إضافة للخزينة
+        settings.treasury += amount;
+        settings.totalFunded = (settings.totalFunded || 0) + amount;
         settings.rewardPerPoint = rewardPerPoint;
         settings.pointsPerReward = pointsPerReward;
       }
@@ -293,50 +306,75 @@ async function onInteraction(client, interaction) {
       return true;
     }
     
-    if (sub === 'disable') {
-      let settings = await PointsSettings.findOne({ guildId: guild.id });
-      if (settings) {
-        settings.enabled = false;
-        await settings.save();
-      }
-      await interaction.reply({ 
-        content: `-# ** تم إطفاء نظام النقاط <:new_emoji:1388436095842385931> **`, 
-        ephemeral: true 
-      });
-      return true;
-    }
-    
-    if (sub === 'enable') {
-      let settings = await PointsSettings.findOne({ guildId: guild.id });
-      if (settings) {
-        settings.enabled = true;
-        await settings.save();
-      } else {
-        settings = new PointsSettings({
-          guildId: guild.id,
-          enabled: true,
-          funded: false,
-          treasury: 0
-        });
-        await settings.save();
-      }
-      
-      let replyMsg = `-# **تم تشغيل نظام النقاط <:new_emoji:1388436089584226387> **`;
-      if (!settings.funded || settings.treasury <= 0) {
-        replyMsg += `\n-# **⚠️ النظام غير ممول، استخدم /points fund لتمويله**`;
-      }
-      
-      await interaction.reply({ content: replyMsg, ephemeral: true });
-      return true;
-    }
-    
     if (sub === 'reset') {
+      if (user.id !== guild.ownerId) {
+        await interaction.reply({ 
+          content: `-# ** فقط مالك السيرفر يستطيع إعادة تعيين النظام <:emoji_84:1389404919672340592> **`, 
+          ephemeral: true 
+        });
+        return true;
+      }
+      
       await Points.deleteMany({ guildId: guild.id });
       let settings = await PointsSettings.findOne({ guildId: guild.id });
       if (settings) {
         settings.enabled = true;
         settings.funded = false;
         settings.treasury = 0;
+        settings.totalFunded = 0;
+        settings.rewardPerPoint = 0;
+        settings.pointsPerReward = 1;
+        await settings.save();
+      }
+      
+      await interaction.reply({ 
+        content: `-# **تم اعادة تعيين نظام النقاط <:2thumbup:1467287897429512396> **`, 
+        ephemeral: true 
+      });
+      return true;
+    }
+  }
+  
+  // معالج أزرار الحالة
+  if (interaction.isButton()) {
+    if (interaction.customId === 'points_toggle') {
+      let settings = await PointsSettings.findOne({ guildId: interaction.guild.id });
+      if (settings) {
+        settings.enabled = !settings.enabled;
+        await settings.save();
+        await interaction.reply({ 
+          content: `-# ** تم ${settings.enabled ? 'تفعيل' : 'تعطيل'} نظام النقاط بنجاح <:2thumbup:1467287897429512396> **`, 
+          ephemeral: true 
+        });
+      }
+      return true;
+    }
+    
+    if (interaction.customId === 'points_fund') {
+      // نحول لأمر fund لكن يحتاج نفتح modal لإدخال القيم
+      await interaction.reply({ 
+        content: `-# ** استخدم الأمر /points fund للتمويل **`, 
+        ephemeral: true 
+      });
+      return true;
+    }
+    
+    if (interaction.customId === 'points_reset') {
+      if (interaction.user.id !== interaction.guild.ownerId) {
+        await interaction.reply({ 
+          content: `-# ** فقط مالك السيرفر يستطيع إعادة تعيين النظام <:emoji_84:1389404919672340592> **`, 
+          ephemeral: true 
+        });
+        return true;
+      }
+      
+      await Points.deleteMany({ guildId: interaction.guild.id });
+      let settings = await PointsSettings.findOne({ guildId: interaction.guild.id });
+      if (settings) {
+        settings.enabled = true;
+        settings.funded = false;
+        settings.treasury = 0;
+        settings.totalFunded = 0;
         settings.rewardPerPoint = 0;
         settings.pointsPerReward = 1;
         await settings.save();
