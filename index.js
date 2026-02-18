@@ -139,33 +139,31 @@ const slashCommands = [
       { name: 'timestamp', description: 'إضافة وقت', type: 5, required: false }
     ]
   },
-  // أوامر points (محدثة)
+  // أوامر points
   {
     name: 'points',
     description: 'نظام النقاط',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
     options: [
       {
-        name: 'setup',
-        description: 'تفعيل نظام النقاط',
-        type: 1,
-        options: [
-          { name: 'channel', description: 'روم التهنئة (اختياري)', type: 7, required: false, channel_types: [0] },
-          { name: 'message', description: 'رسالة التهنئة ({user}, {points})', type: 3, required: false }
-        ]
+        name: 'status',
+        description: 'عرض حالة نظام النقاط',
+        type: 1
       },
       {
         name: 'fund',
-        description: 'تمويل نظام النقاط (للمالك فقط)',
+        description: 'تمويل نظام النقاط',
         type: 1,
         options: [
           { name: 'amount', description: 'كمية الدنانير', type: 4, required: true, min_value: 1 },
           { name: 'points', description: 'كم نقطة لكل دينار', type: 4, required: true, min_value: 1 }
         ]
       },
-      { name: 'disable', description: 'إطفاء نظام النقاط', type: 1 },
-      { name: 'enable', description: 'تشغيل نظام النقاط', type: 1 },
-      { name: 'reset', description: 'تصفير جميع النقاط', type: 1 }
+      {
+        name: 'reset',
+        description: 'إعادة تعيين جميع النقاط',
+        type: 1
+      }
     ]
   },
   // أوامر sub
@@ -246,7 +244,7 @@ const slashCommands = [
       }
     ]
   },
-  // أوامر whisper (جديد)
+  // أوامر whisper
   {
     name: 'whisper',
     description: 'إرسال همسة لشخص معين (يشوفها فقط هو)',
@@ -254,13 +252,13 @@ const slashCommands = [
       {
         name: 'user',
         description: 'الشخص اللي تبي ترسل له الهمسة',
-        type: 6, // USER type
+        type: 6,
         required: true
       },
       {
         name: 'message',
         description: 'الهمسة',
-        type: 3, // STRING type
+        type: 3,
         required: true
       }
     ]
