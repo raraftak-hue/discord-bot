@@ -43,191 +43,209 @@ function calculatePointsFromMessages(totalMessages) {
   return { points, remainingMessages };
 }
 
-module.exports = {
-  onMessage: async (client, message) => {
-    if (message.author.bot || !message.guild) return;
+// ==================== onMessage (للرسائل العادية) ====================
+async function onMessage(client, message) {
+  if (message.author.bot || !message.guild) return;
 
-    const content = message.content.trim();
-    const args = content.split(/\s+/);
-    const command = args[0];
-
-    // نظام زيادة النقاط تلقائياً
-    const settings = await PointsSettings.findOne({ guildId: message.guild.id });
-    if (settings && settings.enabled) {
-      const lastMsgDate = settings.lastMessage.get(message.author.id);
-      const now = new Date();
-      
-      if (!lastMsgDate || (now - lastMsgDate) > 5000) {
-        let pointsData = await Points.findOne({ guildId: message.guild.id, userId: message.author.id });
-        if (!pointsData) {
-          pointsData = new Points({ guildId: message.guild.id, userId: message.author.id });
-        }
-        
-        pointsData.messages += 1;
-        const { points: newPoints } = calculatePointsFromMessages(pointsData.messages);
-        
-        if (newPoints > pointsData.points) {
-          pointsData.points = newPoints;
-          
-          // إرسال رسالة التهنئة
-          const channel = settings.channelId ? await message.guild.channels.fetch(settings.channelId).catch(() => null) : message.channel;
-          if (channel) {
-            const msg = settings.customMessage
-              .replace('{user}', `<@${message.author.id}>`)
-              .replace('{points}', newPoints);
-            channel.send(msg).catch(() => {});
-          }
-          
-          // إضافة مكافأة مالية إذا وجدت
-          if (settings.rewardPerPoint > 0) {
-            const User = mongoose.model('User');
-            if (User) {
-              let userData = await User.findOne({ userId: message.author.id });
-              if (!userData) userData = new User({ userId: message.author.id });
-              userData.balance += settings.rewardPerPoint;
-              await userData.save();
-            }
-          }
-        }
-        
-        await pointsData.save();
-        settings.lastMessage.set(message.author.id, now);
-        await settings.save();
-      }
-    }
-
-    if (command === 'نقاطي') {
-      const pointsData = await Points.findOne({ 
-        guildId: message.guild.id, 
-        userId: message.author.id 
-      });
-      
+  // نظام زيادة النقاط تلقائياً
+  const settings = await PointsSettings.findOne({ guildId: message.guild.id });
+  if (settings && settings.enabled) {
+    const lastMsgDate = settings.lastMessage.get(message.author.id);
+    const now = new Date();
+    
+    if (!lastMsgDate || (now - lastMsgDate) > 5000) {
+      let pointsData = await Points.findOne({ guildId: message.guild.id, userId: message.author.id });
       if (!pointsData) {
-        return message.channel.send(`-# **ما عندك نقاط، اكتب شوية رسايل <:emoji_32:1471962578895769611>**`);
+        pointsData = new Points({ guildId: message.guild.id, userId: message.author.id });
       }
       
-      const { remainingMessages } = calculatePointsFromMessages(pointsData.messages);
-      const requiredForNext = getRequiredMessages(pointsData.points);
-      const remaining = requiredForNext - remainingMessages;
+      pointsData.messages += 1;
+      const { points: newPoints } = calculatePointsFromMessages(pointsData.messages);
       
-      const pointsSettings = await PointsSettings.findOne({ guildId: message.guild.id });
-      
-      let replyMsg = `-# ** نقاطك حالياً ${pointsData.points} و باقيلك ${remaining} رسالة عشان تزيد نقطة`;
-      
-      if (pointsSettings && pointsSettings.rewardPerPoint && pointsSettings.rewardPerPoint > 0) {
-        const totalEarned = pointsData.points * pointsSettings.rewardPerPoint;
-        replyMsg += ` (كسبت ${totalEarned} دينار)`;
-      }
-      
-      replyMsg += ` <:emoji_32:1471962578895769611> **`;
-      
-      return message.channel.send(replyMsg);
-    }
-
-    if (command === 'نقاط') {
-      const topPoints = await Points.find({ guildId: message.guild.id })
-        .sort({ points: -1 })
-        .limit(5);
-      
-      if (topPoints.length === 0) {
-        return message.channel.send(`-# **ما في نقاط مسجلة يا خليفة <:emoji_52:1473620889349128298>**`);
-      }
-      
-      let leaderboardText = '';
-      topPoints.forEach((entry, idx) => {
-        leaderboardText += `-# ** الخليفة <@${entry.userId}> ${entry.points} نقطة**\n`;
-      });
-      
-      const embed = new EmbedBuilder()
-        .setDescription(`**خلفاء السبع ليالِ <:emoji_52:1473620889349128298>**\n\n${leaderboardText}`)
-        .setColor(0x2b2d31);
-      
-      return message.channel.send({ embeds: [embed] });
-    }
-  },
-
-  onInteraction: async (client, interaction) => {
-    if (!interaction.isChatInputCommand()) return;
-    const { commandName, options } = interaction;
-
-    if (commandName === 'points') {
-      const sub = options.getSubcommand();
-      
-      if (sub === 'setup') {
-        const channel = options.getChannel('channel');
-        const customMessage = options.getString('message');
-        const reward = options.getInteger('reward');
+      if (newPoints > pointsData.points) {
+        pointsData.points = newPoints;
         
-        let settings = await PointsSettings.findOne({ guildId: interaction.guild.id });
-        
-        if (!settings) {
-          settings = new PointsSettings({
-            guildId: interaction.guild.id,
-            enabled: true,
-            channelId: channel?.id || null,
-            customMessage: customMessage || 'مبروك {user} وصلت {points} نقطة',
-            rewardPerPoint: reward || 0
-          });
-        } else {
-          settings.enabled = true;
-          if (channel) settings.channelId = channel.id;
-          if (customMessage) settings.customMessage = customMessage;
-          if (reward !== null) settings.rewardPerPoint = reward;
+        // إرسال رسالة التهنئة
+        const channel = settings.channelId ? await message.guild.channels.fetch(settings.channelId).catch(() => null) : message.channel;
+        if (channel) {
+          const msg = settings.customMessage
+            .replace('{user}', `<@${message.author.id}>`)
+            .replace('{points}', newPoints);
+          channel.send(msg).catch(() => {});
         }
         
-        await settings.save();
-        
-        let replyMsg = `-# ** تم تفعيل نظام النقاط في السيرفر <:new_emoji:1388436089584226387> **`;
-        if (channel) replyMsg += `\n-# **📢 الروم: <#${channel.id}>**`;
-        if (customMessage) replyMsg += `\n-# **📝 الرسالة: ${customMessage}**`;
-        if (reward) replyMsg += `\n-# **💰 المكافأة: ${reward} دينار لكل نقطة**`;
-        
-        return interaction.reply({ content: replyMsg, ephemeral: true });
+        // إضافة مكافأة مالية إذا وجدت
+        if (settings.rewardPerPoint > 0) {
+          const User = mongoose.model('User');
+          if (User) {
+            let userData = await User.findOne({ userId: message.author.id });
+            if (!userData) userData = new User({ userId: message.author.id });
+            userData.balance += settings.rewardPerPoint;
+            await userData.save();
+          }
+        }
       }
       
-      if (sub === 'disable') {
-        let settings = await PointsSettings.findOne({ guildId: interaction.guild.id });
-        if (settings) {
-          settings.enabled = false;
-          await settings.save();
-        }
-        return interaction.reply({ 
-          content: `-# ** تم إطفاء نظام النقاط <:new_emoji:1388436095842385931> **`, 
-          ephemeral: true 
-        });
-      }
-      
-      if (sub === 'enable') {
-        let settings = await PointsSettings.findOne({ guildId: interaction.guild.id });
-        if (settings) {
-          settings.enabled = true;
-          await settings.save();
-        } else {
-          settings = new PointsSettings({
-            guildId: interaction.guild.id,
-            enabled: true
-          });
-          await settings.save();
-        }
-        return interaction.reply({ 
-          content: `-# **تم تشغيل نظام النقاط <:new_emoji:1388436089584226387> **`, 
-          ephemeral: true 
-        });
-      }
-      
-      if (sub === 'reset') {
-        await Points.deleteMany({ guildId: interaction.guild.id });
-        let settings = await PointsSettings.findOne({ guildId: interaction.guild.id });
-        if (settings) {
-          settings.enabled = true;
-          settings.rewardPerPoint = 0;
-          await settings.save();
-        }
-        return interaction.reply({ 
-          content: `-# **تم اعادة تعيين نظام النقاط <:2thumbup:1467287897429512396> **`, 
-          ephemeral: true 
-        });
-      }
+      await pointsData.save();
+      settings.lastMessage.set(message.author.id, now);
+      await settings.save();
     }
   }
+}
+
+// ==================== معالج الأوامر النصية ====================
+async function handleTextCommand(client, message, command, args, prefix) {
+  if (command === 'نقاطي') {
+    const pointsData = await Points.findOne({ 
+      guildId: message.guild.id, 
+      userId: message.author.id 
+    });
+    
+    if (!pointsData) {
+      await message.channel.send(`-# **ما عندك نقاط، اكتب شوية رسايل <:emoji_32:1471962578895769611>**`);
+      return true;
+    }
+    
+    const { remainingMessages } = calculatePointsFromMessages(pointsData.messages);
+    const requiredForNext = getRequiredMessages(pointsData.points);
+    const remaining = requiredForNext - remainingMessages;
+    
+    const pointsSettings = await PointsSettings.findOne({ guildId: message.guild.id });
+    
+    let replyMsg = `-# ** نقاطك حالياً ${pointsData.points} و باقيلك ${remaining} رسالة عشان تزيد نقطة`;
+    
+    if (pointsSettings && pointsSettings.rewardPerPoint && pointsSettings.rewardPerPoint > 0) {
+      const totalEarned = pointsData.points * pointsSettings.rewardPerPoint;
+      replyMsg += ` (كسبت ${totalEarned} دينار)`;
+    }
+    
+    replyMsg += ` <:emoji_32:1471962578895769611> **`;
+    
+    await message.channel.send(replyMsg);
+    return true;
+  }
+
+  if (command === 'نقاط') {
+    const topPoints = await Points.find({ guildId: message.guild.id })
+      .sort({ points: -1 })
+      .limit(5);
+    
+    if (topPoints.length === 0) {
+      await message.channel.send(`-# **ما في نقاط مسجلة يا خليفة <:emoji_52:1473620889349128298>**`);
+      return true;
+    }
+    
+    let leaderboardText = '';
+    topPoints.forEach((entry, idx) => {
+      leaderboardText += `-# ** الخليفة <@${entry.userId}> ${entry.points} نقطة**\n`;
+    });
+    
+    const embed = new EmbedBuilder()
+      .setDescription(`**خلفاء السبع ليالِ <:emoji_52:1473620889349128298>**\n\n${leaderboardText}`)
+      .setColor(0x2b2d31);
+    
+    await message.channel.send({ embeds: [embed] });
+    return true;
+  }
+
+  return false;
+}
+
+// ==================== onInteraction ====================
+async function onInteraction(client, interaction) {
+  if (!interaction.isChatInputCommand()) return false;
+  const { commandName, options } = interaction;
+
+  if (commandName === 'points') {
+    const sub = options.getSubcommand();
+    
+    if (sub === 'setup') {
+      const channel = options.getChannel('channel');
+      const customMessage = options.getString('message');
+      const reward = options.getInteger('reward');
+      
+      let settings = await PointsSettings.findOne({ guildId: interaction.guild.id });
+      
+      if (!settings) {
+        settings = new PointsSettings({
+          guildId: interaction.guild.id,
+          enabled: true,
+          channelId: channel?.id || null,
+          customMessage: customMessage || 'مبروك {user} وصلت {points} نقطة',
+          rewardPerPoint: reward || 0
+        });
+      } else {
+        settings.enabled = true;
+        if (channel) settings.channelId = channel.id;
+        if (customMessage) settings.customMessage = customMessage;
+        if (reward !== null) settings.rewardPerPoint = reward;
+      }
+      
+      await settings.save();
+      
+      let replyMsg = `-# ** تم تفعيل نظام النقاط في السيرفر <:new_emoji:1388436089584226387> **`;
+      if (channel) replyMsg += `\n-# **📢 الروم: <#${channel.id}>**`;
+      if (customMessage) replyMsg += `\n-# **📝 الرسالة: ${customMessage}**`;
+      if (reward) replyMsg += `\n-# **💰 المكافأة: ${reward} دينار لكل نقطة**`;
+      
+      await interaction.reply({ content: replyMsg, ephemeral: true });
+      return true;
+    }
+    
+    if (sub === 'disable') {
+      let settings = await PointsSettings.findOne({ guildId: interaction.guild.id });
+      if (settings) {
+        settings.enabled = false;
+        await settings.save();
+      }
+      await interaction.reply({ 
+        content: `-# ** تم إطفاء نظام النقاط <:new_emoji:1388436095842385931> **`, 
+        ephemeral: true 
+      });
+      return true;
+    }
+    
+    if (sub === 'enable') {
+      let settings = await PointsSettings.findOne({ guildId: interaction.guild.id });
+      if (settings) {
+        settings.enabled = true;
+        await settings.save();
+      } else {
+        settings = new PointsSettings({
+          guildId: interaction.guild.id,
+          enabled: true
+        });
+        await settings.save();
+      }
+      await interaction.reply({ 
+        content: `-# **تم تشغيل نظام النقاط <:new_emoji:1388436089584226387> **`, 
+        ephemeral: true 
+      });
+      return true;
+    }
+    
+    if (sub === 'reset') {
+      await Points.deleteMany({ guildId: interaction.guild.id });
+      let settings = await PointsSettings.findOne({ guildId: interaction.guild.id });
+      if (settings) {
+        settings.enabled = true;
+        settings.rewardPerPoint = 0;
+        await settings.save();
+      }
+      await interaction.reply({ 
+        content: `-# **تم اعادة تعيين نظام النقاط <:2thumbup:1467287897429512396> **`, 
+        ephemeral: true 
+      });
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+// ==================== تصدير النظام ====================
+module.exports = {
+  onMessage,
+  handleTextCommand,
+  onInteraction
 };
