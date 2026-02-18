@@ -18,7 +18,8 @@ const PointsSettingsSchema = new mongoose.Schema({
   channelId: { type: String, default: null },
   customMessage: { type: String, default: 'مبروك {user} وصلت {points} نقطة' },
   lastMessage: { type: Map, of: Date, default: new Map() },
-  funded: { type: Boolean, default: false }
+  funded: { type: Boolean, default: false },
+  treasury: { type: Number, default: 0 } // خزينة النظام
 });
 
 const Points = mongoose.model('Points', PointsSchema);
@@ -66,28 +67,39 @@ async function onMessage(client, message) {
     const pointsGained = newPoints - pointsData.points;
     pointsData.points = newPoints;
     
-    if (settings.rewardPerPoint > 0 && settings.pointsPerReward > 0) {
+    // صرف المكافأة من الخزينة
+    if (settings.rewardPerPoint > 0 && settings.pointsPerReward > 0 && settings.treasury > 0) {
       const rewardAmount = Math.floor(pointsGained / settings.pointsPerReward) * settings.rewardPerPoint;
       
-      if (rewardAmount > 0) {
-        const User = mongoose.model('User');
-        const ownerData = await User.findOne({ userId: message.guild.ownerId });
+      if (rewardAmount > 0 && settings.treasury >= rewardAmount) {
+        // الخصم من الخزينة
+        settings.treasury -= rewardAmount;
         
-        if (ownerData && ownerData.balance >= rewardAmount) {
-          ownerData.balance -= rewardAmount;
-          await ownerData.save();
-          
-          let userData = await User.findOne({ userId: message.author.id });
-          if (!userData) userData = new User({ userId: message.author.id });
-          userData.balance += rewardAmount;
-          
-          userData.history.push({ 
-            type: 'POINTS_REWARD', 
-            amount: rewardAmount, 
-            date: new Date() 
-          });
-          
-          await userData.save();
+        // إضافة للعضو
+        const User = mongoose.model('User');
+        let userData = await User.findOne({ userId: message.author.id });
+        if (!userData) userData = new User({ userId: message.author.id });
+        userData.balance += rewardAmount;
+        
+        userData.history.push({ 
+          type: 'POINTS_REWARD', 
+          amount: rewardAmount, 
+          date: new Date() 
+        });
+        
+        await userData.save();
+        await settings.save();
+      }
+      
+      // التحقق إذا الخزينة خلصت
+      if (settings.treasury <= 0) {
+        settings.funded = false;
+        await settings.save();
+        
+        // إرسال رسالة للمالك
+        const owner = await client.users.fetch(message.guild.ownerId);
+        if (owner) {
+          await owner.send(`-# ** دنانير التمويل المكافأة خلصت و الان سوف يتم التعامل مع النقاط كانها بدون مكافأة <:2thumbup:1467287897429512396> **`).catch(() => {});
         }
       }
     }
@@ -190,6 +202,7 @@ async function onInteraction(client, interaction) {
           guildId: guild.id,
           enabled: true,
           funded: false,
+          treasury: 0,
           channelId: channel?.id || null,
           customMessage: customMessage || 'مبروك {user} وصلت {points} نقطة'
         });
@@ -248,31 +261,33 @@ async function onInteraction(client, interaction) {
       // خصم المبلغ من مالك السيرفر
       ownerData.balance -= amount;
       ownerData.history.push({ 
-        type: '-# ** تمويل نضام النقاط <:emoji_41:1471619709936996406> **', 
+        type: 'POINTS_FUND', 
         amount: -amount, 
         date: new Date() 
       });
       await ownerData.save();
       
-      // تحديث إعدادات النظام
+      // تحديث إعدادات النظام (إضافة المبلغ للخزينة)
       let settings = await PointsSettings.findOne({ guildId: guild.id });
       if (!settings) {
         settings = new PointsSettings({
           guildId: guild.id,
           enabled: true,
           funded: true,
+          treasury: amount,
           rewardPerPoint: rewardPerPoint,
           pointsPerReward: pointsPerReward
         });
       } else {
         settings.funded = true;
+        settings.treasury += amount; // إضافة للخزينة
         settings.rewardPerPoint = rewardPerPoint;
         settings.pointsPerReward = pointsPerReward;
       }
       await settings.save();
       
       await interaction.reply({ 
-        content: `-# **تم تمويل نظام النقاط بـ ${amount} دينار لكل ${pointsPerReward} نقاط <:2thumbup:1467287897429512396> **`, 
+        content: `-# **تم تمويل نظام النقاط بـ ${amount} دينار لكل ${pointsPerReward} نقاط (الخزينة: ${settings.treasury}) <:2thumbup:1467287897429512396> **`, 
         ephemeral: true 
       });
       return true;
@@ -300,13 +315,14 @@ async function onInteraction(client, interaction) {
         settings = new PointsSettings({
           guildId: guild.id,
           enabled: true,
-          funded: false
+          funded: false,
+          treasury: 0
         });
         await settings.save();
       }
       
       let replyMsg = `-# **تم تشغيل نظام النقاط <:new_emoji:1388436089584226387> **`;
-      if (!settings.funded) {
+      if (!settings.funded || settings.treasury <= 0) {
         replyMsg += `\n-# **⚠️ النظام غير ممول، استخدم /points fund لتمويله**`;
       }
       
@@ -320,6 +336,7 @@ async function onInteraction(client, interaction) {
       if (settings) {
         settings.enabled = true;
         settings.funded = false;
+        settings.treasury = 0;
         settings.rewardPerPoint = 0;
         settings.pointsPerReward = 1;
         await settings.save();
