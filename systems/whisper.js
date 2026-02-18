@@ -1,4 +1,4 @@
-// ==================== 🤫 نظام الهمسة ====================
+// ==================== 🤫 نظام الهمسة (المتطور) ====================
 const { EmbedBuilder } = require('discord.js');
 
 module.exports = {
@@ -7,7 +7,7 @@ module.exports = {
   handleTextCommand: async (client, message, command, args, prefix) => {
     if (command !== 'همسة' && command !== 'whisper' && command !== 'همس') return false;
 
-    const target = message.mentions.users.first();
+    const target = message.mentions.members.first();
     if (!target) {
       await message.channel.send(`-# **منشن الشخص اللي تبي ترسل له همسة <:emoji_334:1388211595053760663>**`);
       return true;
@@ -19,37 +19,40 @@ module.exports = {
       return true;
     }
 
-    // إنشاء رابط الرسالة
-    const messageLink = `https://discord.com/channels/${message.guild.id}/${message.channel.id}/${message.id}`;
-
-    // الرسالة الخاصة للمستهدف
-    const targetEmbed = new EmbedBuilder()
-      .setColor(0x2b2d31)
-      .setAuthor({ name: message.author.username, iconURL: message.author.displayAvatarURL() })
-      .setDescription(whisperText)
-      .setFooter({ text: 'رسالة خاصة من 👆' })
-      .setTimestamp();
-
-    try {
-      await target.send({ embeds: [targetEmbed] });
-    } catch (error) {
-      await message.channel.send(`-# **ما قدرت أوصل له الهمسة، الخاص مقفل <:emoji_84:1389404919672340592>**`);
-      return true;
-    }
-
-    // حذف الرسالة الأصلية عشان محد يشوفها
+    // حذف رسالة المستخدم الأصلية
     await message.delete().catch(() => {});
 
-    // رسالة التغطية في الشات
-    const coverEmbed = new EmbedBuilder()
-      .setColor(0x2b2d31)
-      .setDescription(`🔇 **${message.author.username}** أرسل همسة لـ **${target.username}**`)
-      .setFooter({ text: 'الرسالة وصلت للخاص' });
+    // إنشاء رسالتين: وحدة للمستهدف ووحدة للعامة
+    const messages = [];
 
-    await message.channel.send({ embeds: [coverEmbed] });
+    // الرسالة الخاصة بالمستهدف (يشوفها هو فقط)
+    const targetMessage = await message.channel.send({
+      content: `🤫 **${message.author.username}** -> **${target.user.username}**`,
+      embeds: [new EmbedBuilder()
+        .setColor(0x2b2d31)
+        .setDescription(whisperText)
+        .setFooter({ text: '🤫 همسة خاصة' })
+      ]
+    });
 
-    // تسجيل في سجل البوت (اختياري)
-    console.log(`🔇 ${message.author.tag} أرسل همسة لـ ${target.tag}: ${whisperText}`);
+    // إضافة المستهدف ومنع الباقين من رؤيتها
+    await targetMessage.permissionOverwrites.edit(target.id, {
+      ViewChannel: true,
+      ReadMessageHistory: true
+    });
+
+    await targetMessage.permissionOverwrites.edit(message.guild.id, {
+      ViewChannel: false,
+      ReadMessageHistory: false
+    });
+
+    // الرسالة العامة للجميع (تظهر للكل)
+    const publicMessage = await message.channel.send(`🤫 **${message.author.username}** أرسل همسة لـ **${target.user.username}**`);
+
+    // حذف الرسالة العامة بعد 5 ثواني عشان ما تزعج
+    setTimeout(() => {
+      publicMessage.delete().catch(() => {});
+    }, 5000);
 
     return true;
   }
