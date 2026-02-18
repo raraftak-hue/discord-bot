@@ -80,71 +80,77 @@ module.exports = {
   },
 
   onInteraction: async (client, interaction) => {
-    const { commandName, options, customId, user } = interaction;
+    if (!interaction.isChatInputCommand() && !interaction.isButton()) return;
 
-    if (interaction.isChatInputCommand() && commandName === 'give') {
-      const sub = options.getSubcommand();
+    if (interaction.isChatInputCommand() && interaction.commandName === 'give') {
+      const sub = interaction.options.getSubcommand();
+      
       if (sub === 'start') {
-        const prize = options.getString('prize');
-        const timeStr = options.getString('time');
-        const winners = options.getInteger('winners');
-        const cond = options.getString('cond');
-        const img = options.getString('img');
-
-        const timeMatch = timeStr.match(/^(\d+)([mhd])$/);
-        if (!timeMatch) return interaction.reply({ content: '❌ تنسيق الوقت غلط (مثال: 10m, 1h, 1d)', ephemeral: true });
-
-        const duration = parseInt(timeMatch[1]);
-        const unit = timeMatch[2];
-        let durationMs;
-        if (unit === 'm') durationMs = duration * 60 * 1000;
-        else if (unit === 'h') durationMs = duration * 60 * 60 * 1000;
-        else if (unit === 'd') durationMs = duration * 24 * 60 * 60 * 1000;
-
+        const prize = interaction.options.getString('prize');
+        const durationStr = interaction.options.getString('time');
+        const winnersCount = interaction.options.getInteger('winners');
+        const condition = interaction.options.getString('cond') || 'لا توجد شروط';
+        const imageOption = interaction.options.getString('img');
+        
+        const timeMatch = durationStr.match(/^(\d+)([mhd])$/);
+        if (!timeMatch) return interaction.reply({ content: 'صيغة الوقت غلط! (10m, 1h, 1d)', ephemeral: true });
+        
+        const durationMs = parseInt(timeMatch[1]) * (timeMatch[2] === 'm' ? 60 : timeMatch[2] === 'h' ? 3600 : 86400) * 1000;
         const endTime = new Date(Date.now() + durationMs);
+        
         const embed = new EmbedBuilder()
-          .setTitle(`🎉 قيف أوي جديد!`)
-          .setDescription(`-# **الجائزة: ${prize}**\n-# **الفائزين: ${winners}**\n-# **ينتهي في: <t:${Math.floor(endTime.getTime() / 1000)}:R>**\n-# **الشروط: ${cond || 'لا يوجد'}**`)
+          .setDescription(
+            `-# **سحب عشوائي على ${prize} ينتهي في <t:${Math.floor(endTime.getTime() / 1000)}:R> <:emoji_45:1397804598110195863> **\n` +
+            `-# **الي سوا السحب العشوائي ${interaction.user} <:y_coroa:1404576666105417871> **\n` +
+            `-# **الشروط ${condition} <:new_emoji:1388436089584226387> **`
+          )
           .setColor(0x2b2d31);
         
-        if (img) embed.setImage(img);
-
+        if (imageOption) embed.setImage(imageOption);
+        
         const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('join_giveaway').setLabel('انضمام').setStyle(ButtonStyle.Primary)
+          new ButtonBuilder().setCustomId('join_giveaway').setLabel('ادخل').setStyle(ButtonStyle.Secondary)
         );
-
+        
+        await interaction.deferReply({ ephemeral: true });
         const msg = await interaction.channel.send({ embeds: [embed], components: [row] });
-        await interaction.reply({ content: '✅ تم بدء القيف أوي!', ephemeral: true });
-
+        await interaction.deleteReply();
+        
         const giveaway = new Giveaway({
           guildId: interaction.guild.id,
           channelId: interaction.channel.id,
           messageId: msg.id,
           prize,
           endTime,
-          winners,
+          winners: winnersCount,
           participants: [],
-          image: img,
-          condition: cond,
-          hostId: user.id
+          image: imageOption,
+          condition,
+          hostId: interaction.user.id
         });
         
         await giveaway.save();
         setTimeout(async () => { await endGiveaway(client, giveaway); }, durationMs);
+        return true;
       }
     }
 
-    if (interaction.isButton() && customId === 'join_giveaway') {
-      const giveaway = await Giveaway.findOne({ messageId: interaction.message.id });
-      if (!giveaway || giveaway.ended) return interaction.reply({ content: '❌ القيف أوي انتهى!', ephemeral: true });
-
-      if (giveaway.participants.includes(user.id)) {
-        return interaction.reply({ content: '❌ أنت مشارك بالفعل!', ephemeral: true });
+    if (interaction.isButton() && interaction.customId === 'join_giveaway') {
+      const giveaway = await Giveaway.findOne({ messageId: interaction.message.id, ended: false });
+      
+      if (!giveaway || giveaway.ended) {
+        return interaction.reply({ content: '❌ هذا القيف أوي انتهى أو غير موجود', ephemeral: true });
       }
-
-      giveaway.participants.push(user.id);
+      
+      if (giveaway.participants.includes(interaction.user.id)) {
+        return interaction.reply({ content: `-# **انت داخل القيف اصلا <:__:1467633552408576192> **`, ephemeral: true });
+      }
+      
+      giveaway.participants.push(interaction.user.id);
       await giveaway.save();
-      return interaction.reply({ content: '✅ تم انضمامك للقيف أوي!', ephemeral: true });
+      
+      await interaction.reply({ content: `-# **تم دخولك فالسحب <:2thumbup:1467287897429512396> **`, ephemeral: true });
+      return true;
     }
   }
 };
