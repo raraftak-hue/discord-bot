@@ -139,7 +139,7 @@ const slashCommands = [
       { name: 'timestamp', description: 'إضافة وقت', type: 5, required: false }
     ]
   },
-  // أوامر points (مبسطة)
+  // أوامر points (مبسطة - بدون subcommands)
   {
     name: 'points',
     description: 'نظام النقاط - عرض الحالة والتحكم بالأزرار',
@@ -149,6 +149,7 @@ const slashCommands = [
   {
     name: 'sub',
     description: 'إدارة الاشتراكات (للمالك)',
+    default_member_permissions: "0",
     options: [
       {
         name: 'add',
@@ -180,11 +181,17 @@ const slashCommands = [
     ]
   },
   // أوامر hosting
-  { name: 'hosting', description: 'عرض السيرفرات المشتركة (للمالك)', type: 1 },
+  { 
+    name: 'hosting', 
+    description: 'عرض السيرفرات المشتركة (للمالك)', 
+    default_member_permissions: "0",
+    type: 1 
+  },
   // أوامر auto
   {
     name: 'auto',
     description: 'نظام الحذف التلقائي (للمالك)',
+    default_member_permissions: "0",
     options: [
       {
         name: 'add',
