@@ -1,4 +1,4 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionsBitField } = require('discord.js');
+const { EmbedBuilder, PermissionsBitField } = require('discord.js');
 const mongoose = require('mongoose');
 
 // ==================== 📊 Schemas ====================
@@ -89,84 +89,79 @@ async function formatHistory(client, history) {
 
 // ==================== معالج الأوامر النصية ====================
 async function handleTextCommand(client, message, command, args, prefix) {
-  if (command === 'فلوس' || command === 'رصيد' || command === 'c' || command === 'credits') {
+  if (command === 'دنانير') {
     const user = message.mentions.users.first() || message.author;
     const userData = await getUserData(user.id);
-    
-    if (user.id === message.author.id) {
-      await message.channel.send(`-# **رصيدك الحالي هو ${userData.balance} <a:moneywith_:1470458218953179237>**`);
-    } else {
-      await message.channel.send(`-# **رصيد ${user.username} هو ${userData.balance} <a:moneywith_:1470458218953179237>**`);
-    }
+    const lastIn = userData.history.filter(h => h.type === 'TRANSFER_RECEIVE').pop() || { amount: 0 };
+    await message.channel.send(`-# **رصيدك الحالي ${userData.balance} و اخر عملية تحويل تلقيتها بـ ${lastIn.amount} <:emoji_41:1471619709936996406> **`);
     return true;
   }
 
-  if ((command === 'تحويل' || command === 't') && args[1]) {
+  if (command === 'تحويل') {
     const target = message.mentions.users.first();
-    const amountStr = args[2] || args[1];
-    const amount = parseFloat(amountStr);
-
-    if (!target || isNaN(amount) || amount <= 0 || target.id === message.author.id || target.bot) return true;
-
+    const amount = parseFloat(args.find(a => !isNaN(a) && a.includes('.') ? parseFloat(a) : parseInt(a)));
+    if (!target || isNaN(amount) || amount <= 0) {
+      await message.channel.send(`-# **الصيغة غلط يا ذكي <:emoji_334:1388211595053760663>**`);
+      return true;
+    }
+    if (target.id === message.author.id) {
+      await message.channel.send(`-# **ما تقدر تحول لنفسك يا اهبل <:emoji_464:1388211597197050029>**`);
+      return true;
+    }
+    
     const senderData = await getUserData(message.author.id);
-    if (senderData.balance < amount) {
-      await message.channel.send(`-# **رصيدك ما يكفي يا طفران <:emoji_32:1471962578895769611>**`);
-      return true;
-    }
-
-    const cooldown = client.transferCooldowns.get(message.author.id);
-    if (cooldown && Date.now() - cooldown < 5000) {
-      await message.channel.send(`-# **اهدا شوي، تقدر تحول كل 5 ثواني <:emoji_38:1470920843398746215>**`);
-      return true;
-    }
-
     const tax = calculateTax(senderData.balance, amount);
-    const finalAmount = amount - tax;
-    const captcha = Math.floor(1000 + Math.random() * 9000);
+    const totalAmount = amount + tax;
+    
+    if (senderData.balance < totalAmount) {
+      await message.channel.send(`-# **رصيدك ما يكفي يا فقير (تحتاج ${totalAmount} دينار مع الضريبة) <:emoji_464:1388211597197050029>**`);
+      return true;
+    }
+    
+    const lastTransfer = client.transferCooldowns.get(message.author.id);
+    if (lastTransfer && Date.now() - lastTransfer < 10000) {
+      await message.channel.send(`-# **انتظر ثواني قبل التحويل مرة أخرى <:emoji_334:1388211595053760663>**`);
+      return true;
+    }
+    
+    const confirmMsg = await message.channel.send({ content: `-# **الضريبة ${tax.toFixed(2)} دينار <:emoji_41:1471619709936996406> اكتب "تأكيد" لو انت متأكد من عملية التحويل**` });
+    client.pendingTransfers.set(`${message.guild.id}-${confirmMsg.id}`, { 
+      senderId: message.author.id, 
+      targetId: target.id, 
+      amount, 
+      tax, 
+      totalAmount, 
+      msgId: confirmMsg.id, 
+      channelId: message.channel.id 
+    });
+    
+    setTimeout(() => { 
+      if (client.pendingTransfers.has(`${message.guild.id}-${confirmMsg.id}`)) { 
+        client.pendingTransfers.delete(`${message.guild.id}-${confirmMsg.id}`); 
+        confirmMsg.delete().catch(() => { }); 
+      } 
+    }, 10000);
+    return true;
+  }
 
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('confirm_transfer').setLabel('تأكيد').setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId('cancel_transfer').setLabel('إلغاء').setStyle(ButtonStyle.Danger)
+  if (command === 'تأكيد') {
+    const pending = Array.from(client.pendingTransfers.entries()).find(([key, data]) => 
+      key.startsWith(message.guild.id) && data.senderId === message.author.id && data.channelId === message.channel.id
     );
 
-    const msg = await message.channel.send({
-      content: `-# **${message.author.username}، أنت على وشك تحويل ${finalAmount} لـ ${target.username} (الضريبة: ${tax})\nاكتب الرقم التالي للتأكيد: \`${captcha}\`**`,
-      components: [row]
-    });
-
-    client.pendingTransfers.set(`${message.guild.id}-${message.author.id}`, {
-      targetId: target.id,
-      amount: finalAmount,
-      tax: tax,
-      captcha: captcha,
-      msgId: msg.id,
-      senderId: message.author.id,
-      timestamp: Date.now()
-    });
-
-    setTimeout(() => {
-      if (client.pendingTransfers.has(`${message.guild.id}-${message.author.id}`)) {
-        client.pendingTransfers.delete(`${message.guild.id}-${message.author.id}`);
-        msg.edit({ content: '-# **انتهى وقت التحويل <:emoji_38:1470920843398746215>**', components: [] }).catch(() => { });
-      }
-    }, 30000);
-    return true;
-  }
-
-  // معالجة كتابة الكابتشا للتحويل
-  const key = `${message.guild.id}-${message.author.id}`;
-  const data = client.pendingTransfers.get(key);
-  if (data && message.content === String(data.captcha)) {
+    if (!pending) return true;
+    
+    const [key, data] = pending;
     const sender = await getUserData(data.senderId);
     const target = await getUserData(data.targetId);
     
-    if (sender.balance < (data.amount + data.tax)) {
+    if (sender.balance < data.totalAmount) {
       client.pendingTransfers.delete(key);
-      await message.channel.send(`-# **رصيدك نقص فجأة؟ ما تقدر تحول <:emoji_32:1471962578895769611>**`);
+      await message.channel.send(`-# **رصيدك ما يكفي الحين يا فقير <:emoji_464:1388211597197050029>**`);
       return true;
     }
-
-    sender.balance = parseFloat((sender.balance - (data.amount + data.tax)).toFixed(2));
+    
+    sender.balance = parseFloat((sender.balance - data.totalAmount).toFixed(2));
     target.balance = parseFloat((target.balance + data.amount).toFixed(2));
     
     sender.history.push({ type: 'TRANSFER_SEND', amount: -data.amount, targetUser: data.targetId, targetName: target.username, date: new Date() });
@@ -211,35 +206,12 @@ async function handleTextCommand(client, message, command, args, prefix) {
 
 // ==================== onMessage (للرسائل العادية) ====================
 async function onMessage(client, message) {
-  // هذا النظام ما يحتاج معالجة رسائل عادية
   return;
 }
 
 // ==================== onInteraction ====================
 async function onInteraction(client, interaction) {
-  if (!interaction.isButton()) return false;
-
-  if (interaction.customId === 'confirm_transfer' || interaction.customId === 'cancel_transfer') {
-    const key = `${interaction.guild.id}-${interaction.user.id}`;
-    const data = client.pendingTransfers.get(key);
-
-    if (!data || data.msgId !== interaction.message.id) {
-      await interaction.reply({ content: '-# **هذا الزر مو لك أو انتهت صلاحيته <:emoji_38:1470920843398746215>**', ephemeral: true });
-      return true;
-    }
-
-    if (interaction.customId === 'cancel_transfer') {
-      client.pendingTransfers.delete(key);
-      await interaction.message.edit({ content: '-# **تم إلغاء عملية التحويل <:emoji_38:1470920843398746215>**', components: [] }).catch(() => { });
-      await interaction.reply({ content: '-# **تم الإلغاء بنجاح**', ephemeral: true });
-      return true;
-    }
-    
-    // زر التأكيد يوجه المستخدم لكتابة الكابتشا
-    await interaction.reply({ content: `-# **اكتب الرقم \`${data.captcha}\` في الشات للتأكيد**`, ephemeral: true });
-    return true;
-  }
-  
+  // نظام الاقتصاد ما يحتاج تفاعلات أزرار (لأن مافي أزرار)
   return false;
 }
 
