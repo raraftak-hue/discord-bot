@@ -25,84 +25,90 @@ async function getTicketSettings(guildId) {
 
 module.exports = {
   onInteraction: async (client, interaction) => {
-    const { guild, user, customId, commandName, options } = interaction;
-
-    if (interaction.isChatInputCommand() && commandName === 'tic') {
-      const sub = options.getSubcommand();
-      const settings = await getTicketSettings(guild.id);
+    if (!interaction.isChatInputCommand() && !interaction.isButton()) return;
+    
+    if (interaction.isChatInputCommand() && interaction.commandName === 'tic') {
+      const sub = interaction.options.getSubcommand();
+      const settings = await getTicketSettings(interaction.guild.id);
 
       if (sub === 'set') {
-        const category = options.getChannel('category');
-        const desc = options.getString('desc');
-        const color = options.getString('color');
-        const image = options.getString('image');
-        const role = options.getRole('role');
+        const category = interaction.options.getChannel('category');
+        const desc = interaction.options.getString('desc');
+        const color = interaction.options.getString('color');
+        const image = interaction.options.getString('image');
+        const role = interaction.options.getRole('role');
 
         if (category) settings.categoryId = category.id;
         if (desc) settings.embedDescription = desc;
-        if (color) settings.embedColor = color;
+        if (color) settings.embedColor = color.replace('#', '');
         if (image) settings.embedImage = image;
         if (role) settings.supportRoleId = role.id;
 
         await settings.save();
-        return interaction.reply({ content: `-# ** تم حفظ إعدادات التذاكر بنجاح <:2thumbup:1467287897429512396> **`, ephemeral: true });
+        return interaction.reply({ content: `-# ** تم تحديث الاعدادات <:2thumbup:1467287897429512396> **`, ephemeral: true });
       }
 
       if (sub === 'panel') {
         const embed = new EmbedBuilder()
           .setDescription(settings.embedDescription)
-          .setColor(parseInt(settings.embedColor.replace('#', ''), 16) || 0x2b2d31);
+          .setColor(parseInt(settings.embedColor, 16) || 0x2b2d31);
         
         if (settings.embedImage) embed.setImage(settings.embedImage);
 
         const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('open_ticket').setLabel('فتح تذكرة').setStyle(ButtonStyle.Primary)
+          new ButtonBuilder().setCustomId('open_ticket').setLabel('فتح تذكرة').setStyle(ButtonStyle.Secondary)
         );
 
         await interaction.channel.send({ embeds: [embed], components: [row] });
-        return interaction.reply({ content: `-# ** تم إرسال لوحة التذاكر <:2thumbup:1467287897429512396> **`, ephemeral: true });
+        return interaction.reply({ content: `-# **تم ارسال الرسالة <:2thumbup:1467287897429512396> **`, ephemeral: true });
       }
     }
 
     if (interaction.isButton()) {
-      if (customId === 'open_ticket') {
-        const settings = await getTicketSettings(guild.id);
-        const ticketName = `ticket-${user.username}`;
+      if (interaction.customId === 'open_ticket') {
+        const settings = await getTicketSettings(interaction.guild.id);
         
-        const existingChannel = guild.channels.cache.find(c => c.name === ticketName.toLowerCase());
-        if (existingChannel) return interaction.reply({ content: `-# ** عندك تذكرة مفتوحة أصلاً: <#${existingChannel.id}> **`, ephemeral: true });
-
-        const permissionOverwrites = [
-          { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-          { id: user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.AttachFiles] }
-        ];
-
-        if (settings.supportRoleId) {
-          permissionOverwrites.push({ id: settings.supportRoleId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] });
+        const existingChannel = interaction.guild.channels.cache.find(c => c.name === `ticket-${interaction.user.username}`);
+        if (existingChannel) {
+          return interaction.reply({ content: `-# ** لديك تذكرة مفتوحة ما تقدر تفتح اخرى <:emoji_46:1473343297002148005> **`, ephemeral: true });
         }
 
-        const channel = await guild.channels.create({
-          name: ticketName,
+        const channel = await interaction.guild.channels.create({
+          name: `ticket-${interaction.user.username}`,
           type: ChannelType.GuildText,
           parent: settings.categoryId || null,
-          permissionOverwrites
+          permissionOverwrites: [
+            { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+            { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+            { id: client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+          ]
         });
 
-        const embed = new EmbedBuilder()
-          .setDescription(`-# **أهلاً بك في تذكرتك <@${user.id}>، سيقوم فريق الدعم بالرد عليك قريباً.**`)
-          .setColor(0x2b2d31);
+        if (settings.supportRoleId) {
+          await channel.permissionOverwrites.create(settings.supportRoleId, {
+            ViewChannel: true,
+            SendMessages: true
+          });
+        }
 
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق التذكرة').setStyle(ButtonStyle.Danger)
+        const closeRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق').setStyle(ButtonStyle.Danger)
         );
 
-        await channel.send({ content: `<@${user.id}> ${settings.supportRoleId ? `<@&${settings.supportRoleId}>` : ''}`, embeds: [embed], components: [row] });
-        return interaction.reply({ content: `-# ** تم فتح التذكرة: <#${channel.id}> **`, ephemeral: true });
+        let ticketMessage = `${interaction.user}`;
+        if (settings.supportRoleId) {
+          ticketMessage = `<@&${settings.supportRoleId}> ` + ticketMessage;
+        }
+        ticketMessage += `\n-# ** اكتب سبب فتحك للتكت و فريق الدعم بيتواصل معك قريب <:emoji_32:1471962578895769611> **`;
+
+        await channel.send({ content: ticketMessage, components: [closeRow] });
+        return interaction.reply({ content: `-# ** تم فتح تذكرتك <:emoji_33:1471962823532740739> **`, ephemeral: true });
       }
 
-      if (customId === 'close_ticket') {
-        await interaction.reply({ content: `-# ** سيتم إغلاق التذكرة خلال 5 ثوانٍ... **` });
-        setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
+      if (interaction.customId === 'close_ticket') {
+        await interaction.reply({ content: `-# **يلا يلا عد معي ل ثلاثة <:1KazumaGrin:1468386233750392947> **` });
+        setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
+        return true;
       }
     }
   }
