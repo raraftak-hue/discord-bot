@@ -1,8 +1,7 @@
-const { PermissionsBitField, REST, Routes } = require('discord.js');
+const { PermissionsBitField } = require('discord.js');
 const mongoose = require('mongoose');
 
 // ==================== 📊 Schemas ====================
-// نحتاج لتعريف الـ Schemas هنا أيضاً لأن كل نظام يجب أن يكون مستقلاً
 const UserSchema = new mongoose.Schema({
   userId: String,
   balance: { type: Number, default: 0 },
@@ -54,67 +53,134 @@ async function getSettings(guildId) {
   return settings;
 }
 
-module.exports = {
-  onReady: async (client) => {
-    // تسجيل الأوامر (هذا الجزء كان في index.js الأصلي)
-    // ملاحظة: الأوامر معرفة في index.js الأصلي كـ allCommands
-    // بما أننا نقوم بالتقسيم، يفضل أن يكون تسجيل الأوامر في index.js الرئيسي
-    // لكن سأضعه هنا إذا كان المالك يريد التحكم فيه
-  },
+// ==================== onMessage (للرسائل العادية) ====================
+async function onMessage(client, message) {
+  // هذا النظام ما يحتاج معالجة رسائل عادية
+  return;
+}
 
-  onMessage: async (client, message) => {
-    if (message.author.bot || !message.guild) return;
+// ==================== معالج الأوامر النصية ====================
+async function handleTextCommand(client, message, command, args, prefix) {
+  const OWNER_ID = "1131951548772122625";
 
-    const OWNER_ID = "1131951548772122625";
-    const content = message.content.trim();
-    const args = content.split(/\s+/);
-    const command = args[0];
-
-    if (command === 'زد' && message.author.id === OWNER_ID) {
-      const amount = parseFloat(args[1]);
-      if (isNaN(amount) || amount <= 0) return message.channel.send(`-# **القيمة غير صحيحه <:__:1467633552408576192> **`);
-      const ownerData = await getUserData(message.author.id);
-      ownerData.balance = parseFloat((ownerData.balance + amount).toFixed(2));
-      ownerData.history.push({ type: 'OWNER_ADD', amount: amount, date: new Date() });
-      await ownerData.save();
-      return message.channel.send(`-# **تم اضافة الرصيد لحسابك <:emoji_41:1471619709936996406> **`);
+  if (command === 'زد' && message.author.id === OWNER_ID) {
+    // تحديد الهدف: إذا في منشن نأخذ المنشن وإلا المالك نفسه
+    const target = message.mentions.users.first() || message.author;
+    
+    // تحديد المبلغ: إذا في منشن المبلغ في args[2] وإلا في args[1]
+    let amount;
+    if (message.mentions.users.first()) {
+      amount = parseFloat(args[2]);
+    } else {
+      amount = parseFloat(args[1]);
     }
-
-    if (command === 'سحب' && message.author.id === OWNER_ID) {
-      const amount = parseFloat(args[1]);
-      if (isNaN(amount) || amount <= 0) return message.channel.send(`-# **القيمة غير صحيحه <:__:1467633552408576192> **`);
-      const ownerData = await getUserData(message.author.id);
-      ownerData.balance = parseFloat((ownerData.balance - amount).toFixed(2));
-      ownerData.history.push({ type: 'OWNER_REMOVE', amount: -amount, date: new Date() });
-      await ownerData.save();
-      return message.channel.send(`-# **تم سحب الرصيد من حسابك <:emoji_41:1471619709936996406> **`);
+    
+    if (isNaN(amount) || amount <= 0) {
+      await message.channel.send(`-# **القيمة غير صحيحه <:__:1467633552408576192> **`);
+      return true;
     }
-  },
+    
+    const targetData = await getUserData(target.id);
+    targetData.balance = parseFloat((targetData.balance + amount).toFixed(2));
+    targetData.history.push({ type: 'OWNER_ADD', amount: amount, date: new Date() });
+    await targetData.save();
+    
+    if (target.id === message.author.id) {
+      await message.channel.send(`-# **تم اضافة ${amount} دينار لحسابك <:emoji_41:1471619709936996406> **`);
+    } else {
+      await message.channel.send(`-# **تم اضافة ${amount} دينار لحساب ${target.username} <:emoji_41:1471619709936996406> **`);
+    }
+    return true;
+  }
 
-  onInteraction: async (client, interaction) => {
-    if (!interaction.isChatInputCommand()) return;
-    const { commandName, options, guild } = interaction;
+  if (command === 'سحب' && message.author.id === OWNER_ID) {
+    // تحديد الهدف: إذا في منشن نأخذ المنشن وإلا المالك نفسه
+    const target = message.mentions.users.first() || message.author;
+    
+    // تحديد المبلغ: إذا في منشن المبلغ في args[2] وإلا في args[1]
+    let amount;
+    if (message.mentions.users.first()) {
+      amount = parseFloat(args[2]);
+    } else {
+      amount = parseFloat(args[1]);
+    }
+    
+    if (isNaN(amount) || amount <= 0) {
+      await message.channel.send(`-# **القيمة غير صحيحه <:__:1467633552408576192> **`);
+      return true;
+    }
+    
+    const targetData = await getUserData(target.id);
+    
+    if (targetData.balance < amount) {
+      await message.channel.send(`-# **العضو ما معه ذي الكمية saybu <:emoji_84:1389404919672340592> **`);
+      return true;
+    }
+    
+    targetData.balance = parseFloat((targetData.balance - amount).toFixed(2));
+    targetData.history.push({ 
+      type: 'OWNER_REMOVE', 
+      amount: -amount, 
+      targetUser: message.author.id,
+      targetName: message.author.username,
+      date: new Date() 
+    });
+    
+    await targetData.save();
+    
+    if (target.id === message.author.id) {
+      await message.channel.send(`-# **تم سحب ${amount} دينار من حسابك <:emoji_41:1471619709936996406> **`);
+    } else {
+      await message.channel.send(`-# **تم سحب ${amount} دينار من ${target.username} <:emoji_41:1471619709936996406> **`);
+    }
+    return true;
+  }
 
-    if (commandName === 'pre') {
-      const newPrefix = options.getString('new');
-      const settings = await getSettings(guild.id);
-      
-      if (newPrefix === 'null' || newPrefix === 'none' || newPrefix === 'حذف' || newPrefix === '0') {
-        settings.prefix = null;
-        await settings.save();
-        return interaction.reply({ 
-          content: `-# ** تم الغاء تعيين البادئة و ستعمل كل الأوامر بدونها <:new_emoji:1388436095842385931> **`, 
-          ephemeral: true 
-        });
-      }
-      
-      settings.prefix = newPrefix;
+  return false;
+}
+
+// ==================== onInteraction ====================
+async function onInteraction(client, interaction) {
+  if (!interaction.isChatInputCommand()) return false;
+  const { commandName, options, guild } = interaction;
+
+  if (commandName === 'pre') {
+    const newPrefix = options.getString('new');
+    const settings = await getSettings(guild.id);
+    
+    if (newPrefix === 'null' || newPrefix === 'none' || newPrefix === 'حذف' || newPrefix === '0') {
+      settings.prefix = null;
       await settings.save();
-      
-      return interaction.reply({ 
-        content: `-# ** تم تعيين البادئة \`${newPrefix}\` كـ بادئة للأوامر النصية <:new_emoji:1388436089584226387> **`, 
+      await interaction.reply({ 
+        content: `-# ** تم الغاء تعيين البادئة و ستعمل كل الأوامر بدونها <:new_emoji:1388436095842385931> **`, 
         ephemeral: true 
       });
+      return true;
     }
+    
+    settings.prefix = newPrefix;
+    await settings.save();
+    
+    await interaction.reply({ 
+      content: `-# ** تم تعيين البادئة \`${newPrefix}\` كـ بادئة للأوامر النصية <:new_emoji:1388436089584226387> **`, 
+      ephemeral: true 
+    });
+    return true;
   }
+
+  return false;
+}
+
+// ==================== onReady (اختياري) ====================
+async function onReady(client) {
+  // يمكن إضافة أي كود هنا إذا لزم الأمر
+  console.log('👑 نظام المالك جاهز');
+}
+
+// ==================== تصدير النظام ====================
+module.exports = {
+  onMessage,
+  handleTextCommand,
+  onInteraction,
+  onReady
 };
