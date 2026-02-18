@@ -53,7 +53,7 @@ async function onMessage(client, message) {
   if (message.author.bot || !message.guild) return;
 
   const settings = await PointsSettings.findOne({ guildId: message.guild.id });
-  if (!settings || !settings.enabled || !settings.funded) return;
+  if (!settings || !settings.enabled) return;
 
   let pointsData = await Points.findOne({ guildId: message.guild.id, userId: message.author.id });
   if (!pointsData) {
@@ -69,7 +69,8 @@ async function onMessage(client, message) {
     const pointsGained = newPoints - pointsData.points;
     pointsData.points = newPoints;
     
-    if (settings.rewardPerPoint > 0 && settings.pointsPerReward > 0 && settings.treasury > 0) {
+    // صرف المكافأة فقط إذا في تمويل
+    if (settings.funded && settings.rewardPerPoint > 0 && settings.pointsPerReward > 0 && settings.treasury > 0) {
       const rewardAmount = Math.floor(pointsGained / settings.pointsPerReward) * settings.rewardPerPoint;
       
       if (rewardAmount > 0 && settings.treasury >= rewardAmount) {
@@ -101,6 +102,7 @@ async function onMessage(client, message) {
       }
     }
     
+    // رسالة التهنئة
     let pointsMessage = settings.customMessage || 'مبروك {user} وصلت {points} نقطة';
     pointsMessage = pointsMessage.replace('{user}', `<@${message.author.id}>`);
     pointsMessage = pointsMessage.replace('{points}', newPoints);
@@ -370,10 +372,6 @@ async function onInteraction(client, interaction) {
         new ButtonBuilder()
           .setCustomId('change_channel')
           .setLabel('تغيير الروم')
-          .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
-          .setCustomId('back_to_main')
-          .setLabel('🔙 رجوع')
           .setStyle(ButtonStyle.Secondary)
       );
       
@@ -414,13 +412,6 @@ async function onInteraction(client, interaction) {
         ephemeral: true 
       });
       return true;
-    }
-
-    if (interaction.customId === 'back_to_main') {
-      // نرجع للقائمة الرئيسية
-      const cmdInteraction = interaction;
-      cmdInteraction.commandName = 'points';
-      return onInteraction(client, cmdInteraction);
     }
   }
   
@@ -535,13 +526,17 @@ async function onInteraction(client, interaction) {
         .setStyle(ButtonStyle.Secondary)
     );
     
+    // تحديث الرسالة الأصلية
+    if (interaction.message) {
+      await interaction.message.edit({ embeds: [embed], components: [row] }).catch(() => {});
+    }
+    
+    // إرسال رسالة تأكيد التمويل
     await interaction.reply({ 
       content: `-# **تم تمويل نظام النقاط بـ ${amount} دينار لكل ${pointsPerReward} نقاط و الخزينة فيها ${settings.treasury} دينار <:2thumbup:1467287897429512396> **`, 
       ephemeral: true 
     });
     
-    // تحديث الرسالة الأصلية للمستخدم
-    await interaction.message?.edit({ embeds: [embed], components: [row] }).catch(() => {});
     return true;
   }
 
@@ -573,10 +568,6 @@ async function onInteraction(client, interaction) {
         new ButtonBuilder()
           .setCustomId('change_channel')
           .setLabel('تغيير الروم')
-          .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
-          .setCustomId('back_to_main')
-          .setLabel('🔙 رجوع')
           .setStyle(ButtonStyle.Secondary)
       );
       
