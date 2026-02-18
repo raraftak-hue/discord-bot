@@ -357,15 +357,54 @@ async function onInteraction(client, interaction) {
         new ButtonBuilder()
           .setCustomId('set_message')
           .setLabel('تغيير رسالة التهنئة')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId('back_to_main')
+          .setLabel('🔙 رجوع')
           .setStyle(ButtonStyle.Secondary)
       );
       
       await interaction.reply({ 
-        content: '⚙️ **إعدادات نظام النقاط**', 
+        content: '⚙️ **إعدادات نظام النقاط**\nاختر ما تريد تعديله:', 
         components: [row], 
         ephemeral: true 
       });
       return true;
+    }
+
+    if (interaction.customId === 'set_channel') {
+      // مؤقتاً نستخدم أمر points-setup
+      await interaction.reply({ 
+        content: `-# ** استخدم الأمر /points-setup channel:#الروم مؤقتاً لحين تطوير الواجهة **`, 
+        ephemeral: true 
+      });
+      return true;
+    }
+
+    if (interaction.customId === 'set_message') {
+      const modal = new ModalBuilder()
+        .setCustomId('message_modal')
+        .setTitle('تغيير رسالة التهنئة');
+      
+      const messageInput = new TextInputBuilder()
+        .setCustomId('new_message')
+        .setLabel('الرسالة الجديدة (استخدم {user} و {points})')
+        .setStyle(TextInputStyle.Paragraph)
+        .setRequired(true)
+        .setMaxLength(200);
+      
+      const row = new ActionRowBuilder().addComponents(messageInput);
+      modal.addComponents(row);
+      
+      await interaction.showModal(modal);
+      return true;
+    }
+
+    if (interaction.customId === 'back_to_main') {
+      // نرجع للقائمة الرئيسية
+      const cmdInteraction = interaction;
+      cmdInteraction.commandName = 'points';
+      return onInteraction(client, cmdInteraction);
     }
   }
   
@@ -424,7 +463,7 @@ async function onInteraction(client, interaction) {
       });
     } else {
       settings.funded = true;
-      settings.treasury += amount;
+      settings.treasury = (settings.treasury || 0) + amount;
       settings.totalFunded = (settings.totalFunded || 0) + amount;
       settings.rewardPerPoint = rewardPerPoint;
       settings.pointsPerReward = pointsPerReward;
@@ -432,9 +471,25 @@ async function onInteraction(client, interaction) {
     await settings.save();
     
     await interaction.reply({ 
-      content: `-# **تم تمويل نظام النقاط بـ ${amount} دينار لكل ${pointsPerReward} نقاط (الخزينة: ${settings.treasury}) <:2thumbup:1467287897429512396> **`, 
+      content: `-# **تم تمويل نظام النقاط بـ ${amount} دينار لكل ${pointsPerReward} نقاط و الخزينة فيها ${settings.treasury} دينار <:2thumbup:1467287897429512396> **`, 
       ephemeral: true 
     });
+    return true;
+  }
+
+  // ===== معالج Modal تغيير الرسالة =====
+  if (interaction.isModalSubmit() && interaction.customId === 'message_modal') {
+    const newMessage = interaction.fields.getTextInputValue('new_message');
+    
+    let settings = await PointsSettings.findOne({ guildId: interaction.guild.id });
+    if (settings) {
+      settings.customMessage = newMessage;
+      await settings.save();
+      await interaction.reply({ 
+        content: `-# ** تم تحديث رسالة التهنئة بنجاح <:2thumbup:1467287897429512396> **`, 
+        ephemeral: true 
+      });
+    }
     return true;
   }
   
