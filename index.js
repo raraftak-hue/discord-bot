@@ -139,12 +139,6 @@ const slashCommands = [
       { name: 'timestamp', description: 'إضافة وقت', type: 5, required: false }
     ]
   },
-  // أوامر points (مبسطة - بدون subcommands)
-  {
-    name: 'points',
-    description: 'نظام النقاط - عرض الحالة والتحكم بالأزرار',
-    default_member_permissions: PermissionsBitField.Flags.Administrator.toString()
-  },
   // أوامر sub
   {
     name: 'sub',
@@ -305,7 +299,7 @@ client.on('messageCreate', async (message) => {
       .setDescription(
         `** members<:emoji_32:1471962578895769611> **\n-# ** text - ${membersMsg}**\n\n` +
         `** Mods <:emoji_38:1470920843398746215>**\n` +
-        `-# ** wel, tic, give, pre, emb, points, whisper**\n` +
+        `-# ** wel, tic, give, pre, emb, whisper**\n` +
         `-# ** text -  تايم، طرد، حذف، ارقام، ايقاف**`
       );
     await message.channel.send({ embeds: [embed] });
