@@ -68,15 +68,12 @@ async function onMessage(client, message) {
     const pointsGained = newPoints - pointsData.points;
     pointsData.points = newPoints;
     
-    // صرف المكافأة من الخزينة
     if (settings.rewardPerPoint > 0 && settings.pointsPerReward > 0 && settings.treasury > 0) {
       const rewardAmount = Math.floor(pointsGained / settings.pointsPerReward) * settings.rewardPerPoint;
       
       if (rewardAmount > 0 && settings.treasury >= rewardAmount) {
-        // الخصم من الخزينة
         settings.treasury -= rewardAmount;
         
-        // إضافة للعضو
         const User = mongoose.model('User');
         let userData = await User.findOne({ userId: message.author.id });
         if (!userData) userData = new User({ userId: message.author.id });
@@ -92,12 +89,10 @@ async function onMessage(client, message) {
         await settings.save();
       }
       
-      // التحقق إذا الخزينة خلصت
       if (settings.treasury <= 0) {
         settings.funded = false;
         await settings.save();
         
-        // إرسال رسالة للمالك
         const owner = await client.users.fetch(message.guild.ownerId);
         if (owner) {
           await owner.send(`-# ** دنانير التمويل المكافأة خلصت و الان سوف يتم التعامل مع النقاط كانها بدون مكافأة <:2thumbup:1467287897429512396> **`).catch(() => {});
@@ -127,7 +122,15 @@ async function onMessage(client, message) {
 
 // ==================== handleTextCommand ====================
 async function handleTextCommand(client, message, command, args, prefix) {
+  const settings = await PointsSettings.findOne({ guildId: message.guild.id });
+  
   if (command === 'نقاطي') {
+    if (!settings || !settings.enabled) {
+      const msg = await message.channel.send(`-# **نظام النقاط غير مفعل خلي اونركم يفعله <:emoji_32:1471962578895769611> **`);
+      setTimeout(() => msg.delete().catch(() => {}), 10000);
+      return true;
+    }
+    
     const pointsData = await Points.findOne({ 
       guildId: message.guild.id, 
       userId: message.author.id 
@@ -149,6 +152,12 @@ async function handleTextCommand(client, message, command, args, prefix) {
   }
 
   if (command === 'نقاط') {
+    if (!settings || !settings.enabled) {
+      const msg = await message.channel.send(`-# **نظام النقاط غير مفعل خلي اونركم يفعله <:emoji_32:1471962578895769611> **`);
+      setTimeout(() => msg.delete().catch(() => {}), 10000);
+      return true;
+    }
+    
     const topPoints = await Points.find({ guildId: message.guild.id })
       .sort({ points: -1 })
       .limit(5);
@@ -158,7 +167,6 @@ async function handleTextCommand(client, message, command, args, prefix) {
       return true;
     }
     
-    const settings = await PointsSettings.findOne({ guildId: message.guild.id });
     const rewardPerPoint = settings?.rewardPerPoint || 0;
     
     let leaderboardText = '';
@@ -228,6 +236,10 @@ async function onInteraction(client, interaction) {
       new ButtonBuilder()
         .setCustomId('points_reset')
         .setLabel('إعادة تعيين')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId('points_settings')
+        .setLabel('إعدادات')
         .setStyle(ButtonStyle.Secondary)
     );
     
@@ -242,16 +254,43 @@ async function onInteraction(client, interaction) {
       if (settings) {
         settings.enabled = !settings.enabled;
         await settings.save();
-        await interaction.reply({ 
-          content: `-# ** تم ${settings.enabled ? 'تفعيل' : 'تعطيل'} نظام النقاط بنجاح <:2thumbup:1467287897429512396> **`, 
-          ephemeral: true 
-        });
+        
+        const statusText = settings.enabled ? 'مفعل' : 'غير مفعل';
+        const fundedText = settings.funded && settings.treasury > 0 ? 'يوجد' : 'لا يوجد';
+        const fundedAmount = settings.totalFunded || 0;
+        
+        const description = `**حالة النضام <:new_emoji:1388436089584226387>**\n\n` +
+          `-# ** النظام ${statusText} و ${fundedText} تمويل بقيمة ${fundedAmount} دينار و الخزينة متبقي فيها ${settings.treasury} دينار <:2thumbup:1467287897429512396> **`;
+        
+        const embed = new EmbedBuilder()
+          .setDescription(description)
+          .setColor(0x2b2d31);
+        
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId('points_toggle')
+            .setLabel(settings.enabled ? 'تعطيل' : 'تفعيل')
+            .setStyle(settings.enabled ? ButtonStyle.Danger : ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId('points_fund')
+            .setLabel('تمويل')
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
+            .setCustomId('points_reset')
+            .setLabel('إعادة تعيين')
+            .setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder()
+            .setCustomId('points_settings')
+            .setLabel('إعدادات')
+            .setStyle(ButtonStyle.Secondary)
+        );
+        
+        await interaction.update({ embeds: [embed], components: [row] });
       }
       return true;
     }
     
     if (interaction.customId === 'points_fund') {
-      // فتح Modal لإدخال المبلغ وعدد النقاط
       const modal = new ModalBuilder()
         .setCustomId('fund_modal')
         .setTitle('تمويل نظام النقاط');
@@ -304,6 +343,26 @@ async function onInteraction(client, interaction) {
       
       await interaction.reply({ 
         content: `-# **تم اعادة تعيين نظام النقاط <:2thumbup:1467287897429512396> **`, 
+        ephemeral: true 
+      });
+      return true;
+    }
+    
+    if (interaction.customId === 'points_settings') {
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('set_channel')
+          .setLabel('تغيير روم التهنئة')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId('set_message')
+          .setLabel('تغيير رسالة التهنئة')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      
+      await interaction.reply({ 
+        content: '⚙️ **إعدادات نظام النقاط**', 
+        components: [row], 
         ephemeral: true 
       });
       return true;
