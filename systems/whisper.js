@@ -71,10 +71,10 @@ module.exports = {
         guildId: interaction.guild.id
       });
 
-      // حذف الهمسة بعد 5 دقائق
+      // حذف الهمسة بعد 30 ثانية ⏱️
       setTimeout(() => {
         whispers.delete(whisperId);
-      }, 300000);
+      }, 30000); // 30 ثانية
 
       // زر العرض (رصاصي)
       const row = new ActionRowBuilder().addComponents(
