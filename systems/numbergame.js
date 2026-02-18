@@ -65,7 +65,7 @@ async function startNextTurn(client, channel, msgId, guildId) {
     if (!game || !game.started || game.winner) return;
     if (game.currentTurn === currentPlayer) {
       game.canGuess?.set(currentPlayer, false);
-      await channel.send(`-# **المشارك ${getUserTag(client, currentPlayer)} انطرد عشان ما خمن قبل انتهاء الوقت <:s7_discord:1388214117365453062> **`).catch(() => { });
+      await channel.send(`-# **المشارк ${getUserTag(client, currentPlayer)} انطرد عشان ما خمن قبل انتهاء الوقت <:s7_discord:1388214117365453062> **`).catch(() => { });
       
       const attempts = game.attempts.get(currentPlayer) || 0;
       const maxAttempts = game.players.length === 1 ? 5 : 3;
@@ -107,16 +107,15 @@ async function startNumberGameAfterDelay(client, msg, gameData, guildId) {
   }, 20000);
 }
 
-// ==================== onMessage (للرسائل العادية) ====================
+// ==================== onMessage (للتخمين أثناء اللعبة) ====================
 async function onMessage(client, message) {
   if (message.author.bot || !message.guild) return;
 
-  // معالجة التخمين أثناء اللعبة
   for (const [key, game] of client.activeNumberGames.entries()) {
     if (key.startsWith(message.guild.id) && game.started && !game.winner) {
       if (game.currentTurn === message.author.id && game.canGuess?.get(message.author.id)) {
         const guess = parseInt(message.content);
-        if (isNaN(guess)) return;
+        if (isNaN(guess) || guess < 1 || guess > 100) return;
 
         game.canGuess.set(message.author.id, false);
         if (game.timer) { clearTimeout(game.timer); game.timer = null; }
@@ -127,15 +126,25 @@ async function onMessage(client, message) {
 
         if (guess === game.secretNumber) {
           game.winner = message.author.id;
-          await message.channel.send(`-# **مبروك جابها صح ${getUserTag(client, message.author.id)} الرقم كان ${game.secretNumber} <:emoji_33:1401771703306027008> **`).catch(() => { });
+          await message.channel.send(`-# **مبروك المشارك ${getUserTag(client, message.author.id)} جاب الرقم الصح و هو ${game.secretNumber} حظا اوفر للمشاركين الآخرين فالمرات القادمة <:emoji_33:1471962823532740739> **`).catch(() => { });
           client.activeNumberGames.delete(key);
           return;
         } else {
           const hint = guess < game.secretNumber ? 'أكبر' : 'أصغر';
-          await message.channel.send(`-# **خطأ الرقم ${hint} من ${guess} <:emoji_38:1470920843398746215> **`).catch(() => { });
+          await message.channel.send(`-# **تخمين غلط من العضو ${getUserTag(client, message.author.id)} و الرقم ${hint} من الرقم ${guess} **`).catch(() => { });
           
-          game.currentTurnIndex++;
-          setTimeout(() => { startNextTurn(client, message.channel, key.split('-')[1], message.guild.id); }, 3000);
+          const maxAttempts = game.players.length === 1 ? 5 : 3;
+          
+          if (attempts >= maxAttempts) {
+            await message.channel.send(`-# **المشارك ${getUserTag(client, message.author.id)} انطرد عشان خلصت محاولاته ${maxAttempts} <:emoji_32:1471962578895769611> **`).catch(() => { });
+            game.currentTurnIndex++;
+            game.currentTurn = null;
+            setTimeout(() => { startNextTurn(client, message.channel, key.split('-')[1], message.guild.id); }, 3000);
+          } else {
+            game.currentTurnIndex++;
+            game.currentTurn = null;
+            setTimeout(() => { startNextTurn(client, message.channel, key.split('-')[1], message.guild.id); }, 3000);
+          }
           return;
         }
       }
@@ -217,23 +226,27 @@ async function onInteraction(client, interaction) {
     const gameKey = `${interaction.guild.id}-${interaction.message.id}`;
     const game = client.activeNumberGames.get(gameKey);
     
-    if (!game) {
-      await interaction.reply({ content: '❌ اللعبة مو موجودة!', ephemeral: true });
+    if (!game || game.started) {
+      await interaction.reply({ content: `-# **اللعبة فشلت <:new_emoji:1388436095842385931> **`, ephemeral: true });
       return true;
     }
     
-    if (game.started) {
-      await interaction.reply({ content: '❌ اللعبة بدأت خلاص!', ephemeral: true });
+    if (game.players.length >= 6) {
+      await interaction.reply({ content: `-# **اللعبة ممتلئة <:emoji_84:1389404919672340592> **`, ephemeral: true });
       return true;
     }
     
     if (game.players.includes(interaction.user.id)) {
-      await interaction.reply({ content: '❌ أنت مسجل أصلاً!', ephemeral: true });
+      await interaction.reply({ content: `-# **انت داخل اللعبة اصلا <:__:1467633552408576192> **`, ephemeral: true });
       return true;
     }
 
     game.players.push(interaction.user.id);
-    await interaction.reply({ content: '✅ تم تسجيلك في اللعبة!', ephemeral: true });
+    game.attempts.set(interaction.user.id, 0);
+    if (!game.canGuess) game.canGuess = new Map();
+    game.canGuess.set(interaction.user.id, false);
+    
+    await interaction.reply({ content: `-# **تم انت الحين مشارك فاللعبة <:2thumbup:1467287897429512396> **`, ephemeral: true });
     return true;
   }
 
