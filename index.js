@@ -214,11 +214,13 @@ const slashCommands = [
             type: 3,
             required: false,
             choices: [
-              { name: 'حذف كل شيء', value: 'all' },
-              { name: 'حذف كل شيء ما عدا كلمات معينة', value: 'words' }
+              { name: 'الكل', value: 'all' },
+              { name: 'صور', value: 'images' },
+              { name: 'روابط', value: 'links' },
+              { name: 'ملفات', value: 'files' }
             ]
           },
-          { name: 'allow', description: 'الكلمات المسموحة (افصل بفاصلة)', type: 3, required: false },
+          { name: 'allow', description: 'كلمات مستثناة (افصل بفاصلة)', type: 3, required: false },
           { name: 'message', description: 'رسالة تنبيه بعد الحذف', type: 3, required: false },
           { name: 'allowed_users', description: 'ID المستخدمين المستثنين (افصل بفاصلة)', type: 3, required: false }
         ]
@@ -228,6 +230,11 @@ const slashCommands = [
         description: 'إيقاف الحذف التلقائي في روم',
         type: 1,
         options: [{ name: 'channel', description: 'الروم', type: 7, required: true }]
+      },
+      {
+        name: 'list',
+        description: 'عرض رومات الحذف التلقائي',
+        type: 1
       }
     ]
   }
@@ -263,9 +270,7 @@ client.on('messageCreate', async (message) => {
   
   // ===== معالجة الأوامر النصية =====
   // نحتاج Settings من أجل prefix
-  const Settings = mongoose.models.Settings;
-  if (!Settings) return;
-  
+  const Settings = mongoose.model('Settings');
   const settings = await Settings.findOne({ guildId: message.guild.id });
   const prefix = settings?.prefix || '';
   
@@ -276,7 +281,29 @@ client.on('messageCreate', async (message) => {
   const firstWord = args[0];
   const command = prefix ? firstWord.slice(prefix.length).toLowerCase() : firstWord.toLowerCase();
   
-  // تمرير الأمر لجميع الأنظمة
+  // ===== أوامر عامة =====
+  if (command === 'اوامر') {
+    let membersMsg = '';
+    
+    if (prefix) {
+      membersMsg = `${prefix}دنانير، ${prefix}تحويل، ${prefix}اغنياء، ${prefix}سجل، ${prefix}نقاطي، ${prefix}نقاط`;
+    } else {
+      membersMsg = `دنانير، تحويل، اغنياء، سجل، نقاطي، نقاط`;
+    }
+    
+    const embed = new EmbedBuilder()
+      .setColor(0x2b2d31)
+      .setDescription(
+        `** members<:emoji_32:1471962578895769611> **\n-# ** text - ${membersMsg}**\n\n` +
+        `** Mods <:emoji_38:1470920843398746215>**\n` +
+        `-# ** wel, tic, give, pre, emb, points**\n` +
+        `-# ** text -  تايم، طرد، حذف، ارقام، ايقاف**`
+      );
+    await message.channel.send({ embeds: [embed] });
+    return;
+  }
+  
+  // ===== تمرير الأمر لجميع الأنظمة =====
   for (const system of client.systems.values()) {
     if (system.handleTextCommand) {
       try {
