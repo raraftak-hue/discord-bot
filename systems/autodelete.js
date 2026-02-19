@@ -1,4 +1,4 @@
-const { PermissionsBitField } = require('discord.js');
+const { PermissionsBitField, EmbedBuilder } = require('discord.js'); // 👈 أضف EmbedBuilder
 const mongoose = require('mongoose');
 
 // ==================== 📊 Schemas ====================
@@ -66,12 +66,16 @@ module.exports = {
   },
 
   onInteraction: async (client, interaction) => {
-    if (!interaction.isChatInputCommand() || interaction.commandName !== 'auto') return;
+    if (!interaction.isChatInputCommand() || interaction.commandName !== 'auto') return false; // 👈 أضف return false
+    
     const { options, guild, user } = interaction;
     const sub = options.getSubcommand();
 
     const OWNER_ID = "1131951548772122625";
-    if (user.id !== OWNER_ID) return interaction.reply({ content: '❌ هذا الأمر للمالك فقط!', ephemeral: true });
+    if (user.id !== OWNER_ID) {
+      await interaction.reply({ content: '❌ هذا الأمر للمالك فقط!', ephemeral: true });
+      return true; // 👈 أضف return true
+    }
 
     if (sub === 'add') {
       const channel = options.getChannel('channel');
@@ -107,20 +111,23 @@ module.exports = {
       if (allowedWords.length > 0) replyMsg += `\n-# **كلمات مستثناة: ${allowedWords.join('، ')}**`;
       if (allowedUsers.length > 0) replyMsg += `\n-# **أعضاء مسموح لهم: <@${allowedUsers.join('>, <@')}>**`;
       
-      return interaction.reply({ content: replyMsg, ephemeral: true });
+      await interaction.reply({ content: replyMsg, ephemeral: true });
+      return true; // 👈 أضف return true
     }
 
     if (sub === 'rem') {
       const channel = options.getChannel('channel');
       await AutoDelete.deleteMany({ guildId: guild.id, channelId: channel.id });
-      return interaction.reply({ content: `-# ** تم تحديث الاعدادات <:2thumbup:1467287897429512396> **`, ephemeral: true });
+      await interaction.reply({ content: `-# ** تم تحديث الاعدادات <:2thumbup:1467287897429512396> **`, ephemeral: true });
+      return true; // 👈 أضف return true
     }
 
     if (sub === 'list') {
       const channels = await getAutoDeleteChannels(guild.id);
       
       if (channels.length === 0) {
-        return interaction.reply({ content: `-# **ما في رومات حذف تلقائي <:new_emoji:1388436095842385931> **`, ephemeral: true });
+        await interaction.reply({ content: `-# **ما في رومات حذف تلقائي <:new_emoji:1388436095842385931> **`, ephemeral: true });
+        return true; // 👈 أضف return true
       }
       
       const filterTypes = { 
@@ -154,7 +161,9 @@ module.exports = {
       await interaction.deferReply({ ephemeral: true });
       await interaction.channel.send({ embeds: [embed] });
       await interaction.deleteReply();
-      return true;
+      return true; // 👈 أضف return true (موجود أصلاً)
     }
+    
+    return false; // 👈 أضف return false في النهاية
   }
 };
