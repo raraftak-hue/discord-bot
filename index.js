@@ -45,7 +45,7 @@ for (const file of systemFiles) {
 
 // ==================== جمع أوامر السلاش ====================
 const slashCommands = [
-  // أوامر wel
+  // أوامر wel (محدثة)
   {
     name: 'wel',
     description: 'نظام الترحيب',
@@ -64,7 +64,14 @@ const slashCommands = [
         ]
       },
       { name: 'info', description: 'عرض الإعدادات', type: 1 },
-      { name: 'test', description: 'تجربة الرسالة', type: 1 }
+      {
+        name: 'test',
+        description: 'تجربة الرسالة',
+        type: 1,
+        options: [
+          { name: 'target', description: 'العضو المستهدف (اختياري)', type: 6, required: false }
+        ]
+      }
     ]
   },
   // أوامر tic
@@ -336,9 +343,6 @@ client.on('interactionCreate', async (interaction) => {
   }
   
   console.log(`❌ ما في نظام تعامل مع: ${interaction.commandName}`);
-  if (!interaction.replied) {
-    await interaction.reply({ content: '❌ الأمر مو شغال حالياً', ephemeral: true });
-  }
 });
 
 client.on('guildCreate', async (guild) => {
