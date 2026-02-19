@@ -14,7 +14,7 @@ const SettingsSchema = new mongoose.Schema({
   }
 });
 
-// ✅ التعديل المهم: منع تكرار تعريف الموديل
+// منع تكرار تعريف الموديل
 const Settings = mongoose.models.Settings || mongoose.model('Settings', SettingsSchema);
 
 // ==================== 🔧 الدوال المساعدة ====================
@@ -104,8 +104,9 @@ module.exports = {
       }
 
       if (sub === 'test') {
-        await sendWelcomeMessage(interaction.member, settings);
-        await interaction.reply({ content: `-# **تم ارسال الرسالة <:2thumbup:1467287897429512396> **`, ephemeral: true });
+        const target = interaction.options.getMember('target') || interaction.member;
+        await sendWelcomeMessage(target, settings);
+        await interaction.reply({ content: `-# **تم ارسال الرسالة لـ ${target.user.username} <:2thumbup:1467287897429512396> **`, ephemeral: true });
         return true;
       }
     }
