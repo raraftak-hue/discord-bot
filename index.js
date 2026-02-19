@@ -45,7 +45,7 @@ for (const file of systemFiles) {
 
 // ==================== جمع أوامر السلاش ====================
 const slashCommands = [
-  // أوامر wel (محدثة)
+  // أوامر wel
   {
     name: 'wel',
     description: 'نظام الترحيب',
@@ -144,6 +144,22 @@ const slashCommands = [
       { name: 'thumbnail', description: 'الصورة المصغرة', type: 3, required: false },
       { name: 'footer', description: 'التذييل', type: 3, required: false },
       { name: 'timestamp', description: 'إضافة وقت', type: 5, required: false }
+    ]
+  },
+  // أوامر economy (جديد)
+  {
+    name: 'economy',
+    description: 'إعدادات نظام الاقتصاد',
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+    options: [
+      {
+        name: 'channel',
+        description: 'تحديد روم مخصص لأوامر الاقتصاد',
+        type: 1,
+        options: [
+          { name: 'room', description: 'الروم', type: 7, required: true, channel_types: [0] }
+        ]
+      }
     ]
   },
   // أوامر sub
@@ -251,23 +267,7 @@ const slashCommands = [
     ]
   }
 ];
-//اوامر تعيين الروم الاقتصاد
-// أوامر economy
-{
-  name: 'economy',
-  description: 'إعدادات نظام الاقتصاد',
-  default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
-  options: [
-    {
-      name: 'channel',
-      description: 'تحديد روم مخصص لأوامر الاقتصاد',
-      type: 1,
-      options: [
-        { name: 'room', description: 'الروم', type: 7, required: true, channel_types: [0] }
-      ]
-    }
-  ]
-}
+
 // ==================== الأحداث ====================
 client.once('ready', async () => {
   console.log(`✅ تم تسجيل الدخول بـ ${client.user.tag}`);
@@ -276,6 +276,7 @@ client.once('ready', async () => {
   try {
     await rest.put(Routes.applicationCommands(client.user.id), { body: slashCommands });
     console.log('✅ تم تسجيل جميع الأوامر بنجاح!');
+    console.log('📋 الأوامر المسجلة:', slashCommands.map(c => c.name).join(', '));
   } catch (e) { console.error(e); }
 
   // استدعاء onReady في كل نظام
@@ -322,7 +323,7 @@ client.on('messageCreate', async (message) => {
       .setDescription(
         `** members<:emoji_32:1471962578895769611> **\n-# ** text - ${membersMsg}**\n\n` +
         `** Mods <:emoji_38:1470920843398746215>**\n` +
-        `-# ** wel, tic, give, pre, emb, whisper**\n` +
+        `-# ** wel, tic, give, pre, emb, economy, whisper**\n` +
         `-# ** text -  تايم، طرد، حذف، ارقام، ايقاف**`
       );
     await message.channel.send({ embeds: [embed] });
@@ -378,7 +379,17 @@ client.on('guildMemberAdd', async (member) => {
 });
 
 // ==================== تشغيل السيرفر ====================
-app.get('/', (req, res) => res.send('Bot is running!'));
-app.listen(3000, () => console.log('🌐 Server is ready!'));
+const server = app.listen(3000, '0.0.0.0', () => {
+  console.log('🌐 Server is ready on port 3000!');
+});
+
+process.on('SIGTERM', () => {
+  console.log('📴 SIGTERM received, closing gracefully...');
+  server.close(() => {
+    console.log('🛑 HTTP server closed');
+    client.destroy();
+    process.exit(0);
+  });
+});
 
 client.login(process.env.TOKEN);
