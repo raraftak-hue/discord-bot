@@ -1,6 +1,7 @@
 const { EmbedBuilder, PermissionsBitField } = require('discord.js');
 const mongoose = require('mongoose');
 
+// ==================== 📊 Schemas ====================
 const SettingsSchema = new mongoose.Schema({
   guildId: String,
   prefix: { type: String, default: null },
@@ -13,8 +14,10 @@ const SettingsSchema = new mongoose.Schema({
   }
 });
 
-const Settings = mongoose.model('Settings', SettingsSchema);
+// ✅ التعديل المهم: منع تكرار تعريف الموديل
+const Settings = mongoose.models.Settings || mongoose.model('Settings', SettingsSchema);
 
+// ==================== 🔧 الدوال المساعدة ====================
 async function getSettings(guildId) {
   let settings = await Settings.findOne({ guildId });
   if (!settings) {
