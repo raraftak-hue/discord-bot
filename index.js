@@ -251,7 +251,23 @@ const slashCommands = [
     ]
   }
 ];
-
+//اوامر تعيين الروم الاقتصاد
+// أوامر economy
+{
+  name: 'economy',
+  description: 'إعدادات نظام الاقتصاد',
+  default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+  options: [
+    {
+      name: 'channel',
+      description: 'تحديد روم مخصص لأوامر الاقتصاد',
+      type: 1,
+      options: [
+        { name: 'room', description: 'الروم', type: 7, required: true, channel_types: [0] }
+      ]
+    }
+  ]
+}
 // ==================== الأحداث ====================
 client.once('ready', async () => {
   console.log(`✅ تم تسجيل الدخول بـ ${client.user.tag}`);
