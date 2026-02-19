@@ -1,4 +1,4 @@
-const { EmbedBuilder, PermissionsBitField } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionsBitField } = require('discord.js');
 const mongoose = require('mongoose');
 
 // ==================== 📊 Schemas ====================
@@ -14,7 +14,21 @@ const UserSchema = new mongoose.Schema({
   }]
 });
 
+const SettingsSchema = new mongoose.Schema({
+  guildId: String,
+  prefix: { type: String, default: null },
+  economyChannel: { type: String, default: null }, // 👈 روم الاقتصاد
+  welcomeSettings: {
+    channelId: String,
+    title: String,
+    description: String,
+    color: { type: String, default: '2b2d31' },
+    image: String
+  }
+});
+
 const User = mongoose.model('User', UserSchema);
+const Settings = mongoose.models.Settings || mongoose.model('Settings', SettingsSchema);
 
 // ==================== 🔧 الدوال المساعدة ====================
 async function getUserData(userId) {
@@ -48,36 +62,22 @@ async function formatHistory(client, history) {
     const dateStr = `${date.getDate()}-${date.getMonth() + 1}`;
 
     if (h.type === 'TRANSFER_SEND') {
-      let targetName = 'مستخدم';
-      try {
-        if (h.targetUser) {
-          const user = await client.users.fetch(h.targetUser).catch(() => null);
-          if (user) targetName = user.username;
-        }
-      } catch (e) {}
-      lines.push(`-# **تحويل الى ${targetName} في ${dateStr} <:emoji_41:1471619709936996406>**`);
+      lines.push(`-# **تحويل الى <@${h.targetUser}> في ${dateStr} <:emoji_41:1471619709936996406>**`);
     } 
     else if (h.type === 'TRANSFER_RECEIVE') {
-      let targetName = 'مستخدم';
-      try {
-        if (h.targetUser) {
-          const user = await client.users.fetch(h.targetUser).catch(() => null);
-          if (user) targetName = user.username;
-        }
-      } catch (e) {}
-      lines.push(`-# **استلام من ${targetName} في ${dateStr} <:emoji_41:1471983856440836109>**`);
+      lines.push(`-# **استلام من <@${h.targetUser}> في ${dateStr} <:emoji_41:1471983856440836109>**`);
     } 
     else if (h.type === 'WEEKLY_TAX') {
       lines.push(`-# **خصم زكاة 2.5% = ${Math.abs(h.amount)} في ${dateStr} <:emoji_40:1471983905430311074>**`);
     } 
     else if (h.type === 'OWNER_ADD') {
-      lines.push(`-# **إضافة رصيد ${h.amount} <:emoji_41:1471619709936996406>**`);
+      lines.push(`-# **إضافة رصيد ${h.amount} في ${dateStr} <:emoji_41:1471619709936996406>**`);
     } 
     else if (h.type === 'OWNER_REMOVE') {
-      lines.push(`-# **سحب رصيد ${Math.abs(h.amount)} <:emoji_41:1471619709936996406>**`);
+      lines.push(`-# **سحب رصيد ${Math.abs(h.amount)} في ${dateStr} <:emoji_41:1471619709936996406>**`);
     }
     else if (h.type === 'STARTING_GIFT') {
-      lines.push(`-# **هدية ابتدائية بقيمة ${h.amount} <:emoji_35:1471963080228474890>**`);
+      lines.push(`-# **هدية ابتدائية بقيمة ${h.amount} في ${dateStr} <:emoji_35:1471963080228474890>**`);
     }
     else {
       lines.push(`-# **${h.type}: ${Math.abs(h.amount)} في ${dateStr} <:emoji_41:1471983856440836109>**`);
@@ -87,8 +87,15 @@ async function formatHistory(client, history) {
   return lines.join('\n');
 }
 
-// ==================== معالج الأوامر النصية ====================
+// ==================== handleTextCommand (محدث مع فلتر الروم) ====================
 async function handleTextCommand(client, message, command, args, prefix) {
+  const guildSettings = await Settings.findOne({ guildId: message.guild.id });
+  
+  // فلتر الروم: إذا في روم محدد للاقتصاد والرسالة مو فيه، نمنعها
+  if (guildSettings?.economyChannel && message.channel.id !== guildSettings.economyChannel) {
+    return true; // ما نرسل شي، بس نمنع الأمر
+  }
+
   if (command === 'دنانير') {
     const user = message.mentions.users.first() || message.author;
     const userData = await getUserData(user.id);
@@ -204,18 +211,52 @@ async function handleTextCommand(client, message, command, args, prefix) {
   return false;
 }
 
-// ==================== onMessage (للرسائل العادية) ====================
+// ==================== onMessage ====================
 async function onMessage(client, message) {
   return;
 }
 
 // ==================== onInteraction ====================
 async function onInteraction(client, interaction) {
-  // نظام الاقتصاد ما يحتاج تفاعلات أزرار (لأن مافي أزرار)
+  if (!interaction.isChatInputCommand()) return false;
+  
+  // ===== أمر /economy =====
+  if (interaction.commandName === 'economy') {
+    if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+      await interaction.reply({ content: `-# ** ما عندك صلاحية <:emoji_84:1389404919672340592> **`, ephemeral: true });
+      return true;
+    }
+    
+    const sub = interaction.options.getSubcommand();
+    
+    if (sub === 'channel') {
+      const room = interaction.options.getChannel('room');
+      
+      let settings = await Settings.findOne({ guildId: interaction.guild.id });
+      if (!settings) {
+        settings = new Settings({ 
+          guildId: interaction.guild.id,
+          prefix: null,
+          economyChannel: room.id,
+          welcomeSettings: { color: '2b2d31' }
+        });
+      } else {
+        settings.economyChannel = room.id;
+      }
+      
+      await settings.save();
+      
+      await interaction.reply({ 
+        content: `-# ** تم تعيين روم الاقتصاد إلى <#${room.id}> <:2thumbup:1467287897429512396> **`, 
+        ephemeral: true 
+      });
+      return true;
+    }
+  }
+  
   return false;
 }
 
-// ==================== تصدير النظام ====================
 module.exports = {
   onMessage,
   handleTextCommand,
