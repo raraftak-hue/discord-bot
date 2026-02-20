@@ -110,7 +110,7 @@ const slashCommands = [
           { name: 'time', description: 'المدة (10m, 1h, 1d)', type: 3, required: true },
           { name: 'winners', description: 'عدد الفائزين', type: 4, required: true },
           { name: 'cond', description: 'الشروط', type: 3, required: false },
-          { name: 'img', description: 'الصورة', type: 3, required: false }
+          { name: 'img', description: 'صورة (سيتم استخدام آخر صورة، اكتب "حذف" للإرسال بدون صورة)', type: 3, required: false }
         ]
       }
     ]
@@ -146,31 +146,30 @@ const slashCommands = [
       { name: 'timestamp', description: 'إضافة وقت', type: 5, required: false }
     ]
   },
-  // أوامر economy (جديد)
-  // أوامر economy
-{
-  name: 'economy',
-  description: 'إعدادات نظام الاقتصاد',
-  default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
-  options: [
-    {
-      name: 'channel',
-      description: 'تحديد روم مخصص لأوامر الاقتصاد',
-      type: 1,
-      options: [
-        { name: 'room', description: 'الروم', type: 7, required: true, channel_types: [0] }
-      ]
-    },
-    {
-      name: 'message',
-      description: 'تحديد رسالة الخطأ عند استخدام الأوامر خارج الروم',
-      type: 1,
-      options: [
-        { name: 'text', description: 'الرسالة (اكتب "حذف" للرجوع للافتراضي)', type: 3, required: true }
-      ]
-    }
-  ]
-}
+  // أوامر economy (محدث)
+  {
+    name: 'economy',
+    description: 'إعدادات نظام الاقتصاد',
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+    options: [
+      {
+        name: 'channel',
+        description: 'تحديد روم مخصص لأوامر الاقتصاد',
+        type: 1,
+        options: [
+          { name: 'room', description: 'الروم', type: 7, required: true, channel_types: [0] }
+        ]
+      },
+      {
+        name: 'message',
+        description: 'تحديد رسالة الخطأ عند استخدام الأوامر خارج الروم',
+        type: 1,
+        options: [
+          { name: 'text', description: 'الرسالة (اكتب "حذف" للرجوع للافتراضي)', type: 3, required: true }
+        ]
+      }
+    ]
+  },
   // أوامر sub
   {
     name: 'sub',
@@ -288,7 +287,6 @@ client.once('ready', async () => {
     console.log('📋 الأوامر المسجلة:', slashCommands.map(c => c.name).join(', '));
   } catch (e) { console.error(e); }
 
-  // استدعاء onReady في كل نظام
   for (const system of client.systems.values()) {
     if (system.onReady) {
       try { await system.onReady(client); } catch (e) { console.error(e); }
@@ -299,14 +297,12 @@ client.once('ready', async () => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
   
-  // ===== تشغيل onMessage في كل نظام (لأي رسالة) =====
   for (const system of client.systems.values()) {
     if (system.onMessage) {
       try { await system.onMessage(client, message); } catch (e) { console.error(e); }
     }
   }
   
-  // ===== معالجة الأوامر النصية =====
   const Settings = mongoose.model('Settings');
   const settings = await Settings.findOne({ guildId: message.guild.id });
   const prefix = settings?.prefix || '';
@@ -317,14 +313,13 @@ client.on('messageCreate', async (message) => {
   const firstWord = args[0];
   const command = prefix ? firstWord.slice(prefix.length).toLowerCase() : firstWord.toLowerCase();
   
-  // ===== أوامر عامة =====
   if (command === 'اوامر') {
     let membersMsg = '';
     
     if (prefix) {
-      membersMsg = `${prefix}دنانير، ${prefix}تحويل، ${prefix}اغنياء، ${prefix}سجل، ${prefix}نقاطي، ${prefix}نقاط`;
+      membersMsg = `${prefix}دنانير، ${prefix}تحويل، ${prefix}اغنياء، ${prefix}سجل`;
     } else {
-      membersMsg = `دنانير، تحويل، اغنياء، سجل، نقاطي، نقاط`;
+      membersMsg = `دنانير، تحويل، اغنياء، سجل`;
     }
     
     const embed = new EmbedBuilder()
@@ -339,7 +334,6 @@ client.on('messageCreate', async (message) => {
     return;
   }
   
-  // ===== تمرير الأمر لجميع الأنظمة =====
   for (const system of client.systems.values()) {
     if (system.handleTextCommand) {
       try {
@@ -387,7 +381,6 @@ client.on('guildMemberAdd', async (member) => {
   }
 });
 
-// ==================== تشغيل السيرفر ====================
 const server = app.listen(3000, '0.0.0.0', () => {
   console.log('🌐 Server is ready on port 3000!');
 });
