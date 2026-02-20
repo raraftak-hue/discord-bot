@@ -129,8 +129,9 @@ module.exports = {
       return true;
     }
 
-    if (sub === 'rem') {
-      console.log(`📝 rem subcommand`);
+    // ✅ التعديل هنا: يقبل rem أو remove
+    if (sub === 'rem' || sub === 'remove') {
+      console.log(`📝 rem/remove subcommand`);
       const channel = options.getChannel('channel');
       await AutoDelete.deleteMany({ guildId: guild.id, channelId: channel.id });
       await interaction.reply({ content: `-# ** تم تحديث الاعدادات <:2thumbup:1467287897429512396> **`, ephemeral: true });
