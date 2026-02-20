@@ -1,4 +1,4 @@
-const { PermissionsBitField, EmbedBuilder } = require('discord.js'); // 👈 أضف EmbedBuilder
+const { PermissionsBitField, EmbedBuilder } = require('discord.js');
 const mongoose = require('mongoose');
 
 // ==================== 📊 Schemas ====================
@@ -66,7 +66,7 @@ module.exports = {
   },
 
   onInteraction: async (client, interaction) => {
-    if (!interaction.isChatInputCommand() || interaction.commandName !== 'auto') return false; // 👈 أضف return false
+    if (!interaction.isChatInputCommand() || interaction.commandName !== 'auto') return false;
     
     const { options, guild, user } = interaction;
     const sub = options.getSubcommand();
@@ -74,7 +74,7 @@ module.exports = {
     const OWNER_ID = "1131951548772122625";
     if (user.id !== OWNER_ID) {
       await interaction.reply({ content: '❌ هذا الأمر للمالك فقط!', ephemeral: true });
-      return true; // 👈 أضف return true
+      return true;
     }
 
     if (sub === 'add') {
@@ -112,14 +112,14 @@ module.exports = {
       if (allowedUsers.length > 0) replyMsg += `\n-# **أعضاء مسموح لهم: <@${allowedUsers.join('>, <@')}>**`;
       
       await interaction.reply({ content: replyMsg, ephemeral: true });
-      return true; // 👈 أضف return true
+      return true;
     }
 
     if (sub === 'rem') {
       const channel = options.getChannel('channel');
       await AutoDelete.deleteMany({ guildId: guild.id, channelId: channel.id });
       await interaction.reply({ content: `-# ** تم تحديث الاعدادات <:2thumbup:1467287897429512396> **`, ephemeral: true });
-      return true; // 👈 أضف return true
+      return true;
     }
 
     if (sub === 'list') {
@@ -127,7 +127,7 @@ module.exports = {
       
       if (channels.length === 0) {
         await interaction.reply({ content: `-# **ما في رومات حذف تلقائي <:new_emoji:1388436095842385931> **`, ephemeral: true });
-        return true; // 👈 أضف return true
+        return true;
       }
       
       const filterTypes = { 
@@ -161,9 +161,9 @@ module.exports = {
       await interaction.deferReply({ ephemeral: true });
       await interaction.channel.send({ embeds: [embed] });
       await interaction.deleteReply();
-      return true; // 👈 أضف return true (موجود أصلاً)
+      return true;
     }
     
-    return false; // 👈 أضف return false في النهاية
+    return false;
   }
 };
