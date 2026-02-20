@@ -147,21 +147,30 @@ const slashCommands = [
     ]
   },
   // أوامر economy (جديد)
-  {
-    name: 'economy',
-    description: 'إعدادات نظام الاقتصاد',
-    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
-    options: [
-      {
-        name: 'channel',
-        description: 'تحديد روم مخصص لأوامر الاقتصاد',
-        type: 1,
-        options: [
-          { name: 'room', description: 'الروم', type: 7, required: true, channel_types: [0] }
-        ]
-      }
-    ]
-  },
+  // أوامر economy
+{
+  name: 'economy',
+  description: 'إعدادات نظام الاقتصاد',
+  default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+  options: [
+    {
+      name: 'channel',
+      description: 'تحديد روم مخصص لأوامر الاقتصاد',
+      type: 1,
+      options: [
+        { name: 'room', description: 'الروم', type: 7, required: true, channel_types: [0] }
+      ]
+    },
+    {
+      name: 'message',
+      description: 'تحديد رسالة الخطأ عند استخدام الأوامر خارج الروم',
+      type: 1,
+      options: [
+        { name: 'text', description: 'الرسالة (اكتب "حذف" للرجوع للافتراضي)', type: 3, required: true }
+      ]
+    }
+  ]
+}
   // أوامر sub
   {
     name: 'sub',
