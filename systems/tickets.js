@@ -8,7 +8,8 @@ const TicketSettingsSchema = new mongoose.Schema({
   embedDescription: { type: String, default: 'اضغط على الزر لفتح تذكرة جديدة.' },
   embedColor: { type: String, default: '2b2d31' },
   embedImage: { type: String, default: null },
-  supportRoleId: { type: String, default: null }
+  supportRoleId: { type: String, default: null },
+  courtRoleId: { type: String, default: null }  // 👈 رتبة محكمة العدل
 });
 
 const TicketSettings = mongoose.model('TicketSettings', TicketSettingsSchema);
@@ -23,10 +24,60 @@ async function getTicketSettings(guildId) {
   return settings;
 }
 
+async function handleOpenTicket(interaction, client, type) {
+  const settings = await getTicketSettings(interaction.guild.id);
+
+  const existingChannel = interaction.guild.channels.cache.find(c => c.name === `ticket-${interaction.user.username}`);
+  if (existingChannel) {
+    return interaction.reply({
+      content: `-# ** لديك تذكرة مفتوحة ما تقدر تفتح اخرى <:emoji_46:1473343297002148005> **`,
+      ephemeral: true
+    });
+  }
+
+  const channel = await interaction.guild.channels.create({
+    name: `ticket-${interaction.user.username}`,
+    type: ChannelType.GuildText,
+    parent: settings.categoryId || null,
+    permissionOverwrites: [
+      { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+      { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+      { id: client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+    ]
+  });
+
+  const closeRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق').setStyle(ButtonStyle.Danger)
+  );
+
+  let roleMention = '';
+  let content = '';
+
+  if (type === 'court') {
+    roleMention = settings.courtRoleId ? `<@&${settings.courtRoleId}>` : '';
+    content = `-# **اهلا بكم في محكمة العدل الرجاء كتابة ما المشكلة و من هم الشهود عليها ان وجدوا <:emoji_35:1474845075950272756> **`;
+  } else {
+    roleMention = settings.supportRoleId ? `<@&${settings.supportRoleId}>` : '';
+    content = `-# ** اكتب سبب فتحك للتكت و فريق الدعم بيتواصل معك قريب <:emoji_32:1471962578895769611> **`;
+  }
+
+  await channel.send({
+    content: `${interaction.user} ${roleMention}\n${content}`,
+    components: [closeRow]
+  });
+
+  await interaction.reply({
+    content: `-# ** تم فتح تذكرتك <:emoji_33:1471962823532740739> **`,
+    ephemeral: true
+  });
+
+  return true;
+}
+
 module.exports = {
   onInteraction: async (client, interaction) => {
-    if (!interaction.isChatInputCommand() && !interaction.isButton()) return;
-    
+    if (!interaction.isChatInputCommand() && !interaction.isButton()) return false;
+
     if (interaction.isChatInputCommand() && interaction.commandName === 'tic') {
       const sub = interaction.options.getSubcommand();
       const settings = await getTicketSettings(interaction.guild.id);
@@ -36,73 +87,54 @@ module.exports = {
         const desc = interaction.options.getString('desc');
         const color = interaction.options.getString('color');
         const image = interaction.options.getString('image');
-        const role = interaction.options.getRole('role');
+        const supportRole = interaction.options.getRole('support_role');
+        const courtRole = interaction.options.getRole('court_role');
 
         if (category) settings.categoryId = category.id;
         if (desc) settings.embedDescription = desc;
         if (color) settings.embedColor = color.replace('#', '');
         if (image) settings.embedImage = image;
-        if (role) settings.supportRoleId = role.id;
+        if (supportRole) settings.supportRoleId = supportRole.id;
+        if (courtRole) settings.courtRoleId = courtRole.id;
 
         await settings.save();
-        return interaction.reply({ content: `-# ** تم تحديث الاعدادات <:2thumbup:1467287897429512396> **`, ephemeral: true });
+        await interaction.reply({ content: `-# ** تم تحديث الاعدادات <:2thumbup:1467287897429512396> **`, ephemeral: true });
+        return true;
       }
 
       if (sub === 'panel') {
         const embed = new EmbedBuilder()
           .setDescription(settings.embedDescription)
           .setColor(parseInt(settings.embedColor, 16) || 0x2b2d31);
-        
+
         if (settings.embedImage) embed.setImage(settings.embedImage);
 
         const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('open_ticket').setLabel('فتح تذكرة').setStyle(ButtonStyle.Secondary)
+          new ButtonBuilder()
+            .setCustomId('open_ticket_support')
+            .setLabel('الدعم الفني')
+            .setStyle(ButtonStyle.Primary)
+            .setEmoji('🛠️'),
+          new ButtonBuilder()
+            .setCustomId('open_ticket_court')
+            .setLabel('محكمة العدل')
+            .setStyle(ButtonStyle.Danger)
+            .setEmoji('⚖️')
         );
 
         await interaction.channel.send({ embeds: [embed], components: [row] });
-        return interaction.reply({ content: `-# **تم ارسال الرسالة <:2thumbup:1467287897429512396> **`, ephemeral: true });
+        await interaction.reply({ content: `-# **تم ارسال الرسالة <:2thumbup:1467287897429512396> **`, ephemeral: true });
+        return true;
       }
     }
 
     if (interaction.isButton()) {
-      if (interaction.customId === 'open_ticket') {
-        const settings = await getTicketSettings(interaction.guild.id);
-        
-        const existingChannel = interaction.guild.channels.cache.find(c => c.name === `ticket-${interaction.user.username}`);
-        if (existingChannel) {
-          return interaction.reply({ content: `-# ** لديك تذكرة مفتوحة ما تقدر تفتح اخرى <:emoji_46:1473343297002148005> **`, ephemeral: true });
-        }
+      if (interaction.customId === 'open_ticket_support') {
+        return handleOpenTicket(interaction, client, 'support');
+      }
 
-        const channel = await interaction.guild.channels.create({
-          name: `ticket-${interaction.user.username}`,
-          type: ChannelType.GuildText,
-          parent: settings.categoryId || null,
-          permissionOverwrites: [
-            { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-            { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-            { id: client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
-          ]
-        });
-
-        if (settings.supportRoleId) {
-          await channel.permissionOverwrites.create(settings.supportRoleId, {
-            ViewChannel: true,
-            SendMessages: true
-          });
-        }
-
-        const closeRow = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق').setStyle(ButtonStyle.Danger)
-        );
-
-        let ticketMessage = `${interaction.user}`;
-        if (settings.supportRoleId) {
-          ticketMessage = `<@&${settings.supportRoleId}> ` + ticketMessage;
-        }
-        ticketMessage += `\n-# ** اكتب سبب فتحك للتكت و فريق الدعم بيتواصل معك قريب <:emoji_32:1471962578895769611> **`;
-
-        await channel.send({ content: ticketMessage, components: [closeRow] });
-        return interaction.reply({ content: `-# ** تم فتح تذكرتك <:emoji_33:1471962823532740739> **`, ephemeral: true });
+      if (interaction.customId === 'open_ticket_court') {
+        return handleOpenTicket(interaction, client, 'court');
       }
 
       if (interaction.customId === 'close_ticket') {
@@ -111,5 +143,7 @@ module.exports = {
         return true;
       }
     }
+
+    return false;
   }
 };
