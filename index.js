@@ -74,7 +74,7 @@ const slashCommands = [
       }
     ]
   },
-  // أوامر tic
+  // أوامر tic (محدثة)
   {
     name: 'tic',
     description: 'نظام التذاكر',
@@ -90,7 +90,8 @@ const slashCommands = [
           { name: 'desc', description: 'الوصف', type: 3, required: false },
           { name: 'color', description: 'اللون', type: 3, required: false },
           { name: 'image', description: 'الصورة', type: 3, required: false },
-          { name: 'role', description: 'رتبة الدعم', type: 8, required: false }
+          { name: 'support_role', description: 'رتبة الدعم الفني', type: 8, required: false },
+          { name: 'court_role', description: 'رتبة محكمة العدل', type: 8, required: false }
         ]
       }
     ]
@@ -146,7 +147,7 @@ const slashCommands = [
       { name: 'timestamp', description: 'إضافة وقت', type: 5, required: false }
     ]
   },
-  // أوامر economy (محدث)
+  // أوامر economy
   {
     name: 'economy',
     description: 'إعدادات نظام الاقتصاد',
@@ -282,6 +283,8 @@ client.once('ready', async () => {
   
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   try {
+    // مسح الأوامر القديمة وتسجيل الجديدة
+    await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
     await rest.put(Routes.applicationCommands(client.user.id), { body: slashCommands });
     console.log('✅ تم تسجيل جميع الأوامر بنجاح!');
     console.log('📋 الأوامر المسجلة:', slashCommands.map(c => c.name).join(', '));
