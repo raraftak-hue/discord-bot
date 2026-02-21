@@ -9,7 +9,7 @@ const TicketSettingsSchema = new mongoose.Schema({
   embedColor: { type: String, default: '2b2d31' },
   embedImage: { type: String, default: null },
   supportRoleId: { type: String, default: null },
-  courtRoleId: { type: String, default: null }  // 👈 رتبة محكمة العدل
+  courtRoleId: { type: String, default: null }
 });
 
 const TicketSettings = mongoose.model('TicketSettings', TicketSettingsSchema);
@@ -113,13 +113,12 @@ module.exports = {
           new ButtonBuilder()
             .setCustomId('open_ticket_support')
             .setLabel('الدعم الفني')
-            .setStyle(ButtonStyle.Primary)
-            .setEmoji('🛠️'),
+            .setStyle(ButtonStyle.Secondary),  // 👈 رصاصي
+
           new ButtonBuilder()
             .setCustomId('open_ticket_court')
             .setLabel('محكمة العدل')
-            .setStyle(ButtonStyle.Danger)
-            .setEmoji('⚖️')
+            .setStyle(ButtonStyle.Secondary)   // 👈 رصاصي
         );
 
         await interaction.channel.send({ embeds: [embed], components: [row] });
