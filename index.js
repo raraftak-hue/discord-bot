@@ -87,7 +87,8 @@ const slashCommands = [
         type: 1,
         options: [
           { name: 'category', description: 'روم التذاكر', type: 7, required: false, channel_types: [4] },
-          { name: 'desc', description: 'الوصف', type: 3, required: false },
+          { name: 'title', description: 'العنوان (اختياري)', type: 3, required: false },
+          { name: 'desc', description: 'الوصف (اختياري)', type: 3, required: false },
           { name: 'color', description: 'اللون', type: 3, required: false },
           { name: 'image', description: 'الصورة', type: 3, required: false },
           { name: 'support_role', description: 'رتبة الدعم الفني', type: 8, required: false },
@@ -132,14 +133,14 @@ const slashCommands = [
       }
     ]
   },
-  // أوامر emb
+  // أوامر emb (معدلة - العنوان والوصف اختياريين)
   {
     name: 'emb',
     description: 'إنشاء إيمبيد',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
     options: [
-      { name: 'title', description: 'العنوان', type: 3, required: true },
-      { name: 'description', description: 'الوصف', type: 3, required: true },
+      { name: 'title', description: 'العنوان', type: 3, required: false },
+      { name: 'description', description: 'الوصف', type: 3, required: false },
       { name: 'color', description: 'اللون', type: 3, required: false },
       { name: 'image', description: 'الصورة', type: 3, required: false },
       { name: 'thumbnail', description: 'الصورة المصغرة', type: 3, required: false },
