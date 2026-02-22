@@ -1,5 +1,4 @@
 const { EmbedBuilder, PermissionsBitField } = require('discord.js');
-const mongoose = require('mongoose');
 
 // ==================== معالج الأوامر النصية ====================
 async function handleTextCommand(client, message, command, args, prefix) {
@@ -113,7 +112,6 @@ async function handleTextCommand(client, message, command, args, prefix) {
 
 // ==================== onMessage (للرسائل العادية) ====================
 async function onMessage(client, message) {
-  // هذا النظام ما يحتاج معالجة رسائل عادية
   return;
 }
 
@@ -131,6 +129,15 @@ async function onInteraction(client, interaction) {
     const footerText = options.getString('footer');
     const addTimestamp = options.getBoolean('timestamp') || false;
 
+    // ✅ التحقق من وجود أي خيار
+    if (!title && !description && !imageUrl && !thumbnailUrl && !footerText && !addTimestamp) {
+      await interaction.reply({
+        content: `-# ** لازم تكتب عنوان، وصف، صورة، أو أي خيار عشان الإيمبيد يشتغل <:emoji_334:1388211595053760663> **`,
+        ephemeral: true
+      });
+      return true;
+    }
+
     let color = 0x2b2d31;
     if (colorInput) {
       const cleanColor = colorInput.replace('#', '');
@@ -139,8 +146,10 @@ async function onInteraction(client, interaction) {
       }
     }
 
-    let finalDescription = `**${title}**\n\n${description}`;
-    const embed = new EmbedBuilder().setDescription(finalDescription).setColor(color);
+    const embed = new EmbedBuilder().setColor(color);
+
+    if (title) embed.setTitle(title);
+    if (description) embed.setDescription(description);
     if (imageUrl) embed.setImage(imageUrl);
     if (thumbnailUrl) embed.setThumbnail(thumbnailUrl);
     if (footerText) embed.setFooter({ text: footerText });
