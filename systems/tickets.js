@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 const TicketSettingsSchema = new mongoose.Schema({
   guildId: String,
   categoryId: { type: String, default: '' },
-  embedDescription: { type: String, default: 'اضغط على الزر لفتح تذكرة جديدة.' },
+  embedDescription: { type: String, default: '' }, // 👈 فاضي
   embedColor: { type: String, default: '2b2d31' },
   embedImage: { type: String, default: null },
   supportRoleId: { type: String, default: null },
@@ -27,7 +27,6 @@ async function getTicketSettings(guildId) {
 async function handleOpenTicket(interaction, client, type) {
   const settings = await getTicketSettings(interaction.guild.id);
 
-  // تحديد اسم الروم حسب النوع
   const roomName = type === 'court' 
     ? `محكمة-${interaction.user.username}` 
     : `دعم-${interaction.user.username}`;
@@ -99,7 +98,7 @@ module.exports = {
 
         // الوصف
         if (desc !== null) {
-          if (desc === 'حذف') settings.embedDescription = 'اضغط على الزر لفتح تذكرة جديدة.';
+          if (desc === 'حذف') settings.embedDescription = '';
           else settings.embedDescription = desc;
         }
 
@@ -125,7 +124,7 @@ module.exports = {
 
       if (sub === 'panel') {
         const embed = new EmbedBuilder()
-          .setDescription(settings.embedDescription)
+          .setDescription(settings.embedDescription) // 👈 فاضي لو ما حطيت شي
           .setColor(parseInt(settings.embedColor, 16) || 0x2b2d31);
 
         if (settings.embedImage) embed.setImage(settings.embedImage);
