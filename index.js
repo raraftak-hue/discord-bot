@@ -248,8 +248,14 @@ const slashCommands = [
         ]
       },
       {
-        name: 'remove',
+        name: 'rem',
         description: 'إيقاف الحذف التلقائي في روم',
+        type: 1,
+        options: [{ name: 'channel', description: 'الروم', type: 7, required: true }]
+      },
+      {
+        name: 'remove',
+        description: 'إيقاف الحذف التلقائي في روم (بديل)',
         type: 1,
         options: [{ name: 'channel', description: 'الروم', type: 7, required: true }]
       },
@@ -276,6 +282,32 @@ const slashCommands = [
         description: 'الهمسة',
         type: 3,
         required: true
+      }
+    ]
+  },
+  // ✅ إضافة أمر points
+  {
+    name: 'points',
+    description: 'إعدادات نظام النقاط',
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+    options: [
+      {
+        name: 'exclude',
+        description: 'إضافة/إزالة روم مستثنى',
+        type: 1,
+        options: [
+          { 
+            name: 'channel', 
+            description: 'الروم', 
+            type: 7, 
+            required: true 
+          }
+        ]
+      },
+      {
+        name: 'list',
+        description: 'عرض الرومات المستثناة',
+        type: 1
       }
     ]
   }
@@ -306,22 +338,26 @@ client.once('ready', async () => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
   
+  // تمرير الرسالة لجميع الأنظمة (onMessage)
   for (const system of client.systems.values()) {
     if (system.onMessage) {
       try { await system.onMessage(client, message); } catch (e) { console.error(e); }
     }
   }
   
-  const Settings = mongoose.model('Settings');
-  const settings = await Settings.findOne({ guildId: message.guild.id });
+  // جلب الإعدادات للبادئة
+  const Settings = mongoose.models.Settings;
+  const settings = await Settings?.findOne({ guildId: message.guild.id });
   const prefix = settings?.prefix || '';
   
+  // التحقق من وجود بادئة وبدء الرسالة بها
   if (prefix && !message.content.startsWith(prefix)) return;
   
   const args = message.content.trim().split(/\s+/);
   const firstWord = args[0];
   const command = prefix ? firstWord.slice(prefix.length).toLowerCase() : firstWord.toLowerCase();
   
+  // أمر المساعدة
   if (command === 'اوامر') {
     let membersMsg = '';
     
@@ -337,12 +373,13 @@ client.on('messageCreate', async (message) => {
         `** members<:emoji_32:1471962578895769611> **\n-# ** text - ${membersMsg}**\n\n` +
         `** Mods <:emoji_38:1470920843398746215>**\n` +
         `-# ** wel, tic, give, pre, emb, economy, whisper**\n` +
-        `-# ** text -  تايم، طرد، حذف، ارقام، ايقاف**`
+        `-# ** text -  تايم، طرد، حذف، ارقام، ايقاف، نقاطي، نقاط، توب، توب س، توب ي**`
       );
     await message.channel.send({ embeds: [embed] });
     return;
   }
   
+  // تمرير الأمر النصي لجميع الأنظمة (handleTextCommand)
   for (const system of client.systems.values()) {
     if (system.handleTextCommand) {
       try {
