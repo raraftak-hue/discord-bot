@@ -67,7 +67,7 @@ async function handleOpenTicket(interaction, client, type) {
   });
 
   await interaction.reply({
-    content: `-# ** تم فتح تذكرتك <:emoji_33:1471962823532740739> **`,
+    content: `-# **تم تلقي طلبك <:new_emoji:1388436089584226387> **`,
     ephemeral: true
   });
 
@@ -137,7 +137,7 @@ module.exports = {
       }
 
       if (interaction.customId === 'close_ticket') {
-        await interaction.reply({ content: `-# **يلا يلا عد معي ل ثلاثة <:1KazumaGrin:1468386233750392947> **` });
+        await interaction.reply({ content: `-# **احسب الين ثلاثة **` });
         setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
         return true;
       }
