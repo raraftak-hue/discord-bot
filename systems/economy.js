@@ -204,7 +204,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
     if (command === 'اغنياء') {
       const topUsers = await User.find().sort({ balance: -1 }).limit(5);
       const topMsg = topUsers.map((u, idx) => `-# **\u200F${idx + 1}. \u202B<@${u.userId}>\u202C - ${u.balance} دينار**`).join('\n');
-      const embed = new EmbedBuilder().setDescription(`**الطبقة الارستقراطية <:y_coroa:1404576666105417871>**\n\n${topMsg}`).setColor(0x2b2d31);
+      const embed = new EmbedBuilder().setDescription(`**عِلية القوم <:y_coroa:1404576666105417871> **\n\n${topMsg}`).setColor(0x2b2d31);
       await message.channel.send({ embeds: [embed] });
       return true;
     }
