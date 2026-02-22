@@ -39,32 +39,50 @@ async function handleOpenTicket(interaction, client, type) {
     });
   }
 
+  // تحضير الصلاحيات
+  const permissionOverwrites = [
+    { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] }, // @everyone ممنوع
+    { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }, // صاحب التذكرة
+    { id: client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] } // البوت
+  ];
+
+  // ✅ إضافة الرتبة المناسبة للصلاحيات
+  let roleMention = '';
+  let content = '';
+
+  if (type === 'court') {
+    if (settings.courtRoleId) {
+      permissionOverwrites.push({
+        id: settings.courtRoleId,
+        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+      });
+      roleMention = `<@&${settings.courtRoleId}>`;
+    }
+    content = `-# **اهلا بكم في محكمة العدل الرجاء كتابة ما المشكلة و من هم الشهود عليها ان وجدوا <:emoji_35:1474845075950272756> **`;
+  } else {
+    if (settings.supportRoleId) {
+      permissionOverwrites.push({
+        id: settings.supportRoleId,
+        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+      });
+      roleMention = `<@&${settings.supportRoleId}>`;
+    }
+    content = `-# ** اكتب سبب فتحك للتكت و فريق الدعم بيتواصل معك قريب <:emoji_32:1471962578895769611> **`;
+  }
+
+  // إنشاء الروم مع الصلاحيات الكاملة
   const channel = await interaction.guild.channels.create({
     name: roomName,
     type: ChannelType.GuildText,
     parent: settings.categoryId || null,
-    permissionOverwrites: [
-      { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-      { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-      { id: client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
-    ]
+    permissionOverwrites: permissionOverwrites
   });
 
   const closeRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق').setStyle(ButtonStyle.Danger)
   );
 
-  let roleMention = '';
-  let content = '';
-
-  if (type === 'court') {
-    roleMention = settings.courtRoleId ? `<@&${settings.courtRoleId}>` : '';
-    content = `-# **اهلا بكم في محكمة العدل الرجاء كتابة ما المشكلة و من هم الشهود عليها ان وجدوا <:emoji_35:1474845075950272756> **`;
-  } else {
-    roleMention = settings.supportRoleId ? `<@&${settings.supportRoleId}>` : '';
-    content = `-# ** اكتب سبب فتحك للتكت و فريق الدعم بيتواصل معك قريب <:emoji_32:1471962578895769611> **`;
-  }
-
+  // إرسال رسالة الترحيب مع منشن الرتبة (اختياري الآن)
   await channel.send({
     content: `${interaction.user} ${roleMention}\n${content}`,
     components: [closeRow]
@@ -121,7 +139,7 @@ module.exports = {
 
       if (sub === 'panel') {
         const embed = new EmbedBuilder()
-          .setDescription(settings.embedDescription || null) // 👈 التعديل هنا
+          .setDescription(settings.embedDescription || null)
           .setColor(parseInt(settings.embedColor, 16) || 0x2b2d31);
 
         if (settings.embedImage) embed.setImage(settings.embedImage);
