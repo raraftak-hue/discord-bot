@@ -27,7 +27,12 @@ async function getTicketSettings(guildId) {
 async function handleOpenTicket(interaction, client, type) {
   const settings = await getTicketSettings(interaction.guild.id);
 
-  const existingChannel = interaction.guild.channels.cache.find(c => c.name === `ticket-${interaction.user.username}`);
+  // تحديد اسم الروم حسب النوع
+  const roomName = type === 'court' 
+    ? `محكمة-${interaction.user.username}` 
+    : `دعم-${interaction.user.username}`;
+
+  const existingChannel = interaction.guild.channels.cache.find(c => c.name === roomName);
   if (existingChannel) {
     return interaction.reply({
       content: `-# ** لديك تذكرة مفتوحة ما تقدر تفتح اخرى <:emoji_46:1473343297002148005> **`,
@@ -36,7 +41,7 @@ async function handleOpenTicket(interaction, client, type) {
   }
 
   const channel = await interaction.guild.channels.create({
-    name: `ticket-${interaction.user.username}`,
+    name: roomName,
     type: ChannelType.GuildText,
     parent: settings.categoryId || null,
     permissionOverwrites: [
@@ -91,9 +96,25 @@ module.exports = {
         const courtRole = interaction.options.getRole('court_role');
 
         if (category) settings.categoryId = category.id;
-        if (desc) settings.embedDescription = desc;
-        if (color) settings.embedColor = color.replace('#', '');
-        if (image) settings.embedImage = image;
+
+        // الوصف
+        if (desc !== null) {
+          if (desc === 'حذف') settings.embedDescription = 'اضغط على الزر لفتح تذكرة جديدة.';
+          else settings.embedDescription = desc;
+        }
+
+        // اللون
+        if (color !== null) {
+          if (color === 'حذف') settings.embedColor = '2b2d31';
+          else settings.embedColor = color.replace('#', '');
+        }
+
+        // الصورة
+        if (image !== null) {
+          if (image === 'حذف') settings.embedImage = null;
+          else settings.embedImage = image;
+        }
+
         if (supportRole) settings.supportRoleId = supportRole.id;
         if (courtRole) settings.courtRoleId = courtRole.id;
 
@@ -113,12 +134,11 @@ module.exports = {
           new ButtonBuilder()
             .setCustomId('open_ticket_support')
             .setLabel('الدعم الفني')
-            .setStyle(ButtonStyle.Secondary),  // 👈 رصاصي
-
+            .setStyle(ButtonStyle.Secondary),
           new ButtonBuilder()
             .setCustomId('open_ticket_court')
             .setLabel('محكمة العدل')
-            .setStyle(ButtonStyle.Secondary)   // 👈 رصاصي
+            .setStyle(ButtonStyle.Secondary)
         );
 
         await interaction.channel.send({ embeds: [embed], components: [row] });
