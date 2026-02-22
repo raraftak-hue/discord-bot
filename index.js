@@ -74,21 +74,24 @@ const slashCommands = [
       }
     ]
   },
-  // أوامر tic (محدثة)
+  // أوامر tic
   {
     name: 'tic',
     description: 'نظام التذاكر',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
     options: [
-      { name: 'panel', description: 'عرض لوحة التذاكر', type: 1 },
+      { 
+        name: 'panel', 
+        description: 'عرض لوحة التذاكر', 
+        type: 1 
+      },
       {
         name: 'set',
         description: 'إعدادات التذاكر',
         type: 1,
         options: [
           { name: 'category', description: 'روم التذاكر', type: 7, required: false, channel_types: [4] },
-          { name: 'title', description: 'العنوان (اختياري)', type: 3, required: false },
-          { name: 'desc', description: 'الوصف (اختياري)', type: 3, required: false },
+          { name: 'desc', description: 'الوصف', type: 3, required: false },
           { name: 'color', description: 'اللون', type: 3, required: false },
           { name: 'image', description: 'الصورة', type: 3, required: false },
           { name: 'support_role', description: 'رتبة الدعم الفني', type: 8, required: false },
@@ -133,7 +136,7 @@ const slashCommands = [
       }
     ]
   },
-  // أوامر emb (معدلة - العنوان والوصف اختياريين)
+  // أوامر emb
   {
     name: 'emb',
     description: 'إنشاء إيمبيد',
@@ -284,8 +287,10 @@ client.once('ready', async () => {
   
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   try {
-    // مسح الأوامر القديمة وتسجيل الجديدة
+    // مسح الأوامر القديمة أولاً
     await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
+    
+    // تسجيل الأوامر الجديدة
     await rest.put(Routes.applicationCommands(client.user.id), { body: slashCommands });
     console.log('✅ تم تسجيل جميع الأوامر بنجاح!');
     console.log('📋 الأوامر المسجلة:', slashCommands.map(c => c.name).join(', '));
