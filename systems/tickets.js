@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 const TicketSettingsSchema = new mongoose.Schema({
   guildId: String,
   categoryId: { type: String, default: '' },
-  embedDescription: { type: String, default: '' }, // 👈 فاضي
+  embedDescription: { type: String, default: '' },
   embedColor: { type: String, default: '2b2d31' },
   embedImage: { type: String, default: null },
   supportRoleId: { type: String, default: null },
@@ -96,19 +96,16 @@ module.exports = {
 
         if (category) settings.categoryId = category.id;
 
-        // الوصف
         if (desc !== null) {
           if (desc === 'حذف') settings.embedDescription = '';
           else settings.embedDescription = desc;
         }
 
-        // اللون
         if (color !== null) {
           if (color === 'حذف') settings.embedColor = '2b2d31';
           else settings.embedColor = color.replace('#', '');
         }
 
-        // الصورة
         if (image !== null) {
           if (image === 'حذف') settings.embedImage = null;
           else settings.embedImage = image;
@@ -124,7 +121,7 @@ module.exports = {
 
       if (sub === 'panel') {
         const embed = new EmbedBuilder()
-          .setDescription(settings.embedDescription) // 👈 فاضي لو ما حطيت شي
+          .setDescription(settings.embedDescription || null) // 👈 التعديل هنا
           .setColor(parseInt(settings.embedColor, 16) || 0x2b2d31);
 
         if (settings.embedImage) embed.setImage(settings.embedImage);
