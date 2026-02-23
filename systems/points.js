@@ -5,40 +5,33 @@ const path = require('path');
 const POINTS_FILE = path.join(__dirname, 'points.json');
 
 if (!fs.existsSync(POINTS_FILE)) {
-  fs.writeFileSync(POINTS_FILE, JSON.stringify({}));
+  fs.writeFileSync(POINTS_FILE, JSON.stringify({ users: {}, treasury: {} }));
 }
 
-let pointsData = {};
+let pointsData = { users: {}, treasury: {} };
 try {
-  pointsData = JSON.parse(fs.readFileSync(POINTS_FILE, 'utf8'));
+  const raw = fs.readFileSync(POINTS_FILE, 'utf8');
+  pointsData = JSON.parse(raw);
 } catch {
-  pointsData = {};
-  fs.writeFileSync(POINTS_FILE, JSON.stringify({}));
+  pointsData = { users: {}, treasury: {} };
+  fs.writeFileSync(POINTS_FILE, JSON.stringify(pointsData, null, 2));
 }
-
-// هيكل الخزينة (يُحفظ في نفس الملف)
-let treasuryData = {};
 
 function saveToFile() {
-  const fullData = {
-    users: pointsData,
-    treasury: treasuryData
-  };
-  fs.writeFileSync(POINTS_FILE, JSON.stringify(fullData, null, 2));
-  console.log('💾 تم حفظ البيانات في الملف');
+  fs.writeFileSync(POINTS_FILE, JSON.stringify(pointsData, null, 2));
 }
 
 function getUserData(userId, guildId) {
   const key = `${guildId}-${userId}`;
-  if (!pointsData[key]) {
-    pointsData[key] = {
+  if (!pointsData.users[key]) {
+    pointsData.users[key] = {
       daily: 0,
       weekly: 0,
       messageCount: 0,
       lastMsg: 0,
     };
   }
-  return pointsData[key];
+  return pointsData.users[key];
 }
 
 function getRequiredMessages(weeklyPoints) {
@@ -48,28 +41,13 @@ function getRequiredMessages(weeklyPoints) {
   return 40;
 }
 
-function handleMessageCount(userData) {
-  const required = getRequiredMessages(userData.weekly);
-  userData.messageCount++;
-  if (userData.messageCount >= required) {
-    userData.daily++;
-    userData.weekly++;
-    userData.messageCount = 0;
-    return true;
-  }
-  return false;
-}
-
 function getTopUsers(guildId, type = 'weekly') {
   const users = [];
-  for (const [key, data] of Object.entries(pointsData)) {
+  for (const [key, data] of Object.entries(pointsData.users)) {
     if (key.startsWith(guildId)) {
       const points = data[type] || 0;
       if (points > 0) {
-        users.push({
-          userId: key.split('-')[1],
-          points: points,
-        });
+        users.push({ userId: key.split('-')[1], points });
       }
     }
   }
@@ -81,15 +59,23 @@ async function onMessage(client, message) {
 
   const userData = getUserData(message.author.id, message.guild.id);
   const now = Date.now();
+
   if (now - userData.lastMsg < 7000) return;
 
   const oldDaily = userData.daily;
   userData.lastMsg = now;
-  const gotPoint = handleMessageCount(userData);
 
-  if (gotPoint) {
-    const treasury = treasuryData[message.guild.id];
-    if (treasury && treasury.active && treasury.balance >= treasury.exchangeRate) {
+  const required = getRequiredMessages(userData.weekly);
+  userData.messageCount++;
+
+  if (userData.messageCount >= required) {
+    userData.daily++;
+    userData.weekly++;
+    userData.messageCount = 0;
+    saveToFile();
+
+    const treasury = pointsData.treasury[message.guild.id];
+    if (treasury?.active && treasury.balance >= treasury.exchangeRate) {
       const economy = client.systems.get('economy.js');
       if (economy) {
         try {
@@ -121,8 +107,6 @@ async function onMessage(client, message) {
       }
     }
   }
-
-  saveToFile();
 }
 
 async function handleTextCommand(client, message, command, args, prefix) {
@@ -135,84 +119,6 @@ async function handleTextCommand(client, message, command, args, prefix) {
       ? `تملك حالياً ${userData.daily} نقطة تفاعل<:emoji_35:1474845075950272756>`
       : `يملك المستخدم ${userData.daily} نقطة تفاعل<:emoji_35:1474845075950272756>`;
     await message.channel.send(`-# **${text} **`);
-    return true;
-  }
-
-  if (command === 'تمويل' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-    const amount = parseFloat(args[1]);
-    if (isNaN(amount) || amount <= 0) {
-      await message.channel.send(`-# **أدخل مبلغ صحيح**`);
-      return true;
-    }
-
-    const economy = client.systems.get('economy.js');
-    if (!economy) {
-      await message.channel.send(`-# **نظام الاقتصاد غير مفعل**`);
-      return true;
-    }
-
-    try {
-      const userData = await economy.getUserData(message.author.id, message.guild.id);
-      if (userData.balance < amount) {
-        await message.channel.send(`-# **رصيدك ما يكفي**`);
-        return true;
-      }
-
-      userData.balance -= amount;
-      await userData.save();
-
-      treasuryData[message.guild.id] = treasuryData[message.guild.id] || {
-        balance: 0,
-        exchangeRate: 1,
-        fundedBy: message.author.id,
-        active: true
-      };
-      treasuryData[message.guild.id].balance += amount;
-      treasuryData[message.guild.id].active = true;
-      saveToFile();
-
-      await message.channel.send(`-# **تم تمويل الخزينة بــ ${amount} دينار. شكراً لك!**`);
-    } catch (e) {
-      console.error(e);
-      await message.channel.send(`-# **حدث خطأ**`);
-    }
-    return true;
-  }
-
-  if (command === 'points' && args[0] === 'list') {
-    const settings = await getPointsSettings(message.guild.id);
-    const excluded = settings.excludedChannels.map(id => `<#${id}>`).join('، ') || 'لا يوجد';
-    const treasury = treasuryData[message.guild.id] || { balance: 0, exchangeRate: 1, active: false };
-
-    await message.channel.send(
-      `-# **الرومات المستثنى هي ${excluded} يوجد فالخزينة ${treasury.balance} دينار و على كل ${treasury.exchangeRate} دينار لكل نقطة**`
-    );
-    return true;
-  }
-
-  if (command === 'ريستارت' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-    const type = args[1]?.toLowerCase();
-    if (!type || (type !== 'يومي' && type !== 'اسبوعي' && type !== 'الكل')) {
-      await message.channel.send(`-# **استخدم: ريستارت يومي / اسبوعي / الكل**`);
-      return true;
-    }
-
-    let count = 0;
-    for (const key in pointsData) {
-      if (key.startsWith(message.guild.id)) {
-        if (type === 'يومي' || type === 'الكل') {
-          pointsData[key].daily = 0;
-          count++;
-        }
-        if (type === 'اسبوعي' || type === 'الكل') {
-          pointsData[key].weekly = 0;
-          count++;
-        }
-      }
-    }
-
-    saveToFile();
-    await message.channel.send(`-# **تم إعادة تعيين ${type} لـ ${count} مستخدم <:2thumbup:1467287897429512396> **`);
     return true;
   }
 
@@ -260,23 +166,132 @@ async function handleTextCommand(client, message, command, args, prefix) {
 }
 
 async function getPointsSettings(guildId) {
-  // مؤقت: نرجع إعدادات افتراضية لحين إضافة نظام الإعدادات
   return { excludedChannels: [] };
+}
+
+async function onInteraction(client, interaction) {
+  if (!interaction.isChatInputCommand() || interaction.commandName !== 'points') return false;
+
+  const sub = interaction.options.getSubcommand();
+  const guildId = interaction.guild.id;
+
+  // تجهيز التخزين للخزينة إذا ما موجود
+  if (!pointsData.treasury[guildId]) {
+    pointsData.treasury[guildId] = {
+      balance: 0,
+      exchangeRate: 1,
+      fundedBy: null,
+      active: false
+    };
+  }
+
+  // ===== /points ch =====
+  if (sub === 'ch') {
+    const channel = interaction.options.getChannel('room');
+    const settings = await getPointsSettings(guildId);
+
+    if (settings.excludedChannels.includes(channel.id)) {
+      settings.excludedChannels = settings.excludedChannels.filter(id => id !== channel.id);
+      await interaction.reply({ content: `-# **تم إزالة ${channel} من الرومات المستثناة**`, ephemeral: true });
+    } else {
+      settings.excludedChannels.push(channel.id);
+      await interaction.reply({ content: `-# **تم إضافة ${channel} إلى الرومات المستثناة**`, ephemeral: true });
+    }
+    return true;
+  }
+
+  // ===== /points info =====
+  if (sub === 'info') {
+    const settings = await getPointsSettings(guildId);
+    const excluded = settings.excludedChannels.map(id => `<#${id}>`).join('، ') || 'لا يوجد';
+    const treasury = pointsData.treasury[guildId];
+
+    await interaction.reply({
+      content: `-# **الرومات المستثنى هي ${excluded} يوجد فالخزينة ${treasury.balance} دينار و على كل ${treasury.exchangeRate} دينار لكل نقطة**`,
+      ephemeral: true
+    });
+    return true;
+  }
+
+  // ===== /points fund =====
+  if (sub === 'fund') {
+    const amount = interaction.options.getInteger('amount');
+    const newRate = interaction.options.getInteger('rate');
+    const economy = client.systems.get('economy.js');
+
+    if (!economy) {
+      return interaction.reply({ content: `-# **نظام الاقتصاد غير مفعل**`, ephemeral: true });
+    }
+
+    try {
+      const adminData = await economy.getUserData(interaction.user.id, guildId);
+      if (adminData.balance < amount) {
+        return interaction.reply({ content: `-# **رصيدك ما يكفي**`, ephemeral: true });
+      }
+
+      adminData.balance -= amount;
+      adminData.history.push({
+        type: 'FUNDING_DEDUCTION',
+        amount: amount,
+        date: new Date()
+      });
+      await adminData.save();
+
+      const treasury = pointsData.treasury[guildId];
+      treasury.balance += amount;
+      treasury.fundedBy = interaction.user.id;
+      treasury.active = true;
+      if (newRate) treasury.exchangeRate = newRate;
+      saveToFile();
+
+      await interaction.reply({
+        content: `-# **تم تمويل الخزينة بــ ${amount} دينار. سعر الصرف الحالي: ${treasury.exchangeRate} دينار لكل نقطة**`,
+        ephemeral: true
+      });
+    } catch (e) {
+      console.error(e);
+      await interaction.reply({ content: `-# **حدث خطأ**`, ephemeral: true });
+    }
+    return true;
+  }
+
+  // ===== /points reset =====
+  if (sub === 'reset') {
+    const type = interaction.options.getString('type');
+    let count = 0;
+
+    for (const key in pointsData.users) {
+      if (key.startsWith(guildId)) {
+        if (type === 'daily' || type === 'all') {
+          pointsData.users[key].daily = 0;
+          count++;
+        }
+        if (type === 'weekly' || type === 'all') {
+          pointsData.users[key].weekly = 0;
+          count++;
+        }
+      }
+    }
+
+    saveToFile();
+    await interaction.reply({
+      content: `-# **تم إعادة تعيين ${type === 'daily' ? 'اليومي' : type === 'weekly' ? 'الأسبوعي' : 'الكل'} لـ ${count} مستخدم**`,
+      ephemeral: true
+    });
+    return true;
+  }
+
+  return false;
 }
 
 async function onReady(client) {
   console.log('⭐ نظام النقاط مع الخزينة جاهز');
-  console.log(`- إجمالي المستخدمين المسجلين: ${Object.keys(pointsData).length}`);
-  try {
-    const stats = fs.statSync(POINTS_FILE);
-    console.log(`- حجم ملف البيانات: ${Math.round(stats.size / 1024)} KB`);
-  } catch (e) {
-    console.log('- حجم ملف البيانات: غير معروف');
-  }
+  console.log(`- إجمالي المستخدمين المسجلين: ${Object.keys(pointsData.users).length}`);
 }
 
 module.exports = {
   onMessage,
   handleTextCommand,
-  onReady,
+  onInteraction,
+  onReady
 };
