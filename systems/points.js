@@ -31,30 +31,49 @@ function getUserData(userId, guildId) {
     pointsData[key] = {
       daily: 0,
       weekly: 0,
+      messageCount: 0,
       lastMsg: 0,
     };
   }
   return pointsData[key];
 }
 
-function shouldGivePoint(weeklyPoints) {
-  if (weeklyPoints < 10) return Math.random() < 0.20;
-  if (weeklyPoints < 30) return Math.random() < 0.10;
-  if (weeklyPoints < 100) return Math.random() < 0.05;
-  return Math.random() < 0.025;
+// عدد الرسائل المطلوبة حسب النقاط الأسبوعية
+function getRequiredMessages(weeklyPoints) {
+  if (weeklyPoints === 0) return 10;
+  if (weeklyPoints === 1) return 20;
+  if (weeklyPoints === 2) return 30;
+  return 40;
 }
 
+function handleMessageCount(userData) {
+  const required = getRequiredMessages(userData.weekly);
+  userData.messageCount++;
+
+  if (userData.messageCount >= required) {
+    userData.daily++;
+    userData.weekly++;
+    userData.messageCount = 0;
+    return true;
+  }
+  return false;
+}
+
+// تجيب أول 3 أعضاء فقط (اللي نقاطهم > 0)
 function getTopUsers(guildId, type = 'weekly') {
   const users = [];
   for (const [key, data] of Object.entries(pointsData)) {
     if (key.startsWith(guildId)) {
-      users.push({
-        userId: key.split('-')[1],
-        points: data[type] || 0,
-      });
+      const points = data[type] || 0;
+      if (points > 0) {
+        users.push({
+          userId: key.split('-')[1],
+          points: points,
+        });
+      }
     }
   }
-  return users.sort((a, b) => b.points - a.points).slice(0, 5);
+  return users.sort((a, b) => b.points - a.points).slice(0, 3);
 }
 
 async function onMessage(client, message) {
@@ -64,19 +83,16 @@ async function onMessage(client, message) {
   const now = Date.now();
 
   if (now - userData.lastMsg < 7000) return;
-  if (!shouldGivePoint(userData.weekly)) return;
 
-  // ✅ النقطة تزيد في اليومي والأسبوعي معاً
-  userData.daily += 1;
-  userData.weekly += 1;
   userData.lastMsg = now;
-
+  handleMessageCount(userData);
   saveToFile();
 }
 
 async function handleTextCommand(client, message, command, args, prefix) {
   if (!message.guild) return false;
 
+  // أمر عرض النقاط
   if (command === 'نقاط') {
     const target = message.mentions.users.first() || message.author;
     const userData = getUserData(target.id, message.guild.id);
@@ -89,6 +105,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
     return true;
   }
 
+  // أمر ريستارت (للمشرفين فقط)
   if (command === 'ريستارت' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
     const type = args[1]?.toLowerCase();
     if (!type || (type !== 'يومي' && type !== 'اسبوعي' && type !== 'الكل')) {
@@ -115,7 +132,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
     return true;
   }
 
-  // ✅ توب أسبوعي مع رسالة فاضي مضبوطة
+  // توب أسبوعي (أول 3)
   if (command === 'اسبوعي') {
     const topUsers = getTopUsers(message.guild.id, 'weekly');
     const userPoints = getUserData(message.author.id, message.guild.id).weekly;
@@ -124,7 +141,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
       .setColor(0x2b2d31)
       .setDescription(`**خلفاء السبع ليالِ <:emoji_38:1474950090539139182>**`);
 
-    if (topUsers.length === 0 || topUsers.every(u => u.points === 0)) {
+    if (topUsers.length === 0) {
       embed.setDescription(`${embed.data.description}\n\n-# **انه اسبوع جديد و قائمة جديدة ولا يوجد منافسين حتى الآن <:emoji_32:1471962578895769611> **`);
     } else {
       let desc = '';
@@ -134,12 +151,12 @@ async function handleTextCommand(client, message, command, args, prefix) {
       embed.setDescription(`${embed.data.description}\n\n${desc}`);
     }
 
-    embed.setFooter({ text: `نقاطك: ${userPoints}` });
+    embed.setFooter({ text: `انت تملك ${userPoints} نقطة` });
     await message.channel.send({ embeds: [embed] });
     return true;
   }
 
-  // ✅ توب يومي مع رسالة فاضي مضبوطة
+  // توب يومي (أول 3)
   if (command === 'يومي') {
     const topUsers = getTopUsers(message.guild.id, 'daily');
     const userPoints = getUserData(message.author.id, message.guild.id).daily;
@@ -148,7 +165,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
       .setColor(0x2b2d31)
       .setDescription(`**خلفاء الليلة <:emoji_36:1474949953876000950>**`);
 
-    if (topUsers.length === 0 || topUsers.every(u => u.points === 0)) {
+    if (topUsers.length === 0) {
       embed.setDescription(`${embed.data.description}\n\n-# **انه يوم جديد و قائمة جديدة ولا يوجد منافسين حتى الآن <:emoji_32:1471962578895769611> **`);
     } else {
       let desc = '';
@@ -158,7 +175,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
       embed.setDescription(`${embed.data.description}\n\n${desc}`);
     }
 
-    embed.setFooter({ text: `نقاطك: ${userPoints}` });
+    embed.setFooter({ text: `انت تملك ${userPoints} نقطة` });
     await message.channel.send({ embeds: [embed] });
     return true;
   }
@@ -167,7 +184,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
 }
 
 async function onReady(client) {
-  console.log('⭐ نظام النقاط الخفيف جاهز');
+  console.log('⭐ نظام النقاط التصاعدي جاهز');
   console.log(`- إجمالي المستخدمين المسجلين: ${Object.keys(pointsData).length}`);
   try {
     const stats = fs.statSync(POINTS_FILE);
