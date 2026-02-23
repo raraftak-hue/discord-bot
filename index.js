@@ -348,7 +348,9 @@ const slashCommands = [
 // ==================== الأحداث ====================
 client.once('ready', async () => {
   console.log(`✅ تم تسجيل الدخول بـ ${client.user.tag}`);
-  
+  console.log('🔄 Bot ID:', client.user.id);
+console.log('🔄 عدد الأوامر:', slashCommands.length);
+console.log('🔄 جاري تسجيل الأوامر...');
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   try {
   await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
