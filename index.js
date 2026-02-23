@@ -355,12 +355,16 @@ console.log('🔄 جاري تسجيل الأوامر...');
   try {
   await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
   await rest.put(Routes.applicationCommands(client.user.id), { body: slashCommands });
+  console.log('✅ تم تسجيل الأوامر بنجاح! (تم التأكيد)');
   console.log('✅ تم تسجيل جميع الأوامر بنجاح!');
   console.log('📋 الأوامر المسجلة:', slashCommands.map(c => c.name).join(', '));
 } catch (e) { 
-    console.error('❌ فشل تسجيل الأوامر:');
-    console.error(e); 
-  }
+  console.error('❌ فشل تسجيل الأوامر:');
+  console.error('اسم الخطأ:', e.name);
+  console.error('رسالة الخطأ:', e.message);
+  console.error('كود الخطأ:', e.code);
+  console.error('الاستجابة الكاملة:', e.rawError);
+}
 
   for (const system of client.systems.values()) {
     if (system.onReady) {
