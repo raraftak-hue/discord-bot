@@ -20,8 +20,8 @@ try {
 }
 
 // ==================== 📊 Cache ====================
-const pointsCache = new Map(); // للقراءة السريعة
-let pendingWrites = {}; // للتحديثات الدورية
+const pointsCache = new Map();
+let pendingWrites = {};
 
 // ==================== 🔧 الدوال المساعدة ====================
 
@@ -30,7 +30,7 @@ function saveToFile() {
   try {
     for (const [key, value] of Object.entries(pendingWrites)) {
       if (!pointsData[key]) {
-        pointsData[key] = { daily: 0, weekly: 0, lastMsg: 0 };
+        pointsData[key] = { daily: 0, weekly: 0, lastMsg: 0, lastDailyReset: new Date().toDateString(), lastWeeklyReset: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - new Date().getDay()).toDateString() };
       }
       pointsData[key].daily += value.daily || 0;
       pointsData[key].weekly += value.weekly || 0;
@@ -81,20 +81,32 @@ function resetPeriodicPoints(userData) {
 // الحصول على بيانات المستخدم
 function getUserData(userId, guildId) {
   const key = `${guildId}-${userId}`;
+  
+  // من الكاش أولاً
   if (pointsCache.has(key)) {
     const cached = pointsCache.get(key);
     resetPeriodicPoints(cached);
     return cached;
   }
-  let userData = pointsData[key] || {
-    daily: 0,
-    weekly: 0,
-    lastMsg: 0,
-    lastDailyReset: new Date().toDateString(),
-    lastWeeklyReset: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - new Date().getDay()).toDateString()
-  };
+  
+  // من الملف
+  let userData = pointsData[key];
+  if (!userData) {
+    userData = {
+      daily: 0,
+      weekly: 0,
+      lastMsg: 0,
+      lastDailyReset: new Date().toDateString(),
+      lastWeeklyReset: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - new Date().getDay()).toDateString()
+    };
+    // نحفظ المستخدم الجديد في الملف فوراً عشان لا يضيع عند إعادة التشغيل
+    pointsData[key] = userData;
+    pendingWrites[key] = { daily: 0, weekly: 0, lastMsg: 0 };
+  }
+  
   resetPeriodicPoints(userData);
   pointsCache.set(key, { ...userData, lastAccess: Date.now() });
+  
   return userData;
 }
 
@@ -138,8 +150,8 @@ async function onMessage(client, message) {
   if (!shouldGivePoint(userData.weekly)) return;
 
   // إعطاء النقطة
-  userData.daily += 1;
-  userData.weekly += 1;
+  userData.daily = (userData.daily || 0) + 1;
+  userData.weekly = (userData.weekly || 0) + 1;
   userData.lastMsg = now;
   userData.lastAccess = now;
 
@@ -157,12 +169,21 @@ async function handleTextCommand(client, message, command, args, prefix) {
 
   // أمر عرض النقاط
   if (command === 'نقاط') {
-    const target = message.mentions.users.first() || message.author;
-    const userData = getUserData(target.id, message.guild.id);
-    const text = target.id === message.author.id
-      ? `تملك حالياً ${userData.daily} نقطة اليوم و ${userData.weekly} نقطة هذا الأسبوع`
-      : `يملك المستخدم ${userData.daily} نقطة اليوم و ${userData.weekly} نقطة هذا الأسبوع`;
-    await message.channel.send(`-# **${text} <:emoji_35:1474845075950272756> **`);
+    const target = message.mentions.users.first();
+    
+    if (target) {
+      // نقاط عضو آخر
+      const userData = getUserData(target.id, message.guild.id);
+      await message.channel.send(
+        `-# **يملك المستخدم ${userData.daily} نقطة اليوم و ${userData.weekly} نقطة هذا الأسبوع <:emoji_35:1474845075950272756> **`
+      );
+    } else {
+      // نقاط العضو نفسه
+      const userData = getUserData(message.author.id, message.guild.id);
+      await message.channel.send(
+        `-# **تملك حالياً ${userData.daily} نقطة اليوم و ${userData.weekly} نقطة هذا الأسبوع <:emoji_35:1474845075950272756> **`
+      );
+    }
     return true;
   }
 
@@ -180,15 +201,17 @@ async function handleTextCommand(client, message, command, args, prefix) {
     let count = 0;
 
     for (const key in pointsData) {
-      if (type === 'يومي' || type === 'الكل') {
-        pointsData[key].daily = 0;
-        pointsData[key].lastDailyReset = today;
-        count++;
-      }
-      if (type === 'اسبوعي' || type === 'الكل') {
-        pointsData[key].weekly = 0;
-        pointsData[key].lastWeeklyReset = weekStart;
-        count++;
+      if (key.startsWith(message.guild.id)) {
+        if (type === 'يومي' || type === 'الكل') {
+          pointsData[key].daily = 0;
+          pointsData[key].lastDailyReset = today;
+          count++;
+        }
+        if (type === 'اسبوعي' || type === 'الكل') {
+          pointsData[key].weekly = 0;
+          pointsData[key].lastWeeklyReset = weekStart;
+          count++;
+        }
       }
     }
 
@@ -257,6 +280,14 @@ async function onInteraction(client, interaction) {
 async function onReady(client) {
   console.log('⭐ نظام النقاط الخفيف جاهز');
   console.log(`- إجمالي المستخدمين: ${Object.keys(pointsData).length}`);
+  
+  // عرض إحصائيات سريعة
+  let totalPoints = 0;
+  for (const key in pointsData) {
+    totalPoints += pointsData[key].daily || 0;
+    totalPoints += pointsData[key].weekly || 0;
+  }
+  console.log(`- إجمالي النقاط: ${totalPoints}`);
   console.log(`- حجم الملف: ${Math.round(fs.statSync(POINTS_FILE).size / 1024)} KB`);
 }
 
