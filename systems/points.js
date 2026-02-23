@@ -172,10 +172,12 @@ async function getPointsSettings(guildId) {
 async function onInteraction(client, interaction) {
   if (!interaction.isChatInputCommand() || interaction.commandName !== 'points') return false;
 
-  const sub = interaction.options.getSubcommand();
-  const guildId = interaction.guild.id;
+  const guildId = interaction.guild?.id;
+  if (!guildId) return false;
 
-  // تجهيز التخزين للخزينة إذا ما موجود
+  const sub = interaction.options.getSubcommand();
+
+  // ✅ تأمين الخزينة: نضمن وجود object للسيرفر
   if (!pointsData.treasury[guildId]) {
     pointsData.treasury[guildId] = {
       balance: 0,
