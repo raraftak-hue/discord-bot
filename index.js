@@ -285,7 +285,7 @@ const slashCommands = [
       }
     ]
   },
-  // ✅ أوامر points (نظام النقاط) - 4 أوامر فرعية
+  // أوامر points
   {
     name: 'points',
     description: 'نظام النقاط (الإعدادات، الخزينة، إعادة التعيين)',
@@ -355,11 +355,18 @@ client.once('ready', async () => {
     await rest.put(Routes.applicationCommands(client.user.id), { body: slashCommands });
     console.log('✅ تم تسجيل جميع الأوامر بنجاح!');
     console.log('📋 الأوامر المسجلة:', slashCommands.map(c => c.name).join(', '));
-  } catch (e) { console.error(e); }
+  } catch (e) { 
+    console.error('❌ فشل تسجيل الأوامر:');
+    console.error(e); 
+  }
 
   for (const system of client.systems.values()) {
     if (system.onReady) {
-      try { await system.onReady(client); } catch (e) { console.error(e); }
+      try { await system.onReady(client); } 
+      catch (e) { 
+        console.error(`❌ خطأ في onReady لنظام:`);
+        console.error(e); 
+      }
     }
   }
 });
@@ -369,7 +376,11 @@ client.on('messageCreate', async (message) => {
   
   for (const system of client.systems.values()) {
     if (system.onMessage) {
-      try { await system.onMessage(client, message); } catch (e) { console.error(e); }
+      try { await system.onMessage(client, message); } 
+      catch (e) { 
+        console.error(`❌ خطأ في onMessage لنظام:`);
+        console.error(e); 
+      }
     }
   }
   
@@ -402,7 +413,10 @@ client.on('messageCreate', async (message) => {
       try {
         const handled = await system.handleTextCommand(client, message, command, args, prefix);
         if (handled === true) return;
-      } catch (e) { console.error(e); }
+      } catch (e) { 
+        console.error(`❌ خطأ في handleTextCommand لنظام:`);
+        console.error(e); 
+      }
     }
   }
 });
@@ -413,10 +427,8 @@ client.on('interactionCreate', async (interaction) => {
   for (const [name, system] of client.systems) {
     if (system.onInteraction) {
       try {
-        console.log(`🔍 جرب في نظام: ${name}`);
         const handled = await system.onInteraction(client, interaction);
         if (handled) {
-          console.log(`✅ نظام ${name} تعامل مع الأمر`);
           return;
         }
       } catch (e) { 
@@ -424,14 +436,16 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
   }
-  
-  console.log(`❌ ما في نظام تعامل مع: ${interaction.commandName}`);
 });
 
 client.on('guildCreate', async (guild) => {
   for (const system of client.systems.values()) {
     if (system.onGuildCreate) {
-      try { await system.onGuildCreate(client, guild); } catch (e) { console.error(e); }
+      try { await system.onGuildCreate(client, guild); } 
+      catch (e) { 
+        console.error(`❌ خطأ في onGuildCreate لنظام:`);
+        console.error(e); 
+      }
     }
   }
 });
@@ -439,7 +453,11 @@ client.on('guildCreate', async (guild) => {
 client.on('guildMemberAdd', async (member) => {
   for (const system of client.systems.values()) {
     if (system.onGuildMemberAdd) {
-      try { await system.onGuildMemberAdd(client, member); } catch (e) { console.error(e); }
+      try { await system.onGuildMemberAdd(client, member); } 
+      catch (e) { 
+        console.error(`❌ خطأ في onGuildMemberAdd لنظام:`);
+        console.error(e); 
+      }
     }
   }
 });
