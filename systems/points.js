@@ -14,7 +14,7 @@ const userPointsSchema = new mongoose.Schema({
 // فهرسة مركبة عشان نجيب البيانات بسرعة
 userPointsSchema.index({ guildId: 1, userId: 1 }, { unique: true });
 
-const UserPoints = mongoose.model('UserPoints', userPointsSchema);
+const UserPoints = mongoose.models.UserPoints || mongoose.model('UserPoints', userPointsSchema);
 
 // ==================== خزينة منفصلة ====================
 const treasurySchema = new mongoose.Schema({
@@ -25,7 +25,7 @@ const treasurySchema = new mongoose.Schema({
   active: { type: Boolean, default: false }
 });
 
-const Treasury = mongoose.model('Treasury', treasurySchema);
+const Treasury = mongoose.models.Treasury || mongoose.model('Treasury', treasurySchema);
 
 // ==================== إعدادات الرومات المستثناة ====================
 const pointsSettingsSchema = new mongoose.Schema({
@@ -33,7 +33,7 @@ const pointsSettingsSchema = new mongoose.Schema({
   excludedChannels: { type: [String], default: [] }
 });
 
-const PointsSettings = mongoose.model('PointsSettings', pointsSettingsSchema);
+const PointsSettings = mongoose.models.PointsSettings || mongoose.model('PointsSettings', pointsSettingsSchema);
 
 // ==================== دوال مساعدة ====================
 
@@ -73,7 +73,7 @@ function getRequiredMessages(weeklyPoints) {
 
 async function getTopUsers(guildId, type = 'weekly') {
   const sortField = type === 'weekly' ? 'weekly' : 'daily';
-  const users = await UserPoints.find({ guildId })
+  const users = await UserPoints.find({ guildId, [sortField]: { $gt: 0 } })
     .sort({ [sortField]: -1 })
     .limit(3)
     .select('userId ' + sortField);
@@ -116,6 +116,7 @@ async function onMessage(client, message) {
           memberEconomy.history.push({
             type: 'POINTS_REWARD',
             amount: treasury.exchangeRate,
+            reason: `استلام ${treasury.exchangeRate} دينار من نظام النقاط <:emoji_41:1471983856440836109>`,
             date: new Date()
           });
           await memberEconomy.save();
@@ -138,6 +139,8 @@ async function onMessage(client, message) {
         }
       }
     }
+  } else {
+    await userData.save(); // ضمان حفظ عدد الرسائل حتى لو لم يصل للحد المطلوب
   }
 }
 
@@ -163,7 +166,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
       .setDescription(`**خلفاء السبع ليالِ <:emoji_38:1474950090539139182>**`);
 
     if (topUsers.length === 0) {
-      embed.setDescription(`${embed.data.description}\n\n-# **انه اسبوع جديد و قائمة جديدة ولا يوجد منافسين حتى الآن <:emoji_32:1471962578895769611> **`);
+      embed.setDescription(`${embed.data.description}\n\n-# ** انه اسبوع جديد و قائمة جديدة ولا يوجد منافسين حتى الآن <:emoji_32:1471962578895769611> **`);
     } else {
       let desc = '';
       for (let i = 0; i < topUsers.length; i++) {
@@ -184,7 +187,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
       .setDescription(`**خلفاء الليلة <:emoji_36:1474949953876000950>**`);
 
     if (topUsers.length === 0) {
-      embed.setDescription(`${embed.data.description}\n\n-# **انه يوم جديد و قائمة جديدة ولا يوجد منافسين حتى الآن <:emoji_32:1471962578895769611> **`);
+      embed.setDescription(`${embed.data.description}\n\n-# ** انه يوم جديد و قائمة جديدة ولا يوجد منافسين حتى الآن <:emoji_32:1471962578895769611> **`);
     } else {
       let desc = '';
       for (let i = 0; i < topUsers.length; i++) {
@@ -259,6 +262,7 @@ async function onInteraction(client, interaction) {
       adminData.history.push({
         type: 'FUNDING_DEDUCTION',
         amount: amount,
+        reason: `تمويل نظام النقاط بـ ${amount} <:emoji_41:1471619709936996406>`,
         date: new Date()
       });
       await adminData.save();
@@ -284,21 +288,18 @@ async function onInteraction(client, interaction) {
   // ===== /points reset =====
   if (sub === 'reset') {
     const type = interaction.options.getString('type');
-    let count = 0;
-
+    
     if (type === 'daily' || type === 'all') {
       await UserPoints.updateMany(
         { guildId },
         { $set: { daily: 0 } }
       );
-      count++;
     }
     if (type === 'weekly' || type === 'all') {
       await UserPoints.updateMany(
         { guildId },
         { $set: { weekly: 0 } }
       );
-      count++;
     }
 
     await interaction.reply({
