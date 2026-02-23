@@ -285,65 +285,7 @@ const slashCommands = [
         required: true
       }
     ]
-  }, // الفاصلة مهمة هنا
-  // أوامر points (معطلة)
-  /*{
-    name: 'points',
-    description: 'نظام النقاط (الإعدادات، الخزينة، إعادة التعيين)',
-    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
-    options: [
-      {
-        name: 'ch',
-        description: 'إضافة أو إزالة روم مستثنى',
-        type: 1,
-        options: [
-          { name: 'room', description: 'الروم', type: 7, required: true }
-        ]
-      },
-      {
-        name: 'info',
-        description: 'عرض الرومات المستثناة، الخزينة، وسعر الصرف',
-        type: 1
-      },
-      {
-        name: 'fund',
-        description: 'تمويل الخزينة وتحديث سعر الصرف (اختياري)',
-        type: 1,
-        options: [
-          {
-            name: 'amount',
-            description: 'المبلغ المضاف للخزينة',
-            type: 4,
-            required: true
-          },
-          {
-            name: 'rate',
-            description: 'سعر الصرف الجديد (اختياري)',
-            type: 4,
-            required: false
-          }
-        ]
-      },
-      {
-        name: 'reset',
-        description: 'إعادة تعيين نقاط اليوم / الأسبوع / الكل',
-        type: 1,
-        options: [
-          {
-            name: 'type',
-            description: 'نوع إعادة التعيين',
-            type: 3,
-            required: true,
-            choices: [
-              { name: 'يومي', value: 'daily' },
-              { name: 'اسبوعي', value: 'weekly' },
-              { name: 'الكل', value: 'all' }
-            ]
-          }
-        ]
-      }
-    ]
-  }*/
+  }
 ];
 
 // ==================== الأحداث ====================
@@ -351,21 +293,35 @@ client.once('ready', async () => {
   console.log(`✅ تم تسجيل الدخول بـ ${client.user.tag}`);
   console.log('🔄 Bot ID:', client.user.id);
   console.log('🔄 عدد الأوامر:', slashCommands.length);
-  console.log('🔄 جاري تسجيل الأوامر...');
+  console.log('🔄 جاري تسجيل الأوامر لكل سيرفر...');
   
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-  try {
-    await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
-    await rest.put(Routes.applicationCommands(client.user.id), { body: slashCommands });
-    console.log('✅ تم تسجيل الأوامر بنجاح! (تم التأكيد)');
-    console.log('✅ تم تسجيل جميع الأوامر بنجاح!');
-    console.log('📋 الأوامر المسجلة:', slashCommands.map(c => c.name).join(', '));
-  } catch (e) { 
-    console.error('❌ فشل تسجيل الأوامر:');
-    console.error('اسم الخطأ:', e.name);
-    console.error('رسالة الخطأ:', e.message);
-    console.error('كود الخطأ:', e.code);
-    console.error('الاستجابة الكاملة:', e.rawError);
+  
+  // جلب إعدادات الاشتراكات
+  const GlobalSettings = mongoose.models.GlobalSettings;
+  const settings = await GlobalSettings?.findOne();
+  const allowedGuilds = settings?.allowedGuilds || [];
+
+  for (const guild of client.guilds.cache.values()) {
+    try {
+      // تسجيل الأوامر فقط للسيرفرات المشتركة
+      if (allowedGuilds.includes(guild.id)) {
+        await rest.put(
+          Routes.applicationGuildCommands(client.user.id, guild.id),
+          { body: slashCommands }
+        );
+        console.log(`✅ تم تسجيل الأوامر بنجاح لسيرفر: ${guild.name} (${guild.id})`);
+      } else {
+        // مسح الأوامر إذا لم يكن مشتركاً (اختياري)
+        await rest.put(
+          Routes.applicationGuildCommands(client.user.id, guild.id),
+          { body: [] }
+        );
+        console.log(`⚠️ سيرفر غير مشترك، تم مسح الأوامر: ${guild.name}`);
+      }
+    } catch (e) {
+      console.error(`❌ فشل تسجيل الأوامر لسيرفر ${guild.name}:`, e.message);
+    }
   }
 
   for (const system of client.systems.values()) {
