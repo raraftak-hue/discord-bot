@@ -285,29 +285,61 @@ const slashCommands = [
       }
     ]
   },
-  // ✅ إضافة أمر points
+  // ✅ أوامر points (نظام النقاط) - 4 أوامر فرعية
   {
     name: 'points',
-    description: 'إعدادات نظام النقاط',
+    description: 'نظام النقاط (الإعدادات، الخزينة، إعادة التعيين)',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
     options: [
       {
-        name: 'exclude',
-        description: 'إضافة/إزالة روم مستثنى',
+        name: 'ch',
+        description: 'إضافة أو إزالة روم مستثنى',
         type: 1,
         options: [
-          { 
-            name: 'channel', 
-            description: 'الروم', 
-            type: 7, 
-            required: true 
+          { name: 'room', description: 'الروم', type: 7, required: true }
+        ]
+      },
+      {
+        name: 'info',
+        description: 'عرض الرومات المستثناة، الخزينة، وسعر الصرف',
+        type: 1
+      },
+      {
+        name: 'fund',
+        description: 'تمويل الخزينة وتحديث سعر الصرف (اختياري)',
+        type: 1,
+        options: [
+          {
+            name: 'amount',
+            description: 'المبلغ المضاف للخزينة',
+            type: 4,
+            required: true
+          },
+          {
+            name: 'rate',
+            description: 'سعر الصرف الجديد (اختياري)',
+            type: 4,
+            required: false
           }
         ]
       },
       {
-        name: 'list',
-        description: 'عرض الرومات المستثناة',
-        type: 1
+        name: 'reset',
+        description: 'إعادة تعيين نقاط اليوم / الأسبوع / الكل',
+        type: 1,
+        options: [
+          {
+            name: 'type',
+            description: 'نوع إعادة التعيين',
+            type: 3,
+            required: true,
+            choices: [
+              { name: 'يومي', value: 'daily' },
+              { name: 'اسبوعي', value: 'weekly' },
+              { name: 'الكل', value: 'all' }
+            ]
+          }
+        ]
       }
     ]
   }
@@ -319,10 +351,7 @@ client.once('ready', async () => {
   
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   try {
-    // مسح الأوامر القديمة أولاً
     await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
-    
-    // تسجيل الأوامر الجديدة
     await rest.put(Routes.applicationCommands(client.user.id), { body: slashCommands });
     console.log('✅ تم تسجيل جميع الأوامر بنجاح!');
     console.log('📋 الأوامر المسجلة:', slashCommands.map(c => c.name).join(', '));
@@ -338,26 +367,22 @@ client.once('ready', async () => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
   
-  // تمرير الرسالة لجميع الأنظمة (onMessage)
   for (const system of client.systems.values()) {
     if (system.onMessage) {
       try { await system.onMessage(client, message); } catch (e) { console.error(e); }
     }
   }
   
-  // جلب الإعدادات للبادئة
   const Settings = mongoose.models.Settings;
   const settings = await Settings?.findOne({ guildId: message.guild.id });
   const prefix = settings?.prefix || '';
   
-  // التحقق من وجود بادئة وبدء الرسالة بها
   if (prefix && !message.content.startsWith(prefix)) return;
   
   const args = message.content.trim().split(/\s+/);
   const firstWord = args[0];
   const command = prefix ? firstWord.slice(prefix.length).toLowerCase() : firstWord.toLowerCase();
   
-  // أمر المساعدة
   if (command === 'اوامر') {
     const embed = new EmbedBuilder()
       .setColor(0x2b2d31)
@@ -372,7 +397,6 @@ client.on('messageCreate', async (message) => {
     return;
   }
   
-  // تمرير الأمر النصي لجميع الأنظمة (handleTextCommand)
   for (const system of client.systems.values()) {
     if (system.handleTextCommand) {
       try {
