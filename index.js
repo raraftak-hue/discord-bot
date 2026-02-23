@@ -286,7 +286,7 @@ const slashCommands = [
     ]
   },
   // أوامر points
-  {
+  /*{
     name: 'points',
     description: 'نظام النقاط (الإعدادات، الخزينة، إعادة التعيين)',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
@@ -344,7 +344,7 @@ const slashCommands = [
     ]
   }
 ];
-
+*/
 // ==================== الأحداث ====================
 client.once('ready', async () => {
   console.log(`✅ تم تسجيل الدخول بـ ${client.user.tag}`);
