@@ -83,6 +83,7 @@ async function formatHistory(client, history) {
     else if (h.type === 'POINTS_REWARD') {
       lines.push(`-# **استلام من نظام النقاط بـ ${h.amount} دينار <:emoji_41:1471983856440836109> **`);
     }
+    // ✅ سطر التمويل المضاف (هذا بس اللي اضفته)
     else if (h.type === 'FUNDING_DEDUCTION') {
       lines.push(`-# **تمويل نظام النقاط بـ ${h.amount} دينار <:emoji_41:1471619709936996406> **`);
     }
