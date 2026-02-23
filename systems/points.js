@@ -66,6 +66,7 @@ async function onMessage(client, message) {
   if (now - userData.lastMsg < 7000) return;
   if (!shouldGivePoint(userData.weekly)) return;
 
+  // ✅ النقطة تزيد في اليومي والأسبوعي معاً
   userData.daily += 1;
   userData.weekly += 1;
   userData.lastMsg = now;
@@ -114,6 +115,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
     return true;
   }
 
+  // ✅ توب أسبوعي مع رسالة فاضي مضبوطة
   if (command === 'اسبوعي') {
     const topUsers = getTopUsers(message.guild.id, 'weekly');
     const userPoints = getUserData(message.author.id, message.guild.id).weekly;
@@ -122,7 +124,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
       .setColor(0x2b2d31)
       .setDescription(`**خلفاء السبع ليالِ <:emoji_38:1474950090539139182>**`);
 
-    if (topUsers.length === 0) {
+    if (topUsers.length === 0 || topUsers.every(u => u.points === 0)) {
       embed.setDescription(`${embed.data.description}\n\n-# **انه اسبوع جديد و قائمة جديدة ولا يوجد منافسين حتى الآن <:emoji_32:1471962578895769611> **`);
     } else {
       let desc = '';
@@ -137,6 +139,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
     return true;
   }
 
+  // ✅ توب يومي مع رسالة فاضي مضبوطة
   if (command === 'يومي') {
     const topUsers = getTopUsers(message.guild.id, 'daily');
     const userPoints = getUserData(message.author.id, message.guild.id).daily;
@@ -145,7 +148,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
       .setColor(0x2b2d31)
       .setDescription(`**خلفاء الليلة <:emoji_36:1474949953876000950>**`);
 
-    if (topUsers.length === 0) {
+    if (topUsers.length === 0 || topUsers.every(u => u.points === 0)) {
       embed.setDescription(`${embed.data.description}\n\n-# **انه يوم جديد و قائمة جديدة ولا يوجد منافسين حتى الآن <:emoji_32:1471962578895769611> **`);
     } else {
       let desc = '';
