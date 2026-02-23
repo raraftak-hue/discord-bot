@@ -43,7 +43,7 @@ for (const file of systemFiles) {
   }
 }
 
-// ==================== جمع أوامر السلاش ====================
+// ==================== جمع أوامر السلاش (معدلة) ====================
 const slashCommands = [
   // أوامر wel
   {
@@ -210,12 +210,12 @@ const slashCommands = [
       }
     ]
   },
-  // أوامر hosting
+  // أوامر hosting (معدل)
   { 
     name: 'hosting', 
     description: 'عرض السيرفرات المشتركة (للمالك)', 
     default_member_permissions: "0",
-    type: 1 
+    type: 1
   },
   // أوامر auto
   {
@@ -266,10 +266,11 @@ const slashCommands = [
       }
     ]
   },
-  // أوامر whisper
+  // أوامر whisper (معدل)
   {
     name: 'whisper',
     description: 'إرسال همسة لشخص معين (يشوفها فقط هو)',
+    type: 1,
     options: [
       {
         name: 'user',
@@ -285,7 +286,7 @@ const slashCommands = [
       }
     ]
   }, // الفاصلة مهمة هنا
-  // أوامر points
+  // أوامر points (معطلة)
   /*{
     name: 'points',
     description: 'نظام النقاط (الإعدادات، الخزينة، إعادة التعيين)',
