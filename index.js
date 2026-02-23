@@ -285,6 +285,64 @@ const slashCommands = [
         required: true
       }
     ]
+  },
+  // أوامر points
+  {
+    name: 'points',
+    description: 'نظام النقاط (الإعدادات، الخزينة، إعادة التعيين)',
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+    options: [
+      {
+        name: 'ch',
+        description: 'إضافة أو إزالة روم مستثنى',
+        type: 1,
+        options: [
+          { name: 'room', description: 'الروم', type: 7, required: true }
+        ]
+      },
+      {
+        name: 'info',
+        description: 'عرض الرومات المستثناة، الخزينة، وسعر الصرف',
+        type: 1
+      },
+      {
+        name: 'fund',
+        description: 'تمويل الخزينة وتحديث سعر الصرف (اختياري)',
+        type: 1,
+        options: [
+          {
+            name: 'amount',
+            description: 'المبلغ المضاف للخزينة',
+            type: 4,
+            required: true
+          },
+          {
+            name: 'rate',
+            description: 'سعر الصرف الجديد (اختياري)',
+            type: 4,
+            required: false
+          }
+        ]
+      },
+      {
+        name: 'reset',
+        description: 'إعادة تعيين نقاط اليوم / الأسبوع / الكل',
+        type: 1,
+        options: [
+          {
+            name: 'type',
+            description: 'نوع إعادة التعيين',
+            type: 3,
+            required: true,
+            choices: [
+              { name: 'يومي', value: 'daily' },
+              { name: 'اسبوعي', value: 'weekly' },
+              { name: 'الكل', value: 'all' }
+            ]
+          }
+        ]
+      }
+    ]
   }
 ];
 
