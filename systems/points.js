@@ -18,7 +18,6 @@ try {
     pointsData = JSON.parse(raw);
   }
   
-  // نضمن وجود users و treasury حتى لو الملف قديم أو فاضي
   if (!pointsData.users) pointsData.users = {};
   if (!pointsData.treasury) pointsData.treasury = {};
   
@@ -27,7 +26,6 @@ try {
   pointsData = { ...DEFAULT_DATA };
 }
 
-// حفظ البيانات في الملف
 function saveToFile() {
   try {
     fs.writeFileSync(POINTS_FILE, JSON.stringify(pointsData, null, 2));
@@ -36,8 +34,6 @@ function saveToFile() {
     console.error('❌ خطأ في حفظ الملف:', error.message);
   }
 }
-
-// ==================== دوال مساعدة ====================
 
 function getUserData(userId, guildId) {
   const key = `${guildId}-${userId}`;
@@ -61,23 +57,17 @@ function getRequiredMessages(weeklyPoints) {
 
 function getTopUsers(guildId, type = 'weekly') {
   const users = [];
-  
   for (const [key, data] of Object.entries(pointsData.users)) {
     if (key.startsWith(guildId)) {
       const points = data[type] || 0;
       if (points > 0) {
-        users.push({ 
-          userId: key.split('-')[1], 
-          points 
-        });
+        users.push({ userId: key.split('-')[1], points });
       }
     }
   }
-  
   return users.sort((a, b) => b.points - a.points).slice(0, 3);
 }
 
-// ==================== onMessage ====================
 async function onMessage(client, message) {
   if (message.author.bot || !message.guild) return;
 
@@ -96,13 +86,13 @@ async function onMessage(client, message) {
     userData.messageCount = 0;
     saveToFile();
 
-    // صرف من الخزينة إذا كانت مفعلة
     const treasury = pointsData.treasury[message.guild.id];
     if (treasury?.active && treasury.balance >= treasury.exchangeRate) {
-      const economy = client.systems.get('economy'); // بدون .js
+      const economy = client.systems.get('economy');
       if (economy) {
         try {
-          const memberEconomy = await economy.getUserData(message.author.id, message.guild.id);
+          // ✅ تعديل: إزالة guildId لأن economy.getUserData يستقبل userId فقط
+          const memberEconomy = await economy.getUserData(message.author.id);
           memberEconomy.balance += treasury.exchangeRate;
           memberEconomy.history.push({
             type: 'POINTS_REWARD',
@@ -132,7 +122,6 @@ async function onMessage(client, message) {
   }
 }
 
-// ==================== معالج الأوامر النصية ====================
 async function handleTextCommand(client, message, command, args, prefix) {
   if (!message.guild) return false;
 
@@ -149,11 +138,9 @@ async function handleTextCommand(client, message, command, args, prefix) {
   if (command === 'اسبوعي') {
     const topUsers = getTopUsers(message.guild.id, 'weekly');
     const userPoints = getUserData(message.author.id, message.guild.id).weekly;
-    
     const embed = new EmbedBuilder()
       .setColor(0x2b2d31)
       .setDescription(`**خلفاء السبع ليالِ <:emoji_38:1474950090539139182>**`);
-
     if (topUsers.length === 0) {
       embed.setDescription(`${embed.data.description}\n\n-# **انه اسبوع جديد و قائمة جديدة ولا يوجد منافسين حتى الآن <:emoji_32:1471962578895769611> **`);
     } else {
@@ -163,7 +150,6 @@ async function handleTextCommand(client, message, command, args, prefix) {
       }
       embed.setDescription(`${embed.data.description}\n\n${desc}`);
     }
-
     embed.setFooter({ text: `انت تملك ${userPoints} نقطة` });
     await message.channel.send({ embeds: [embed] });
     return true;
@@ -172,11 +158,9 @@ async function handleTextCommand(client, message, command, args, prefix) {
   if (command === 'يومي') {
     const topUsers = getTopUsers(message.guild.id, 'daily');
     const userPoints = getUserData(message.author.id, message.guild.id).daily;
-    
     const embed = new EmbedBuilder()
       .setColor(0x2b2d31)
       .setDescription(`**خلفاء الليلة <:emoji_36:1474949953876000950>**`);
-
     if (topUsers.length === 0) {
       embed.setDescription(`${embed.data.description}\n\n-# **انه يوم جديد و قائمة جديدة ولا يوجد منافسين حتى الآن <:emoji_32:1471962578895769611> **`);
     } else {
@@ -186,7 +170,6 @@ async function handleTextCommand(client, message, command, args, prefix) {
       }
       embed.setDescription(`${embed.data.description}\n\n${desc}`);
     }
-
     embed.setFooter({ text: `انت تملك ${userPoints} نقطة` });
     await message.channel.send({ embeds: [embed] });
     return true;
@@ -196,7 +179,6 @@ async function handleTextCommand(client, message, command, args, prefix) {
 }
 
 async function getPointsSettings(guildId) {
-  // مؤقت: إعدادات افتراضية لحين إضافة نظام الإعدادات
   return { excludedChannels: [] };
 }
 
@@ -209,7 +191,6 @@ async function onInteraction(client, interaction) {
 
   const sub = interaction.options.getSubcommand();
 
-  // تجهيز الخزينة للسيرفر إذا ما كانت موجودة
   if (!pointsData.treasury[guildId]) {
     pointsData.treasury[guildId] = {
       balance: 0,
@@ -234,14 +215,14 @@ async function onInteraction(client, interaction) {
     return true;
   }
 
-  // ===== /points info =====
+  // ===== /points info (بالصيغة المطلوبة) =====
   if (sub === 'info') {
     const settings = await getPointsSettings(guildId);
     const excluded = settings.excludedChannels.map(id => `<#${id}>`).join('، ') || 'لا يوجد';
     const treasury = pointsData.treasury[guildId];
 
     await interaction.reply({
-      content: `-# **الرومات المستثنى هي ${excluded} يوجد فالخزينة ${treasury.balance} دينار و على كل ${treasury.exchangeRate} دينار لكل نقطة**`,
+      content: `-# **الرومات المستثنى هي ${excluded} يوجد فالخزينة ${treasury.balance} دينار و على كل نقطة ${treasury.exchangeRate} دينار**`,
       ephemeral: true
     });
     return true;
@@ -252,17 +233,16 @@ async function onInteraction(client, interaction) {
     const amount = interaction.options.getInteger('amount');
     const newRate = interaction.options.getInteger('rate');
 
-    // ✅ سبرينت للأنظمة المتوفرة (للتشخيص)
-    console.log('📦 الأنظمة المتوفرة في client.systems:', [...client.systems.keys()]);
+    console.log('📦 الأنظمة المتوفرة:', [...client.systems.keys()]);
 
-    const economy = client.systems.get('economy'); // بدون .js
-
+    const economy = client.systems.get('economy');
     if (!economy) {
       return interaction.reply({ content: `-# **نظام الاقتصاد غير مفعل**`, ephemeral: true });
     }
 
     try {
-      const adminData = await economy.getUserData(interaction.user.id, guildId);
+      // ✅ تعديل: إزالة guildId لأن economy.getUserData يستقبل userId فقط
+      const adminData = await economy.getUserData(interaction.user.id);
       if (adminData.balance < amount) {
         return interaction.reply({ content: `-# **رصيدك ما يكفي**`, ephemeral: true });
       }
@@ -322,7 +302,6 @@ async function onInteraction(client, interaction) {
   return false;
 }
 
-// ==================== onReady ====================
 async function onReady(client) {
   console.log('⭐ نظام النقاط مع الخزينة جاهز');
   console.log(`- إجمالي المستخدمين المسجلين: ${Object.keys(pointsData.users).length}`);
