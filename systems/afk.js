@@ -24,19 +24,20 @@ async function handleTextCommand(client, message, command, args, prefix) {
     const userId = message.author.id;
     const guildId = message.guild.id;
 
-    // حذف أي AFK قديم للمستخدم
-    await Afk.deleteOne({ userId, guildId });
+    // عملية واحدة سريعة (Upsert)
+    await Afk.updateOne(
+      { userId, guildId },
+      { 
+        userId, 
+        guildId, 
+        reason, 
+        timestamp: new Date() 
+      },
+      { upsert: true }
+    );
 
-    // إنشاء AFK جديد
-    const afk = new Afk({
-      userId,
-      guildId,
-      reason,
-      timestamp: new Date()
-    });
-    await afk.save();
-
-    await message.reply(`-# **غايب و عذرك معاك بالتوفيق <:emoji_84:1389404919672340592> **`);
+    // رسالة عادية (مو reply)
+    await message.channel.send(`-# **غايب و عذرك معاك بالتوفيق <:emoji_84:1389404919672340592> **`);
     return true;
   }
 
@@ -54,7 +55,8 @@ async function onMessage(client, message) {
   const userAfk = await Afk.findOne({ userId, guildId });
   if (userAfk) {
     await Afk.deleteOne({ userId, guildId });
-    await message.reply(`-# **الحمدلله رجعتلنا بالسلامة <:emoji_37:1474950026840244265> **`);
+    // رسالة عادية (مو reply)
+    await message.channel.send(`-# **الحمدلله رجعتلنا بالسلامة <:emoji_37:1474950026840244265> **`);
     return; // ما نكمل عشان ما يفحص المنشن
   }
 
@@ -65,7 +67,8 @@ async function onMessage(client, message) {
 
       const afk = await Afk.findOne({ userId: mentionedUser.id, guildId });
       if (afk) {
-        await message.reply(`-# **المستخدم غايب و يقول ${afk.reason}**`);
+        // رسالة عادية (مو reply)
+        await message.channel.send(`-# **المستخدم غايب و يقول ${afk.reason}**`);
         // ما نعمل break عشان لو فيه أكثر من منشن، كل واحد ياخذ رده
       }
     }
