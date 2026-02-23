@@ -359,25 +359,18 @@ client.on('messageCreate', async (message) => {
   
   // أمر المساعدة
   if (command === 'اوامر') {
-    let membersMsg = '';
-    
-    if (prefix) {
-      membersMsg = `${prefix}دنانير، ${prefix}تحويل، ${prefix}اغنياء، ${prefix}سجل`;
-    } else {
-      membersMsg = `دنانير، تحويل، اغنياء، سجل`;
-    }
-    
-    const embed = new EmbedBuilder()
-      .setColor(0x2b2d31)
-      .setDescription(
-        `** members<:emoji_32:1471962578895769611> **\n-# ** text - ${membersMsg}**\n\n` +
-        `** Mods <:emoji_38:1470920843398746215>**\n` +
-        `-# ** wel, tic, give, pre, emb, economy, whisper**\n` +
-        `-# ** text -  تايم، طرد، حذف، ارقام، ايقاف، نقاطي، نقاط، توب، توب س، توب ي**`
-      );
-    await message.channel.send({ embeds: [embed] });
-    return;
-  }
+  const embed = new EmbedBuilder()
+    .setColor(0x2b2d31)
+    .setDescription(
+      `** members<:emoji_32:1471962578895769611> **\n` +
+      `-# **text - دنانير، تحويل، اغنياء، نقاط، توب س، توب ي، سجل**\n\n` +
+      `** Mods <:emoji_38:1470920843398746215>**\n` +
+      `-# **wel, tic, give, pre, emb, eco, whisper**\n` +
+      `-# **text - تايم، طرد، حذف، ارقام، ايقاف**`
+    );
+  await message.channel.send({ embeds: [embed] });
+  return;
+}
   
   // تمرير الأمر النصي لجميع الأنظمة (handleTextCommand)
   for (const system of client.systems.values()) {
