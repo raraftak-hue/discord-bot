@@ -301,5 +301,6 @@ async function onInteraction(client, interaction) {
 module.exports = {
   onMessage,
   handleTextCommand,
-  onInteraction
+  onInteraction,
+  getUserData   // 👈 إضافة هذا السطر
 };
