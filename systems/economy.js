@@ -80,6 +80,9 @@ async function formatHistory(client, history) {
     else if (h.type === 'STARTING_GIFT') {
       lines.push(`-# **هدية ابتدائية بقيمة ${h.amount} في ${dateStr} <:emoji_35:1471963080228474890>**`);
     }
+    else if (h.type === 'POINTS_REWARD') {
+      lines.push(`-# **استلام من نظام النقاط بـ ${h.amount} دينار <:emoji_41:1471983856440836109> **`);
+    }
     else {
       lines.push(`-# **${h.type}: ${Math.abs(h.amount)} في ${dateStr} <:emoji_41:1471983856440836109>**`);
     }
