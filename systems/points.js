@@ -166,21 +166,6 @@ async function onMessage(client, message) {
 async function handleTextCommand(client, message, command, args, prefix) {
   if (!message.guild) return false;
 
-  // أمر المساعدة
-  if (command === 'اوامر') {
-    const embed = new EmbedBuilder()
-      .setColor(0x2b2d31)
-      .setDescription(
-        `** members<:emoji_32:1471962578895769611> **\n` +
-        `-# **text - دنانير، تحويل، اغنياء، نقاط، توب س، توب ي، سجل**\n\n` +
-        `** Mods <:emoji_38:1470920843398746215>**\n` +
-        `-# **wel, tic, give, pre, emb, eco, whisper**\n` +
-        `-# **text - تايم، طرد، حذف، ارقام، ايقاف**`
-      );
-    await message.channel.send({ embeds: [embed] });
-    return true;
-  }
-
   // أمر عرض النقاط
   if (command === 'نقاط') {
     const target = message.mentions.users.first();
@@ -243,7 +228,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
       .setDescription(`**خلفاء السبع ليالِ <:emoji_38:1474950090539139182>**`);
 
     if (topUsers.length === 0) {
-      embed.setDescription(`${embed.data.description}\n\n-# **لا يوجد منافسين للآن <:emoji_40:1475268254028267738> **`);
+      embed.setDescription(`${embed.data.description}\n\n-# **انه اسبوع جديد و قائمة جديدة ولا يوجد منافسين حتى الآن <:emoji_32:1471962578895769611> **`);
     } else {
       let desc = '';
       for (let i = 0; i < topUsers.length; i++) {
@@ -267,7 +252,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
       .setDescription(`**خلفاء الليلة <:emoji_36:1474949953876000950>**`);
 
     if (topUsers.length === 0) {
-      embed.setDescription(`${embed.data.description}\n\n-# **لا يوجد منافسين للآن <:emoji_40:1475268254028267738> **`);
+      embed.setDescription(`${embed.data.description}\n\n-# **انه يوم جديد و قائمة جديدة ولا يوجد منافسين حتى الآن <:emoji_32:1471962578895769611> **`);
     } else {
       let desc = '';
       for (let i = 0; i < topUsers.length; i++) {
