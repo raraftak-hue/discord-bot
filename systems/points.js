@@ -2,7 +2,7 @@ const { EmbedBuilder, PermissionsBitField } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 
-const POINTS_FILE = path.join(__dirname, '../data/points.json');
+const POINTS_FILE = path.join(__dirname, 'points.json');
 
 if (!fs.existsSync(path.dirname(POINTS_FILE))) {
   fs.mkdirSync(path.dirname(POINTS_FILE), { recursive: true });
