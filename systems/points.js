@@ -70,25 +70,26 @@ async function onMessage(client, message) {
   userData.weekly += 1;
   userData.lastMsg = now;
 
-  saveToFile(); // 👈 نحفظ فوراً بعد كل نقطة
+  saveToFile();
 }
 
 async function handleTextCommand(client, message, command, args, prefix) {
   if (!message.guild) return false;
 
+  // --- أمر نقاط ---
   if (command === 'نقاط') {
     const target = message.mentions.users.first() || message.author;
     const userData = getUserData(target.id, message.guild.id);
 
-    const text =
-      target.id === message.author.id
-        ? `تملك حالياً ${userData.daily} نقطة تفاعل<:emoji_35:1474845075950272756>`
-        : `يملك المستخدم ${userData.daily} نقطة تفاعل<:emoji_35:1474845075950272756>`;
+    const text = target.id === message.author.id
+      ? `تملك حالياً ${userData.daily} نقطة تفاعل<:emoji_35:1474845075950272756>`
+      : `يملك المستخدم ${userData.daily} نقطة تفاعل<:emoji_35:1474845075950272756>`;
 
     await message.channel.send(`-# **${text} **`);
-    return true;
+    return true; // تمت معالجة الأمر
   }
 
+  // --- أمر ريستارت (للمشرفين) ---
   if (command === 'ريستارت' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
     const type = args[1]?.toLowerCase();
     if (!type || (type !== 'يومي' && type !== 'اسبوعي' && type !== 'الكل')) {
@@ -96,11 +97,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
       return true;
     }
 
-    const now = new Date();
-    const today = now.toDateString();
-    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()).toDateString();
     let count = 0;
-
     for (const key in pointsData) {
       if (key.startsWith(message.guild.id)) {
         if (type === 'يومي' || type === 'الكل') {
@@ -119,7 +116,9 @@ async function handleTextCommand(client, message, command, args, prefix) {
     return true;
   }
 
+  // --- أمر توب أسبوعي (س) ---
   if (command === 'توب س') {
+    console.log(`📊 [DEBUG] أمر 'توب س' تم استقباله من ${message.author.tag}`);
     const topUsers = getTopUsers(message.guild.id, 'weekly');
     const userPoints = getUserData(message.author.id, message.guild.id).weekly;
 
@@ -139,10 +138,13 @@ async function handleTextCommand(client, message, command, args, prefix) {
 
     embed.setFooter({ text: `نقاطك: ${userPoints}` });
     await message.channel.send({ embeds: [embed] });
-    return true;
+    console.log(`✅ [DEBUG] Embed 'توب س' تم إرساله.`);
+    return true; // تمت معالجة الأمر
   }
 
+  // --- أمر توب يومي (ي) ---
   if (command === 'توب ي') {
+    console.log(`📊 [DEBUG] أمر 'توب ي' تم استقباله من ${message.author.tag}`);
     const topUsers = getTopUsers(message.guild.id, 'daily');
     const userPoints = getUserData(message.author.id, message.guild.id).daily;
 
@@ -162,16 +164,23 @@ async function handleTextCommand(client, message, command, args, prefix) {
 
     embed.setFooter({ text: `نقاطك: ${userPoints}` });
     await message.channel.send({ embeds: [embed] });
-    return true;
+    console.log(`✅ [DEBUG] Embed 'توب ي' تم إرساله.`);
+    return true; // تمت معالجة الأمر
   }
 
+  // إذا وصلنا إلى هنا، الأمر لم يتم التعامل معه بواسطة هذا النظام
   return false;
 }
 
 async function onReady(client) {
   console.log('⭐ نظام النقاط الخفيف جاهز');
-  console.log(`- إجمالي المستخدمين: ${Object.keys(pointsData).length}`);
-  console.log(`- حجم الملف: ${Math.round(fs.statSync(POINTS_FILE).size / 1024)} KB`);
+  console.log(`- إجمالي المستخدمين المسجلين: ${Object.keys(pointsData).length}`);
+  try {
+    const stats = fs.statSync(POINTS_FILE);
+    console.log(`- حجم ملف البيانات: ${Math.round(stats.size / 1024)} KB`);
+  } catch (e) {
+    console.log('- حجم ملف البيانات: غير معروف');
+  }
 }
 
 module.exports = {
