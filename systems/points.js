@@ -4,22 +4,40 @@ const path = require('path');
 
 const POINTS_FILE = path.join(__dirname, 'points.json');
 
-if (!fs.existsSync(POINTS_FILE)) {
-  fs.writeFileSync(POINTS_FILE, JSON.stringify({ users: {}, treasury: {} }));
-}
+// ==================== هيكل البيانات الأساسي ====================
+const DEFAULT_DATA = {
+  users: {},
+  treasury: {}
+};
 
-let pointsData = { users: {}, treasury: {} };
+// تحميل أو إنشاء ملف البيانات
+let pointsData = { ...DEFAULT_DATA };
 try {
-  const raw = fs.readFileSync(POINTS_FILE, 'utf8');
-  pointsData = JSON.parse(raw);
-} catch {
-  pointsData = { users: {}, treasury: {} };
-  fs.writeFileSync(POINTS_FILE, JSON.stringify(pointsData, null, 2));
+  if (fs.existsSync(POINTS_FILE)) {
+    const raw = fs.readFileSync(POINTS_FILE, 'utf8');
+    pointsData = JSON.parse(raw);
+  }
+  
+  // نضمن وجود users و treasury حتى لو الملف قديم أو فاضي
+  if (!pointsData.users) pointsData.users = {};
+  if (!pointsData.treasury) pointsData.treasury = {};
+  
+} catch (error) {
+  console.error('❌ خطأ في قراءة ملف النقاط، سيتم إنشاء ملف جديد:', error.message);
+  pointsData = { ...DEFAULT_DATA };
 }
 
+// حفظ البيانات في الملف
 function saveToFile() {
-  fs.writeFileSync(POINTS_FILE, JSON.stringify(pointsData, null, 2));
+  try {
+    fs.writeFileSync(POINTS_FILE, JSON.stringify(pointsData, null, 2));
+    console.log('💾 تم حفظ النقاط في الملف');
+  } catch (error) {
+    console.error('❌ خطأ في حفظ الملف:', error.message);
+  }
 }
+
+// ==================== دوال مساعدة ====================
 
 function getUserData(userId, guildId) {
   const key = `${guildId}-${userId}`;
@@ -43,17 +61,23 @@ function getRequiredMessages(weeklyPoints) {
 
 function getTopUsers(guildId, type = 'weekly') {
   const users = [];
+  
   for (const [key, data] of Object.entries(pointsData.users)) {
     if (key.startsWith(guildId)) {
       const points = data[type] || 0;
       if (points > 0) {
-        users.push({ userId: key.split('-')[1], points });
+        users.push({ 
+          userId: key.split('-')[1], 
+          points 
+        });
       }
     }
   }
+  
   return users.sort((a, b) => b.points - a.points).slice(0, 3);
 }
 
+// ==================== onMessage ====================
 async function onMessage(client, message) {
   if (message.author.bot || !message.guild) return;
 
@@ -62,9 +86,7 @@ async function onMessage(client, message) {
 
   if (now - userData.lastMsg < 7000) return;
 
-  const oldDaily = userData.daily;
   userData.lastMsg = now;
-
   const required = getRequiredMessages(userData.weekly);
   userData.messageCount++;
 
@@ -74,6 +96,7 @@ async function onMessage(client, message) {
     userData.messageCount = 0;
     saveToFile();
 
+    // صرف من الخزينة إذا كانت مفعلة
     const treasury = pointsData.treasury[message.guild.id];
     if (treasury?.active && treasury.balance >= treasury.exchangeRate) {
       const economy = client.systems.get('economy.js');
@@ -109,6 +132,7 @@ async function onMessage(client, message) {
   }
 }
 
+// ==================== معالج الأوامر النصية ====================
 async function handleTextCommand(client, message, command, args, prefix) {
   if (!message.guild) return false;
 
@@ -125,9 +149,11 @@ async function handleTextCommand(client, message, command, args, prefix) {
   if (command === 'اسبوعي') {
     const topUsers = getTopUsers(message.guild.id, 'weekly');
     const userPoints = getUserData(message.author.id, message.guild.id).weekly;
+    
     const embed = new EmbedBuilder()
       .setColor(0x2b2d31)
       .setDescription(`**خلفاء السبع ليالِ <:emoji_38:1474950090539139182>**`);
+
     if (topUsers.length === 0) {
       embed.setDescription(`${embed.data.description}\n\n-# **انه اسبوع جديد و قائمة جديدة ولا يوجد منافسين حتى الآن <:emoji_32:1471962578895769611> **`);
     } else {
@@ -137,6 +163,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
       }
       embed.setDescription(`${embed.data.description}\n\n${desc}`);
     }
+
     embed.setFooter({ text: `انت تملك ${userPoints} نقطة` });
     await message.channel.send({ embeds: [embed] });
     return true;
@@ -145,9 +172,11 @@ async function handleTextCommand(client, message, command, args, prefix) {
   if (command === 'يومي') {
     const topUsers = getTopUsers(message.guild.id, 'daily');
     const userPoints = getUserData(message.author.id, message.guild.id).daily;
+    
     const embed = new EmbedBuilder()
       .setColor(0x2b2d31)
       .setDescription(`**خلفاء الليلة <:emoji_36:1474949953876000950>**`);
+
     if (topUsers.length === 0) {
       embed.setDescription(`${embed.data.description}\n\n-# **انه يوم جديد و قائمة جديدة ولا يوجد منافسين حتى الآن <:emoji_32:1471962578895769611> **`);
     } else {
@@ -157,6 +186,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
       }
       embed.setDescription(`${embed.data.description}\n\n${desc}`);
     }
+
     embed.setFooter({ text: `انت تملك ${userPoints} نقطة` });
     await message.channel.send({ embeds: [embed] });
     return true;
@@ -169,6 +199,7 @@ async function getPointsSettings(guildId) {
   return { excludedChannels: [] };
 }
 
+// ==================== onInteraction ====================
 async function onInteraction(client, interaction) {
   if (!interaction.isChatInputCommand() || interaction.commandName !== 'points') return false;
 
@@ -177,7 +208,7 @@ async function onInteraction(client, interaction) {
 
   const sub = interaction.options.getSubcommand();
 
-  // ✅ تأمين الخزينة: نضمن وجود object للسيرفر
+  // تجهيز الخزينة للسيرفر إذا ما كانت موجودة
   if (!pointsData.treasury[guildId]) {
     pointsData.treasury[guildId] = {
       balance: 0,
@@ -286,9 +317,11 @@ async function onInteraction(client, interaction) {
   return false;
 }
 
+// ==================== onReady ====================
 async function onReady(client) {
   console.log('⭐ نظام النقاط مع الخزينة جاهز');
   console.log(`- إجمالي المستخدمين المسجلين: ${Object.keys(pointsData.users).length}`);
+  console.log(`- السيرفرات المفعلة للخزينة: ${Object.keys(pointsData.treasury).length}`);
 }
 
 module.exports = {
