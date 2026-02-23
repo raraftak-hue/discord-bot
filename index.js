@@ -356,9 +356,9 @@ client.once('ready', async () => {
   console.log('✅ تم تسجيل جميع الأوامر بنجاح!');
   console.log('📋 الأوامر المسجلة:', slashCommands.map(c => c.name).join(', '));
 } catch (e) { 
-  console.error('❌ فشل تسجيل الأوامر:');
-  console.error(e); 
-}
+    console.error('❌ فشل تسجيل الأوامر:');
+    console.error(e); 
+  }
 
   for (const system of client.systems.values()) {
     if (system.onReady) {
