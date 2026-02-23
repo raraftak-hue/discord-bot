@@ -99,7 +99,7 @@ async function onMessage(client, message) {
     // صرف من الخزينة إذا كانت مفعلة
     const treasury = pointsData.treasury[message.guild.id];
     if (treasury?.active && treasury.balance >= treasury.exchangeRate) {
-      const economy = client.systems.get('economy.js');
+      const economy = client.systems.get('economy'); // بدون .js
       if (economy) {
         try {
           const memberEconomy = await economy.getUserData(message.author.id, message.guild.id);
@@ -196,6 +196,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
 }
 
 async function getPointsSettings(guildId) {
+  // مؤقت: إعدادات افتراضية لحين إضافة نظام الإعدادات
   return { excludedChannels: [] };
 }
 
@@ -250,7 +251,11 @@ async function onInteraction(client, interaction) {
   if (sub === 'fund') {
     const amount = interaction.options.getInteger('amount');
     const newRate = interaction.options.getInteger('rate');
-    const economy = client.systems.get('economy.js');
+
+    // ✅ سبرينت للأنظمة المتوفرة (للتشخيص)
+    console.log('📦 الأنظمة المتوفرة في client.systems:', [...client.systems.keys()]);
+
+    const economy = client.systems.get('economy'); // بدون .js
 
     if (!economy) {
       return interaction.reply({ content: `-# **نظام الاقتصاد غير مفعل**`, ephemeral: true });
