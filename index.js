@@ -284,7 +284,7 @@ const slashCommands = [
         required: true
       }
     ]
-  },
+  }, // الفاصلة مهمة هنا
   // أوامر points
   /*{
     name: 'points',
@@ -342,29 +342,30 @@ const slashCommands = [
         ]
       }
     ]
-  }
+  }*/
 ];
-*/
+
 // ==================== الأحداث ====================
 client.once('ready', async () => {
   console.log(`✅ تم تسجيل الدخول بـ ${client.user.tag}`);
   console.log('🔄 Bot ID:', client.user.id);
-console.log('🔄 عدد الأوامر:', slashCommands.length);
-console.log('🔄 جاري تسجيل الأوامر...');
+  console.log('🔄 عدد الأوامر:', slashCommands.length);
+  console.log('🔄 جاري تسجيل الأوامر...');
+  
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   try {
-  await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
-  await rest.put(Routes.applicationCommands(client.user.id), { body: slashCommands });
-  console.log('✅ تم تسجيل الأوامر بنجاح! (تم التأكيد)');
-  console.log('✅ تم تسجيل جميع الأوامر بنجاح!');
-  console.log('📋 الأوامر المسجلة:', slashCommands.map(c => c.name).join(', '));
-} catch (e) { 
-  console.error('❌ فشل تسجيل الأوامر:');
-  console.error('اسم الخطأ:', e.name);
-  console.error('رسالة الخطأ:', e.message);
-  console.error('كود الخطأ:', e.code);
-  console.error('الاستجابة الكاملة:', e.rawError);
-}
+    await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
+    await rest.put(Routes.applicationCommands(client.user.id), { body: slashCommands });
+    console.log('✅ تم تسجيل الأوامر بنجاح! (تم التأكيد)');
+    console.log('✅ تم تسجيل جميع الأوامر بنجاح!');
+    console.log('📋 الأوامر المسجلة:', slashCommands.map(c => c.name).join(', '));
+  } catch (e) { 
+    console.error('❌ فشل تسجيل الأوامر:');
+    console.error('اسم الخطأ:', e.name);
+    console.error('رسالة الخطأ:', e.message);
+    console.error('كود الخطأ:', e.code);
+    console.error('الاستجابة الكاملة:', e.rawError);
+  }
 
   for (const system of client.systems.values()) {
     if (system.onReady) {
