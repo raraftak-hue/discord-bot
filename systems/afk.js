@@ -9,7 +9,6 @@ const AfkSchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now }
 });
 
-// فهرسة مركبة عشان نجيب البيانات بسرعة
 AfkSchema.index({ guildId: 1, userId: 1 }, { unique: true });
 
 const Afk = mongoose.model('Afk', AfkSchema);
@@ -20,6 +19,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
 
   // ===== أمر غايب =====
   if (command === 'غايب') {
+    // خذ كل الكلام بعد الأمر كسبب
     const reason = args.join(' ') || 'بدون سبب';
     const userId = message.author.id;
     const guildId = message.guild.id;
@@ -36,7 +36,6 @@ async function handleTextCommand(client, message, command, args, prefix) {
       { upsert: true }
     );
 
-    // رسالة عادية (مو reply)
     await message.channel.send(`-# **غايب و عذرك معاك بالتوفيق <:emoji_84:1389404919672340592> **`);
     return true;
   }
@@ -55,9 +54,8 @@ async function onMessage(client, message) {
   const userAfk = await Afk.findOne({ userId, guildId });
   if (userAfk) {
     await Afk.deleteOne({ userId, guildId });
-    // رسالة عادية (مو reply)
     await message.channel.send(`-# **الحمدلله رجعتلنا بالسلامة <:emoji_37:1474950026840244265> **`);
-    return; // ما نكمل عشان ما يفحص المنشن
+    return;
   }
 
   // ===== 2. إذا فيه منشن، نفحص كل منشن =====
@@ -67,9 +65,7 @@ async function onMessage(client, message) {
 
       const afk = await Afk.findOne({ userId: mentionedUser.id, guildId });
       if (afk) {
-        // رسالة عادية (مو reply)
         await message.channel.send(`-# **المستخدم غايب و يقول ${afk.reason}**`);
-        // ما نعمل break عشان لو فيه أكثر من منشن، كل واحد ياخذ رده
       }
     }
   }
