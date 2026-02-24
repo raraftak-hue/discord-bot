@@ -1,5 +1,6 @@
 const { EmbedBuilder, PermissionsBitField } = require('discord.js');
 const mongoose = require('mongoose');
+const cron = require('node-cron'); // <-- إضافة مكتبة cron
 
 // ==================== 📊 Schema ====================
 const userPointsSchema = new mongoose.Schema({
@@ -37,6 +38,27 @@ const PointsSettings = mongoose.models.PointsSettings || mongoose.model('PointsS
 
 // ==================== دوال مساعدة ====================
 
+// دالة جديدة لإعادة تعيين النقاط اليومية لكل السيرفرات
+async function resetDailyPointsForAllGuilds() {
+  try {
+    const result = await UserPoints.updateMany({}, { $set: { daily: 0 } });
+    console.log(`✅ [${new Date().toLocaleString()}] تم إعادة تعيين النقاط اليومية لـ ${result.modifiedCount} مستخدم.`);
+  } catch (error) {
+    console.error('❌ خطأ في إعادة تعيين النقاط اليومية:', error);
+  }
+}
+
+// دالة جديدة لإعادة تعيين النقاط الأسبوعية لكل السيرفرات
+async function resetWeeklyPointsForAllGuilds() {
+  try {
+    const result = await UserPoints.updateMany({}, { $set: { weekly: 0 } });
+    console.log(`✅ [${new Date().toLocaleString()}] تم إعادة تعيين النقاط الأسبوعية لـ ${result.modifiedCount} مستخدم.`);
+  } catch (error) {
+    console.error('❌ خطأ في إعادة تعيين النقاط الأسبوعية:', error);
+  }
+}
+
+// ==================== باقي الدوال المساعدة (بدون تغيير) ====================
 async function getUserData(userId, guildId) {
   let user = await UserPoints.findOne({ userId, guildId });
   if (!user) {
@@ -84,7 +106,7 @@ async function getTopUsers(guildId, type = 'weekly') {
   }));
 }
 
-// ==================== onMessage ====================
+// ==================== onMessage (بدون تغيير) ====================
 async function onMessage(client, message) {
   if (message.author.bot || !message.guild) return;
 
@@ -144,7 +166,7 @@ async function onMessage(client, message) {
   }
 }
 
-// ==================== معالج الأوامر النصية ====================
+// ==================== معالج الأوامر النصية (بدون تغيير) ====================
 async function handleTextCommand(client, message, command, args, prefix) {
   if (!message.guild) return false;
 
@@ -203,7 +225,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
   return false;
 }
 
-// ==================== onInteraction ====================
+// ==================== onInteraction (بدون تغيير) ====================
 async function onInteraction(client, interaction) {
   if (!interaction.isChatInputCommand() || interaction.commandName !== 'points') return false;
 
@@ -212,7 +234,6 @@ async function onInteraction(client, interaction) {
 
   const sub = interaction.options.getSubcommand();
 
-  // ===== /points ch =====
   if (sub === 'ch') {
     const channel = interaction.options.getChannel('room');
     const settings = await getPointsSettings(guildId);
@@ -229,7 +250,6 @@ async function onInteraction(client, interaction) {
     return true;
   }
 
-  // ===== /points info =====
   if (sub === 'info') {
     const settings = await getPointsSettings(guildId);
     const excluded = settings.excludedChannels.map(id => `<#${id}>`).join('، ') || 'لا يوجد';
@@ -242,7 +262,6 @@ async function onInteraction(client, interaction) {
     return true;
   }
 
-  // ===== /points fund =====
   if (sub === 'fund') {
     const amount = interaction.options.getInteger('amount');
     const newRate = interaction.options.getInteger('rate');
@@ -285,7 +304,6 @@ async function onInteraction(client, interaction) {
     return true;
   }
 
-  // ===== /points reset =====
   if (sub === 'reset') {
     const type = interaction.options.getString('type');
     
@@ -312,13 +330,39 @@ async function onInteraction(client, interaction) {
   return false;
 }
 
-// ==================== onReady ====================
+// ==================== onReady (معدل مع التايم زون) ====================
 async function onReady(client) {
   console.log('⭐ نظام النقاط مع MongoDB جاهز');
   const usersCount = await UserPoints.countDocuments();
   const treasuryCount = await Treasury.countDocuments();
   console.log(`- إجمالي المستخدمين المسجلين: ${usersCount}`);
   console.log(`- السيرفرات المفعلة للخزينة: ${treasuryCount}`);
+
+  // ==================== تشغيل المؤقتات (Cron Jobs) ====================
+  // تحديد المنطقة الزمنية لمكة المكرمة (مناسبة لمعظم الدول العربية)
+  const TIMEZONE = 'Asia/Riyadh';
+
+  // 1. إعادة تعيين النقاط اليومية كل يوم في الساعة 00:00 بتوقيت مكة
+  cron.schedule('0 0 * * *', async () => {
+    console.log(`⏰ [${new Date().toLocaleString()}] بدء إعادة تعيين النقاط اليومية بتوقيت مكة...`);
+    await resetDailyPointsForAllGuilds();
+    console.log(`✅ [${new Date().toLocaleString()}] تم إعادة تعيين جميع النقاط اليومية`);
+  }, {
+    scheduled: true,
+    timezone: TIMEZONE
+  });
+
+  // 2. إعادة تعيين النقاط الأسبوعية كل يوم أحد في الساعة 00:00 بتوقيت مكة
+  cron.schedule('0 0 * * 0', async () => {
+    console.log(`⏰ [${new Date().toLocaleString()}] بدء إعادة تعيين النقاط الأسبوعية بتوقيت مكة...`);
+    await resetWeeklyPointsForAllGuilds();
+    console.log(`✅ [${new Date().toLocaleString()}] تم إعادة تعيين جميع النقاط الأسبوعية`);
+  }, {
+    scheduled: true,
+    timezone: TIMEZONE
+  });
+
+  console.log(`⏰ تم تشغيل المؤقتات اليومية والأسبوعية بنجاح حسب توقيت مكة المكرمة (${TIMEZONE})`);
 }
 
 module.exports = {
