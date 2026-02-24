@@ -52,8 +52,8 @@ async function endGiveaway(client, giveaway) {
       
       await message.edit({ embeds: [embed], components: [] }).catch(() => {});
       await channel.send(
-        `-# **مبروك فزتم بـ ${giveaway.prize} افتحوا تكت عشان تستلموها <:emoji_33:1401771703306027008> **\n` +
-        `-# **${winners.join(', ')}**`
+        `-# ** مبروك فزتم بـ ${giveaway.prize} افتحوا تذكرة لتستلموا الجائزة <:emoji_40:1471983905430311074> **\n` +
+        `-# **الفائزين ${winners.join(' ')}**`
       ).catch(() => {});
     }
     
