@@ -55,28 +55,25 @@ function calculateTax(balance, amount) {
 async function formatHistory(client, history) {
   if (!history || history.length === 0) return "-# **ما عندك أي عمليات سابقة <:emoji_32:1471962578895769611>**";
   
-  const filtered = history.slice(-3).reverse();
+  // تصفية العمليات لإخفاء OWNER_ADD و OWNER_REMOVE
+  const filteredHistory = history.filter(h => h.type !== 'OWNER_ADD' && h.type !== 'OWNER_REMOVE');
+  
+  const lastThree = filteredHistory.slice(-3).reverse();
   const lines = [];
 
-  for (const h of filtered) {
+  for (const h of lastThree) {
     const date = new Date(h.date);
     const dateStr = `${date.getDate()}-${date.getMonth() + 1}`;
 
     if (h.type === 'TRANSFER_SEND') {
-      lines.push(`-# **تحويل الى <@${h.targetUser}> في ${dateStr} <:emoji_41:1471619709936996406>**`);
+      lines.push(`-# ** ارسال الى <@${h.targetUser}> بـ ${Math.abs(h.amount)} دينار في ${dateStr} <:emoji_41:1471619709936996406> **`);
     } 
     else if (h.type === 'TRANSFER_RECEIVE') {
-      lines.push(`-# **استلام من <@${h.targetUser}> في ${dateStr} <:emoji_41:1471983856440836109>**`);
+      lines.push(`-# ** استلام من <@${h.targetUser}> بـ ${h.amount} دينار في ${dateStr} <:emoji_41:1471983856440836109>**`);
     } 
     else if (h.type === 'WEEKLY_TAX') {
       lines.push(`-# **خصم زكاة 2.5% = ${Math.abs(h.amount)} في ${dateStr} <:emoji_40:1471983905430311074>**`);
     } 
-    else if (h.type === 'OWNER_ADD') {
-      lines.push(`-# **إضافة رصيد ${h.amount} في ${dateStr} <:emoji_41:1471619709936996406>**`);
-    } 
-    else if (h.type === 'OWNER_REMOVE') {
-      lines.push(`-# **سحب رصيد ${Math.abs(h.amount)} في ${dateStr} <:emoji_41:1471619709936996406>**`);
-    }
     else if (h.type === 'STARTING_GIFT') {
       lines.push(`-# **هدية ابتدائية بقيمة ${h.amount} في ${dateStr} <:emoji_35:1471963080228474890>**`);
     }
@@ -91,7 +88,7 @@ async function formatHistory(client, history) {
     }
   }
 
-  return lines.join('\n');
+  return lines.length > 0 ? lines.join('\n') : "-# **ما عندك أي عمليات سابقة تظهر هنا <:emoji_32:1471962578895769611>**";
 }
 
 // ==================== handleTextCommand ====================
