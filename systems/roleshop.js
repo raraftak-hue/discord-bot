@@ -104,29 +104,14 @@ async function handleTextCommand(client, message, command, args, prefix) {
   if (!message.guild) return false;
 
   if (command === 'شراء') {
-    // ندمج args عشان نشوف اسم الرتبة
-    const roleInput = args.join(' ').trim();
-    if (!roleInput) {
-      await message.channel.send(`-# **اكتب اسم الرتبة اللي تبي تشتريها <:emoji_334:1388211595053760663> **`);
+    // التأكد من وجود منشن رتبة
+    if (message.mentions.roles.size === 0) {
+      await message.channel.send(`-# **منشن الرتبة اللي تبي تشتريها <:emoji_334:1388211595053760663> **`);
       return true;
     }
 
-    let role = null;
+    const role = message.mentions.roles.first();
     
-    // الحالة 1: إذا كان المدخل منشن رتبة
-    if (message.mentions.roles.size > 0) {
-      role = message.mentions.roles.first();
-    } 
-    // الحالة 2: إذا كان اسم رتبة
-    else {
-      role = message.guild.roles.cache.find(r => r.name.toLowerCase() === roleInput.toLowerCase());
-    }
-
-    if (!role) {
-      await message.channel.send(`-# **ما لقيت رتبة بهالاسم أو المنشن <:emoji_84:1389404919672340592> **`);
-      return true;
-    }
-
     const item = await RoleShop.findOne({ guildId: message.guild.id, roleId: role.id });
     if (!item) {
       await message.channel.send(`-# **هذي الرتبة مو موجودة بالسوق <:emoji_84:1389404919672340592> **`);
@@ -147,7 +132,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
 
     // رسالة تأكيد
     const confirmMsg = await message.channel.send({
-      content: `-# **بتشتري الرتبة "${role.name}" بـ ${item.price} دينار؟ اكتب "تأكيد" <:emoji_41:1471619709936996406> **`
+      content: `-# **بتشتري ${role} بـ ${item.price} دينار؟ اكتب "تأكيد" <:emoji_41:1471619709936996406> **`
     });
 
     const filter = (m) => m.author.id === message.author.id && m.content === 'تأكيد';
@@ -177,12 +162,12 @@ async function handleTextCommand(client, message, command, args, prefix) {
 
       // تحديث رسالة التأكيد
       await confirmMsg.edit({
-        content: `-# **تم شراء الرتبة "${role.name}" بـ ${item.price} دينار <:2thumbup:1467287897429512396> **`,
+        content: `-# **تم شراء ${role} بـ ${item.price} دينار <:2thumbup:1467287897429512396> **`,
         components: []
       });
 
-      // رسالة السجل
-      await message.channel.send(`-# **شراء رتبة ${role.name} بـ ${item.price} دينار <:emoji_41:1471619709936996406> **`);
+      // رسالة السجل (بمنشن الرتبة)
+      await message.channel.send(`-# **شراء رتبة ${role} بـ ${item.price} دينار <:emoji_41:1471619709936996406> **`);
     });
 
     collector.on('end', (collected) => {
