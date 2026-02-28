@@ -63,7 +63,7 @@ async function formatHistory(client, history) {
 
   for (const h of lastThree) {
     const date = new Date(h.date);
-    const dateStr = `${date.getDate()}-${date.getMonth() + 1}`;
+    const dateStr = `${date.getDate()} و ${date.getMonth() + 1}`;
 
     if (h.type === 'TRANSFER_SEND') {
       lines.push(`-# ** ارسال الى <@${h.targetUser}> بـ ${Math.abs(h.amount)} دينار في ${dateStr} <:emoji_41:1471619709936996406> **`);
@@ -82,6 +82,10 @@ async function formatHistory(client, history) {
     }
     else if (h.type === 'FUNDING_DEDUCTION') {
       lines.push(`-# ** تمويل نظام النقاط بـ ${Math.abs(h.amount)} دينار  <:emoji_41:1471619709936996406> **`);
+    }
+    else if (h.type === 'ROLE_PURCHASE') {
+      // h.targetUser هنا يحتوي على ID الرتبة الذي تم تخزينه في roleshop.js
+      lines.push(`-# ** شراء رتبة <@&${h.targetUser}> بـ ${Math.abs(h.amount)}دينار في ${dateStr} <:emoji_41:1471619709936996406> **`);
     }
     else {
       lines.push(`-# **${h.type}: ${Math.abs(h.amount)} في ${dateStr} <:emoji_41:1471983856440836109>**`);

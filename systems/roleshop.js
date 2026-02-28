@@ -151,8 +151,8 @@ async function handleTextCommand(client, message, command, args, prefix) {
       freshData.history.push({
         type: 'ROLE_PURCHASE',
         amount: item.price,
-        targetUser: message.author.id,
-        targetName: message.author.username,
+        targetUser: role.id, // تخزين ID الرتبة هنا ليظهر المنشن في السجل
+        targetName: role.name,
         date: new Date()
       });
       await freshData.save();
