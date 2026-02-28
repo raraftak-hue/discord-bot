@@ -343,41 +343,39 @@ const slashCommands = [
         ]
       }
     ]
+  },
+  // أوامر بيع الرولز
+  {
+    name: 'shop',
+    description: 'نظام الرتب الشرائية',
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+    options: [
+      {
+        name: 'add',
+        description: 'إضافة رتبة للسوق',
+        type: 1,
+        options: [
+          { name: 'role', description: 'الرتبة', type: 8, required: true },
+          { name: 'price', description: 'السعر بالدينار', type: 4, required: true },
+          { name: 'channel', description: 'روم القائمة', type: 7, required: true }
+        ]
+      },
+      {
+        name: 'remove',
+        description: 'حذف رتبة من السوق',
+        type: 1,
+        options: [
+          { name: 'role', description: 'الرتبة', type: 8, required: true }
+        ]
+      },
+      {
+        name: 'list',
+        description: 'عرض كل الرتب المتاحة',
+        type: 1
+      }
+    ]
   }
 ];
-
-//اوامر بيع الرولز
-
-{
-  name: 'shop',
-  description: 'نظام الرتب الشرائية',
-  default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
-  options: [
-    {
-      name: 'add',
-      description: 'إضافة رتبة للسوق',
-      type: 1,
-      options: [
-        { name: 'role', description: 'الرتبة', type: 8, required: true },
-        { name: 'price', description: 'السعر بالدينار', type: 4, required: true },
-        { name: 'channel', description: 'روم القائمة', type: 7, required: true }
-      ]
-    },
-    {
-      name: 'remove',
-      description: 'حذف رتبة من السوق',
-      type: 1,
-      options: [
-        { name: 'role', description: 'الرتبة', type: 8, required: true }
-      ]
-    },
-    {
-      name: 'list',
-      description: 'عرض كل الرتب المتاحة',
-      type: 1
-    }
-  ]
-}
 
 // ==================== الأحداث ====================
 client.once('ready', async () => {
