@@ -6,15 +6,17 @@ const roleShopSchema = new mongoose.Schema({
   guildId: String,
   roleId: String,
   price: Number,
+  description: String,
   channelId: String,
   messageId: String
 });
 
 const RoleShop = mongoose.model('RoleShop', roleShopSchema);
 
-// ==================== تحديث القائمة ====================
+// ==================== تحديث القائمة (مرتبة حسب السعر) ====================
 async function updateShopMessage(guild) {
-  const items = await RoleShop.find({ guildId: guild.id });
+  // نجيب الرتب مرتبة من الأعلى سعراً للأقل
+  const items = await RoleShop.find({ guildId: guild.id }).sort({ price: -1 }); // -1 = تنازلي (الأغلى أولاً)
   
   if (items.length === 0) return;
 
@@ -26,7 +28,11 @@ async function updateShopMessage(guild) {
   for (const item of items) {
     const role = await guild.roles.fetch(item.roleId).catch(() => null);
     if (role) {
-      desc += `-# **${role} – ${item.price} دينار <:emoji_41:1471619709936996406> **\n`;
+      desc += `-# **${role} – ${item.price} دينار**\n`;
+      if (item.description) {
+        desc += `-# ${item.description}\n`;
+      }
+      desc += `-# <:emoji_41:1471619709936996406> \n\n`;
     }
   }
 
@@ -62,17 +68,24 @@ async function onInteraction(client, interaction) {
 
       const role = interaction.options.getRole('role');
       const price = interaction.options.getInteger('price');
+      const description = interaction.options.getString('description') || '';
       const channel = interaction.options.getChannel('channel');
 
       await RoleShop.findOneAndUpdate(
         { guildId: interaction.guild.id, roleId: role.id },
-        { price, channelId: channel.id },
+        { price, description, channelId: channel.id },
         { upsert: true }
       );
 
       await updateShopMessage(interaction.guild);
+      
+      let replyMsg = `-# **تم إضافة ${role} للسوق بـ ${price} دينار <:2thumbup:1467287897429512396> **`;
+      if (description) {
+        replyMsg += `\n-# **الوصف:** ${description}`;
+      }
+      
       await interaction.reply({ 
-        content: `-# **تم إضافة ${role} للسوق بـ ${price} دينار <:2thumbup:1467287897429512396> **`, 
+        content: replyMsg, 
         ephemeral: true 
       });
       return true;
@@ -151,7 +164,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
       freshData.history.push({
         type: 'ROLE_PURCHASE',
         amount: item.price,
-        targetUser: role.id, // تخزين ID الرتبة هنا ليظهر المنشن في السجل
+        targetUser: role.id,
         targetName: role.name,
         date: new Date()
       });
@@ -160,7 +173,7 @@ async function handleTextCommand(client, message, command, args, prefix) {
       // إضافة الرتبة فعلياً
       await message.member.roles.add(role.id);
 
-      // تحديث رسالة التأكيد (رجعت زي ما كانت)
+      // تحديث رسالة التأكيد
       const successMsg = await confirmMsg.edit({
         content: `-# **تم شراء ${role} بـ ${item.price} دينار <:2thumbup:1467287897429512396> **`,
         components: []
