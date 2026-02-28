@@ -345,6 +345,7 @@ const slashCommands = [
     ]
   },
   // أوامر بيع الرولز
+  // أوامر بيع الرولز
   {
     name: 'shop',
     description: 'نظام الرتب الشرائية',
@@ -357,6 +358,7 @@ const slashCommands = [
         options: [
           { name: 'role', description: 'الرتبة', type: 8, required: true },
           { name: 'price', description: 'السعر بالدينار', type: 4, required: true },
+          { name: 'description', description: 'وصف الرتبة (اختياري)', type: 3, required: false },
           { name: 'channel', description: 'روم القائمة', type: 7, required: true }
         ]
       },
@@ -367,15 +369,10 @@ const slashCommands = [
         options: [
           { name: 'role', description: 'الرتبة', type: 8, required: true }
         ]
-      },
-      {
-        name: 'list',
-        description: 'عرض كل الرتب المتاحة',
-        type: 1
       }
+      // ❌ list محذوف نهائياً
     ]
   }
-];
 
 // ==================== الأحداث ====================
 client.once('ready', async () => {
