@@ -160,22 +160,16 @@ async function handleTextCommand(client, message, command, args, prefix) {
       // إضافة الرتبة فعلياً
       await message.member.roles.add(role.id);
 
-      // تحديث رسالة التأكيد
-      await confirmMsg.edit({
+      // تحديث رسالة التأكيد (رجعت زي ما كانت)
+      const successMsg = await confirmMsg.edit({
         content: `-# **تم شراء ${role} بـ ${item.price} دينار <:2thumbup:1467287897429512396> **`,
         components: []
       });
 
       // حذف رسالة التأكيد بعد 12 ثانية
       setTimeout(() => {
-        confirmMsg.delete().catch(() => null);
+        successMsg.delete().catch(() => null);
       }, 12000);
-
-      // رسالة السجل (بمنشن الرتبة)
-      const now = new Date();
-      const day = now.getDate();
-      const month = now.getMonth() + 1; // الأشهر تبدأ من 0
-      await message.channel.send(`-# ** شراء رتبة ${role} بـ ${item.price}دينار في ${day} و ${month} <:emoji_41:1471619709936996406> **`);
     });
 
     collector.on('end', (collected) => {

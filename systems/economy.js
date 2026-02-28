@@ -84,7 +84,7 @@ async function formatHistory(client, history) {
       lines.push(`-# ** تمويل نظام النقاط بـ ${Math.abs(h.amount)} دينار  <:emoji_41:1471619709936996406> **`);
     }
     else if (h.type === 'ROLE_PURCHASE') {
-      // h.targetUser هنا يحتوي على ID الرتبة الذي تم تخزينه في roleshop.js
+      // h.targetUser هنا يحتوي على ID الرتبة
       lines.push(`-# ** شراء رتبة <@&${h.targetUser}> بـ ${Math.abs(h.amount)}دينار في ${dateStr} <:emoji_41:1471619709936996406> **`);
     }
     else {
