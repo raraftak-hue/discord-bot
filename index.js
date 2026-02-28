@@ -344,8 +344,7 @@ const slashCommands = [
       }
     ]
   },
-  // أوامر بيع الرولز
-  // أوامر بيع الرولز
+  // أوامر بيع الرولز (معدلة نهائياً)
   {
     name: 'shop',
     description: 'نظام الرتب الشرائية',
@@ -370,9 +369,9 @@ const slashCommands = [
           { name: 'role', description: 'الرتبة', type: 8, required: true }
         ]
       }
-      // ❌ list محذوف نهائياً
     ]
   }
+];
 
 // ==================== الأحداث ====================
 client.once('ready', async () => {
