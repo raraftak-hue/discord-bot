@@ -166,8 +166,16 @@ async function handleTextCommand(client, message, command, args, prefix) {
         components: []
       });
 
+      // حذف رسالة التأكيد بعد 12 ثانية
+      setTimeout(() => {
+        confirmMsg.delete().catch(() => null);
+      }, 12000);
+
       // رسالة السجل (بمنشن الرتبة)
-      await message.channel.send(`-# **شراء رتبة ${role} بـ ${item.price} دينار <:emoji_41:1471619709936996406> **`);
+      const now = new Date();
+      const day = now.getDate();
+      const month = now.getMonth() + 1; // الأشهر تبدأ من 0
+      await message.channel.send(`-# ** شراء رتبة ${role} بـ ${item.price}دينار في ${day} و ${month} <:emoji_41:1471619709936996406> **`);
     });
 
     collector.on('end', (collected) => {
