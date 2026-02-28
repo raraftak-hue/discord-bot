@@ -104,17 +104,26 @@ async function handleTextCommand(client, message, command, args, prefix) {
   if (!message.guild) return false;
 
   if (command === 'شراء') {
-    // ندمج args عشان نشوف اسم الرتبة (ممكن يكون "نجم نادر" مثلاً)
-    const roleName = args.join(' ').trim();
-    if (!roleName) {
+    // ندمج args عشان نشوف اسم الرتبة
+    const roleInput = args.join(' ').trim();
+    if (!roleInput) {
       await message.channel.send(`-# **اكتب اسم الرتبة اللي تبي تشتريها <:emoji_334:1388211595053760663> **`);
       return true;
     }
 
-    // البحث عن الرتبة بالاسم (case insensitive)
-    const role = message.guild.roles.cache.find(r => r.name.toLowerCase() === roleName.toLowerCase());
+    let role = null;
+    
+    // الحالة 1: إذا كان المدخل منشن رتبة
+    if (message.mentions.roles.size > 0) {
+      role = message.mentions.roles.first();
+    } 
+    // الحالة 2: إذا كان اسم رتبة
+    else {
+      role = message.guild.roles.cache.find(r => r.name.toLowerCase() === roleInput.toLowerCase());
+    }
+
     if (!role) {
-      await message.channel.send(`-# **ما لقيت رتبة بهالاسم <:emoji_84:1389404919672340592> **`);
+      await message.channel.send(`-# **ما لقيت رتبة بهالاسم أو المنشن <:emoji_84:1389404919672340592> **`);
       return true;
     }
 
