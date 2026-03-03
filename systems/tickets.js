@@ -38,7 +38,6 @@ async function getTicketSettings(guildId) {
 
 // ==================== onInteraction ====================
 async function onInteraction(client, interaction) {
-  // ========== تحقق 1: هل التفاعل وصل أساساً؟ ==========
   console.log(`📢 [TICKETS] تفاعل جديد - Type: ${interaction.type}, CustomId: ${interaction.customId}, User: ${interaction.user.tag}`);
 
   if (!interaction.isChatInputCommand() && !interaction.isButton()) {
@@ -111,11 +110,11 @@ async function onInteraction(client, interaction) {
 
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-          .setCustomId('open_ticket_support')
+          .setCustomId('ticket_support')
           .setLabel('الدعم الفني')
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
-          .setCustomId('open_ticket_court')
+          .setCustomId('ticket_court')
           .setLabel('محكمة العدل')
           .setStyle(ButtonStyle.Secondary)
       );
@@ -130,20 +129,19 @@ async function onInteraction(client, interaction) {
   if (interaction.isButton()) {
     console.log(`🔘 [TICKETS] زر مضغوط: ${interaction.customId}`);
 
-    if (interaction.customId === 'open_ticket_support') {
+    if (interaction.customId === 'ticket_support') {
       console.log(`🎫 [TICKETS] فتح تذكرة دعم`);
       return handleOpenTicket(interaction, client, 'support');
     }
 
-    if (interaction.customId === 'open_ticket_court') {
+    if (interaction.customId === 'ticket_court') {
       console.log(`🎫 [TICKETS] فتح تذكرة محكمة`);
       return handleOpenTicket(interaction, client, 'court');
     }
 
-    if (interaction.customId === 'claim_ticket') {
+    if (interaction.customId === 'ticket_claim') {
       console.log(`🔄 [TICKETS] محاولة استلام تذكرة في: ${interaction.channel.id}`);
       
-      // ========== تحقق 2: هل التذكرة مسجلة في DB؟ ==========
       let ticket = await Ticket.findOne({ channelId: interaction.channel.id });
       console.log(`📦 [TICKETS] نتيجة البحث في DB: ${ticket ? 'موجودة' : 'غير موجودة'}`);
       
@@ -167,7 +165,6 @@ async function onInteraction(client, interaction) {
       
       console.log(`👤 [TICKETS] رتبة المستخدمين: support=${settings.supportRoleId}, court=${settings.courtRoleId}, allowed=${allowedRoleId}`);
 
-      // ========== تحقق 3: هل المستخدم عنده الرتبة؟ ==========
       if (!allowedRoleId || !interaction.member.roles.cache.has(allowedRoleId)) {
         console.log(`❌ [TICKETS] المستخدم ${interaction.user.id} ليس لديه الرتبة المطلوبة`);
         return interaction.reply({ 
@@ -176,7 +173,6 @@ async function onInteraction(client, interaction) {
         });
       }
 
-      // ========== تحقق 4: هل التذكرة مستلمة قبل كده؟ ==========
       if (ticket.claimedBy) {
         console.log(`⚠️ [TICKETS] التذكرة مستلمة بالفعل بواسطة ${ticket.claimedBy}`);
         const claimer = await interaction.guild.members.fetch(ticket.claimedBy).catch(() => null);
@@ -186,7 +182,6 @@ async function onInteraction(client, interaction) {
         });
       }
 
-      // ========== تحقق 5: استلام التذكرة ==========
       console.log(`✅ [TICKETS] تم استلام التذكرة بواسطة ${interaction.user.id}`);
       ticket.claimedBy = interaction.user.id;
       await ticket.save();
@@ -194,12 +189,12 @@ async function onInteraction(client, interaction) {
 
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-          .setCustomId('claim_ticket')
+          .setCustomId('ticket_claim')
           .setLabel('استلام التذكرة')
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true),
         new ButtonBuilder()
-          .setCustomId('close_ticket')
+          .setCustomId('ticket_close')
           .setLabel('إغلاق')
           .setStyle(ButtonStyle.Danger)
           .setDisabled(false)
@@ -219,7 +214,7 @@ async function onInteraction(client, interaction) {
       return true;
     }
 
-    if (interaction.customId === 'close_ticket') {
+    if (interaction.customId === 'ticket_close') {
       console.log(`🔒 [TICKETS] محاولة إغلاق تذكرة في: ${interaction.channel.id}`);
       
       let ticket = await Ticket.findOne({ channelId: interaction.channel.id });
@@ -330,11 +325,11 @@ async function handleOpenTicket(interaction, client, type) {
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId('claim_ticket')
+      .setCustomId('ticket_claim')
       .setLabel('استلام التذكرة')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
-      .setCustomId('close_ticket')
+      .setCustomId('ticket_close')
       .setLabel('إغلاق')
       .setStyle(ButtonStyle.Danger)
       .setDisabled(true)
@@ -359,7 +354,6 @@ async function handleOpenTicket(interaction, client, type) {
   });
   await ticket.save();
   
-  // ========== تحقق 6: التأكد من الحفظ ==========
   const savedTicket = await Ticket.findOne({ channelId: thread.id });
   console.log(`✅ [TICKETS] تم حفظ التذكرة في DB: ${savedTicket ? 'نعم' : 'لا'}`);
 
