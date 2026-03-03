@@ -191,7 +191,7 @@ async function onInteraction(client, interaction) {
     return true;
   }
 
-  // ===== زر الشراء =====
+  // ===== زر الشراء (نسخة Threads مع Permission Overwrites) =====
   if (interaction.isButton() && interaction.customId.startsWith('buy_')) {
     const productId = interaction.customId.split('_')[1];
     const product = await Product.findOne({ productId, isActive: true });
@@ -217,10 +217,10 @@ async function onInteraction(client, interaction) {
     });
 
     if (existingTicket) {
-      const channel = await interaction.guild.channels.fetch(existingTicket.channelId).catch(() => null);
-      if (channel) {
+      const thread = await interaction.guild.channels.fetch(existingTicket.channelId).catch(() => null);
+      if (thread) {
         return interaction.reply({ 
-          content: `-# **انت فاتح تذكرة شراء لنفس المنتج: ${channel} <:emoji_32:1471962578895769611> **`, 
+          content: `-# **انت فاتح تذكرة شراء لنفس المنتج: ${thread} <:emoji_32:1471962578895769611> **`, 
           ephemeral: true 
         });
       } else {
@@ -239,41 +239,39 @@ async function onInteraction(client, interaction) {
     // جلب رتبة الوسيط
     const mediatorRoleId = await getMediatorRole(interaction.guild.id);
 
-    // إنشاء مصفوفة الصلاحيات
-    const permissionOverwrites = [
-      { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-      { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-      { id: seller.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-      { id: client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
-    ];
-
-    // إضافة رتبة الوسيط إذا كانت موجودة
-    if (mediatorRoleId) {
-      permissionOverwrites.push({
-        id: mediatorRoleId,
-        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
-      });
-    }
-
-    // إنشاء تذكرة
+    // إنشاء Thread
     const ticketName = `شراء-${product.name}-${interaction.user.username}`;
     
-    const ticketChannel = await interaction.guild.channels.create({
+    const thread = await interaction.channel.threads.create({
       name: ticketName.slice(0, 50),
-      type: 0,
-      parent: null,
-      permissionOverwrites
+      autoArchiveDuration: 1440,
+      type: 12, // Private Thread
+      invitable: false,
+      reason: `تذكرة شراء ${product.name}`,
+      startMessage: false
     });
+
+    // إضافة الأعضاء الأساسيين
+    await thread.members.add(interaction.user.id); // المشتري
+    await thread.members.add(seller.id); // البائع
+
+    // إضافة رتبة الوسيط باستخدام Permission Overwrites (ما بتظهرش رسائل نظام)
+    if (mediatorRoleId) {
+      await thread.permissionOverwrites.edit(mediatorRoleId, {
+        ViewChannel: true,
+        SendMessages: true
+      }).catch(() => {});
+    }
 
     await PurchaseTicket.create({
       productId,
       buyerId: interaction.user.id,
       guildId: interaction.guild.id,
-      channelId: ticketChannel.id,
+      channelId: thread.id,
       mediatorId: null
     });
 
-    // زر واحد للاستلام + زر الإغلاق
+    // أزرار الاستلام والإغلاق
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`claim_${productId}`)
@@ -290,16 +288,15 @@ async function onInteraction(client, interaction) {
 
     const mediatorRole = mediatorRoleId ? `<@&${mediatorRoleId}>` : 'وسيط';
 
-    await ticketChannel.send({
+    await thread.send({
       content: `${seller.user} ${interaction.user}\n` +
                `-# **انت الحين في صدد شراء ${product.name} من البائع ${seller.user}**\n` +
                `-# **عند الاتفاق على السعر يفضّل استخدام أحد الوسطاء ${mediatorRole} الي ياخذون ٥٪؜ فقط من المبلغ <:emoji_36:1474949953876000950> **`,
       components: [row, closeRow]
     });
 
-    // رسالة الاستلام
     await interaction.reply({ 
-      content: `-# **تم استلام طلبك ${ticketChannel} <:new_emoji:1388436089584226387> **`, 
+      content: `-# **تم استلام طلبك ${thread} <:new_emoji:1388436089584226387> **`, 
       ephemeral: true 
     });
     return true;
@@ -310,7 +307,6 @@ async function onInteraction(client, interaction) {
     const productId = interaction.customId.split('_')[1];
     const mediatorRoleId = await getMediatorRole(interaction.guild.id);
     
-    // التحقق من رتبة الوسيط
     if (!mediatorRoleId || !interaction.member.roles.cache.has(mediatorRoleId)) {
       return interaction.reply({ 
         content: `-# **انت لست وسيطاً فلن تستطيع استلامها <:emoji_38:1401773302619439147> **`, 
@@ -326,7 +322,6 @@ async function onInteraction(client, interaction) {
       });
     }
 
-    // التحقق إذا كانت التذكرة مستلمة من قبل
     if (ticket.mediatorId) {
       const mediator = await interaction.guild.members.fetch(ticket.mediatorId).catch(() => null);
       return interaction.reply({ 
@@ -335,19 +330,10 @@ async function onInteraction(client, interaction) {
       });
     }
 
-    // استلام التذكرة
     ticket.mediatorId = interaction.user.id;
     await ticket.save();
 
-    // تحديث صلاحيات الروم
-    const channel = interaction.channel;
-    await channel.permissionOverwrites.edit(interaction.user.id, {
-      ViewChannel: true,
-      SendMessages: true
-    });
-
-    // إرسال رسالة التعيين في الروم (الكل يشوفها)
-    await channel.send({ 
+    await interaction.channel.send({ 
       content: `-# **تم تعيين ${interaction.user} وسيطاً لهذه العملية <:new_emoji:1388436089584226387> **`
     });
 
@@ -370,7 +356,6 @@ async function onInteraction(client, interaction) {
       });
     }
 
-    // إذا لم يتم استلام التذكرة بعد
     if (!ticket.mediatorId) {
       return interaction.reply({ 
         content: `-# **انتضروا الى ان يأتي وسيط و يغلق التذكرة لما يتأكد ان العملية صارت بأمان <:emoji_39:1474950143634706543> **`, 
@@ -378,7 +363,6 @@ async function onInteraction(client, interaction) {
       });
     }
 
-    // إذا كان المستخدم ليس الوسيط
     if (ticket.mediatorId !== interaction.user.id) {
       return interaction.reply({ 
         content: `-# **انت لست الوسيط هنا <:s7_discord:1388214117365453062> **`, 
@@ -386,9 +370,17 @@ async function onInteraction(client, interaction) {
       });
     }
 
-    // إغلاق التذكرة
     await interaction.reply({ content: `-# **جاري إغلاق التذكرة...**` });
-    setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
+    
+    setTimeout(async () => {
+      try {
+        await interaction.channel.delete();
+        console.log(`✅ تم حذف الـ Thread: ${interaction.channel.name}`);
+      } catch (error) {
+        console.error('❌ خطأ في حذف الـ Thread:', error);
+      }
+    }, 3000);
+    
     return true;
   }
 
