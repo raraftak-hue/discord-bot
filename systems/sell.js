@@ -238,7 +238,22 @@ async function onInteraction(client, interaction) {
 
     // جلب رتبة الوسيط
     const mediatorRoleId = await getMediatorRole(interaction.guild.id);
-    const mediatorRole = mediatorRoleId ? `<@&${mediatorRoleId}>` : 'وسيط';
+
+    // إنشاء مصفوفة الصلاحيات
+    const permissionOverwrites = [
+      { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+      { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+      { id: seller.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+      { id: client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+    ];
+
+    // إضافة رتبة الوسيط إذا كانت موجودة
+    if (mediatorRoleId) {
+      permissionOverwrites.push({
+        id: mediatorRoleId,
+        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+      });
+    }
 
     // إنشاء تذكرة
     const ticketName = `شراء-${product.name}-${interaction.user.username}`;
@@ -247,13 +262,7 @@ async function onInteraction(client, interaction) {
       name: ticketName.slice(0, 50),
       type: 0,
       parent: null,
-      permissionOverwrites: [
-        { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-        { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-        { id: seller.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-        { id: mediatorRoleId ? mediatorRoleId : null, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }.filter(p => p.id !== null),
-        { id: client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
-      ]
+      permissionOverwrites
     });
 
     await PurchaseTicket.create({
@@ -279,6 +288,8 @@ async function onInteraction(client, interaction) {
         .setStyle(ButtonStyle.Danger)
     );
 
+    const mediatorRole = mediatorRoleId ? `<@&${mediatorRoleId}>` : 'وسيط';
+
     await ticketChannel.send({
       content: `${seller.user} ${interaction.user}\n` +
                `-# **انت الحين في صدد شراء ${product.name} من البائع ${seller.user}**\n` +
@@ -286,7 +297,7 @@ async function onInteraction(client, interaction) {
       components: [row, closeRow]
     });
 
-    // رسالة الاستلام الجديدة
+    // رسالة الاستلام
     await interaction.reply({ 
       content: `-# **تم استلام طلبك ${ticketChannel} <:new_emoji:1388436089584226387> **`, 
       ephemeral: true 
