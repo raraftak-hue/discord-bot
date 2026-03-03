@@ -45,7 +45,7 @@ for (const file of systemFiles) {
 
 // ==================== جمع أوامر السلاش (معدلة) ====================
 const slashCommands = [
-  // ===== أوامر نظام البيع =====
+  // ===== أوامر نظام البيع =====// ===== أوامر نظام البيع =====
   {
     name: 'set-seller-role',
     description: 'تعيين رتبة البائعين في السيرفر',
@@ -54,6 +54,19 @@ const slashCommands = [
       {
         name: 'role',
         description: 'الرتبة المسموح لها بالبيع',
+        type: 8,
+        required: true
+      }
+    ]
+  },
+  {
+    name: 'set-mediator-role',
+    description: 'تعيين رتبة الوسطاء في السيرفر',
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+    options: [
+      {
+        name: 'role',
+        description: 'الرتبة المسموح لها بالتوسط',
         type: 8,
         required: true
       }
