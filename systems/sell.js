@@ -191,7 +191,7 @@ async function onInteraction(client, interaction) {
     return true;
   }
 
-  // ===== زر الشراء (نسخة Threads) =====
+  // ===== زر الشراء =====
   if (interaction.isButton() && interaction.customId.startsWith('buy_')) {
     const productId = interaction.customId.split('_')[1];
     const product = await Product.findOne({ productId, isActive: true });
@@ -217,10 +217,10 @@ async function onInteraction(client, interaction) {
     });
 
     if (existingTicket) {
-      const thread = await interaction.guild.channels.fetch(existingTicket.channelId).catch(() => null);
-      if (thread) {
+      const channel = await interaction.guild.channels.fetch(existingTicket.channelId).catch(() => null);
+      if (channel) {
         return interaction.reply({ 
-          content: `-# **انت فاتح تذكرة شراء لنفس المنتج: ${thread} <:emoji_32:1471962578895769611> **`, 
+          content: `-# **انت فاتح تذكرة شراء لنفس المنتج: ${channel} <:emoji_32:1471962578895769611> **`, 
           ephemeral: true 
         });
       } else {
@@ -239,47 +239,41 @@ async function onInteraction(client, interaction) {
     // جلب رتبة الوسيط
     const mediatorRoleId = await getMediatorRole(interaction.guild.id);
 
-    // إنشاء Thread
+    // إنشاء مصفوفة الصلاحيات
+    const permissionOverwrites = [
+      { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+      { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+      { id: seller.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+      { id: client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+    ];
+
+    // إضافة رتبة الوسيط إذا كانت موجودة
+    if (mediatorRoleId) {
+      permissionOverwrites.push({
+        id: mediatorRoleId,
+        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+      });
+    }
+
+    // إنشاء تذكرة
     const ticketName = `شراء-${product.name}-${interaction.user.username}`;
     
-    const thread = await interaction.channel.threads.create({
+    const ticketChannel = await interaction.guild.channels.create({
       name: ticketName.slice(0, 50),
-      autoArchiveDuration: 1440,
-      type: 12, // Private Thread
-      invitable: false,
-      reason: `تذكرة شراء ${product.name}`,
-      startMessage: false
+      type: 0,
+      parent: null,
+      permissionOverwrites
     });
-
-    // إضافة الأعضاء الأساسيين
-    await thread.members.add(interaction.user.id);
-    await thread.members.add(seller.id);
-
-    // رسالة فاضية لدفع رسالة النظام
-    await thread.send({ content: '** **' });
-
-    // إضافة كل أعضاء رتبة الوسيط
-    if (mediatorRoleId) {
-      const members = await interaction.guild.members.fetch();
-      for (const [memberId, member] of members) {
-        if (member.roles.cache.has(mediatorRoleId) && 
-            member.id !== interaction.user.id && 
-            member.id !== seller.id) {
-          await thread.members.add(memberId).catch(() => {});
-        }
-      }
-      await thread.send({ content: '** **' });
-    }
 
     await PurchaseTicket.create({
       productId,
       buyerId: interaction.user.id,
       guildId: interaction.guild.id,
-      channelId: thread.id,
+      channelId: ticketChannel.id,
       mediatorId: null
     });
 
-    // أزرار الاستلام والإغلاق
+    // زر واحد للاستلام + زر الإغلاق
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`claim_${productId}`)
@@ -296,15 +290,16 @@ async function onInteraction(client, interaction) {
 
     const mediatorRole = mediatorRoleId ? `<@&${mediatorRoleId}>` : 'وسيط';
 
-    await thread.send({
+    await ticketChannel.send({
       content: `${seller.user} ${interaction.user}\n` +
                `-# **انت الحين في صدد شراء ${product.name} من البائع ${seller.user}**\n` +
                `-# **عند الاتفاق على السعر يفضّل استخدام أحد الوسطاء ${mediatorRole} الي ياخذون ٥٪؜ فقط من المبلغ <:emoji_36:1474949953876000950> **`,
       components: [row, closeRow]
     });
 
+    // رسالة الاستلام
     await interaction.reply({ 
-      content: `-# **تم استلام طلبك ${thread} <:new_emoji:1388436089584226387> **`, 
+      content: `-# **تم استلام طلبك ${ticketChannel} <:new_emoji:1388436089584226387> **`, 
       ephemeral: true 
     });
     return true;
@@ -315,6 +310,7 @@ async function onInteraction(client, interaction) {
     const productId = interaction.customId.split('_')[1];
     const mediatorRoleId = await getMediatorRole(interaction.guild.id);
     
+    // التحقق من رتبة الوسيط
     if (!mediatorRoleId || !interaction.member.roles.cache.has(mediatorRoleId)) {
       return interaction.reply({ 
         content: `-# **انت لست وسيطاً فلن تستطيع استلامها <:emoji_38:1401773302619439147> **`, 
@@ -330,6 +326,7 @@ async function onInteraction(client, interaction) {
       });
     }
 
+    // التحقق إذا كانت التذكرة مستلمة من قبل
     if (ticket.mediatorId) {
       const mediator = await interaction.guild.members.fetch(ticket.mediatorId).catch(() => null);
       return interaction.reply({ 
@@ -338,10 +335,19 @@ async function onInteraction(client, interaction) {
       });
     }
 
+    // استلام التذكرة
     ticket.mediatorId = interaction.user.id;
     await ticket.save();
 
-    await interaction.channel.send({ 
+    // تحديث صلاحيات الروم
+    const channel = interaction.channel;
+    await channel.permissionOverwrites.edit(interaction.user.id, {
+      ViewChannel: true,
+      SendMessages: true
+    });
+
+    // إرسال رسالة التعيين في الروم (الكل يشوفها)
+    await channel.send({ 
       content: `-# **تم تعيين ${interaction.user} وسيطاً لهذه العملية <:new_emoji:1388436089584226387> **`
     });
 
@@ -364,6 +370,7 @@ async function onInteraction(client, interaction) {
       });
     }
 
+    // إذا لم يتم استلام التذكرة بعد
     if (!ticket.mediatorId) {
       return interaction.reply({ 
         content: `-# **انتضروا الى ان يأتي وسيط و يغلق التذكرة لما يتأكد ان العملية صارت بأمان <:emoji_39:1474950143634706543> **`, 
@@ -371,6 +378,7 @@ async function onInteraction(client, interaction) {
       });
     }
 
+    // إذا كان المستخدم ليس الوسيط
     if (ticket.mediatorId !== interaction.user.id) {
       return interaction.reply({ 
         content: `-# **انت لست الوسيط هنا <:s7_discord:1388214117365453062> **`, 
@@ -378,17 +386,9 @@ async function onInteraction(client, interaction) {
       });
     }
 
+    // إغلاق التذكرة
     await interaction.reply({ content: `-# **جاري إغلاق التذكرة...**` });
-    
-    setTimeout(async () => {
-      try {
-        await interaction.channel.delete();
-        console.log(`✅ تم حذف الـ Thread: ${interaction.channel.name}`);
-      } catch (error) {
-        console.error('❌ خطأ في حذف الـ Thread:', error);
-      }
-    }, 3000);
-    
+    setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
     return true;
   }
 
