@@ -251,6 +251,7 @@ async function onInteraction(client, interaction) {
         { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
         { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
         { id: seller.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+        { id: mediatorRoleId ? mediatorRoleId : null, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }.filter(p => p.id !== null),
         { id: client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
       ]
     });
@@ -263,7 +264,7 @@ async function onInteraction(client, interaction) {
       mediatorId: null
     });
 
-    // زر واحد للاستلام (نفس الزر القديم)
+    // زر واحد للاستلام + زر الإغلاق
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`claim_${productId}`)
@@ -271,7 +272,6 @@ async function onInteraction(client, interaction) {
         .setStyle(ButtonStyle.Secondary)
     );
 
-    // زر الإغلاق (موجود من الأول)
     const closeRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`close_${productId}`)
@@ -286,8 +286,9 @@ async function onInteraction(client, interaction) {
       components: [row, closeRow]
     });
 
+    // رسالة الاستلام الجديدة
     await interaction.reply({ 
-      content: `-# **تم إنشاء تذكرة شراء: ${ticketChannel} <:2thumbup:1467287897429512396> **`, 
+      content: `-# **تم استلام طلبك ${ticketChannel} <:new_emoji:1388436089584226387> **`, 
       ephemeral: true 
     });
     return true;
@@ -334,7 +335,7 @@ async function onInteraction(client, interaction) {
       SendMessages: true
     });
 
-    // إرسال رسالة التعيين
+    // إرسال رسالة التعيين في الروم (الكل يشوفها)
     await channel.send({ 
       content: `-# **تم تعيين ${interaction.user} وسيطاً لهذه العملية <:new_emoji:1388436089584226387> **`
     });
