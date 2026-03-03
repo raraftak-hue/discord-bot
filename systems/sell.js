@@ -239,30 +239,36 @@ async function onInteraction(client, interaction) {
     // جلب رتبة الوسيط
     const mediatorRoleId = await getMediatorRole(interaction.guild.id);
 
-    // إنشاء Thread بدل روم
+    // إنشاء Thread
     const ticketName = `شراء-${product.name}-${interaction.user.username}`;
     
     const thread = await interaction.channel.threads.create({
       name: ticketName.slice(0, 50),
-      autoArchiveDuration: 1440, // 24 ساعة (ما يتقفلش إلا يدوي)
+      autoArchiveDuration: 1440,
       type: 12, // Private Thread
-      invitable: false, // ما يقدروا يدعوا غير الأعضاء المحددين
+      invitable: false,
       reason: `تذكرة شراء ${product.name}`,
-      startMessage: false // إخفاء رسالة النظام
+      startMessage: false
     });
 
     // إضافة الأعضاء الأساسيين
-    await thread.members.add(interaction.user.id); // المشتري
-    await thread.members.add(seller.id); // البائع
+    await thread.members.add(interaction.user.id);
+    await thread.members.add(seller.id);
+
+    // رسالة فاضية لدفع رسالة النظام
+    await thread.send({ content: '** **' });
 
     // إضافة كل أعضاء رتبة الوسيط
     if (mediatorRoleId) {
       const members = await interaction.guild.members.fetch();
       for (const [memberId, member] of members) {
-        if (member.roles.cache.has(mediatorRoleId)) {
+        if (member.roles.cache.has(mediatorRoleId) && 
+            member.id !== interaction.user.id && 
+            member.id !== seller.id) {
           await thread.members.add(memberId).catch(() => {});
         }
       }
+      await thread.send({ content: '** **' });
     }
 
     await PurchaseTicket.create({
@@ -309,7 +315,6 @@ async function onInteraction(client, interaction) {
     const productId = interaction.customId.split('_')[1];
     const mediatorRoleId = await getMediatorRole(interaction.guild.id);
     
-    // التحقق من رتبة الوسيط
     if (!mediatorRoleId || !interaction.member.roles.cache.has(mediatorRoleId)) {
       return interaction.reply({ 
         content: `-# **انت لست وسيطاً فلن تستطيع استلامها <:emoji_38:1401773302619439147> **`, 
@@ -325,7 +330,6 @@ async function onInteraction(client, interaction) {
       });
     }
 
-    // التحقق إذا كانت التذكرة مستلمة من قبل
     if (ticket.mediatorId) {
       const mediator = await interaction.guild.members.fetch(ticket.mediatorId).catch(() => null);
       return interaction.reply({ 
@@ -334,11 +338,9 @@ async function onInteraction(client, interaction) {
       });
     }
 
-    // استلام التذكرة
     ticket.mediatorId = interaction.user.id;
     await ticket.save();
 
-    // إرسال رسالة التعيين في الـ Thread (الكل يشوفها)
     await interaction.channel.send({ 
       content: `-# **تم تعيين ${interaction.user} وسيطاً لهذه العملية <:new_emoji:1388436089584226387> **`
     });
@@ -362,7 +364,6 @@ async function onInteraction(client, interaction) {
       });
     }
 
-    // إذا لم يتم استلام التذكرة بعد
     if (!ticket.mediatorId) {
       return interaction.reply({ 
         content: `-# **انتضروا الى ان يأتي وسيط و يغلق التذكرة لما يتأكد ان العملية صارت بأمان <:emoji_39:1474950143634706543> **`, 
@@ -370,7 +371,6 @@ async function onInteraction(client, interaction) {
       });
     }
 
-    // إذا كان المستخدم ليس الوسيط
     if (ticket.mediatorId !== interaction.user.id) {
       return interaction.reply({ 
         content: `-# **انت لست الوسيط هنا <:s7_discord:1388214117365453062> **`, 
@@ -378,11 +378,17 @@ async function onInteraction(client, interaction) {
       });
     }
 
-    // إغلاق التذكرة (أرشفة الـ Thread)
     await interaction.reply({ content: `-# **جاري إغلاق التذكرة...**` });
+    
     setTimeout(async () => {
-      await interaction.channel.setArchived(true).catch(() => {});
+      try {
+        await interaction.channel.delete();
+        console.log(`✅ تم حذف الـ Thread: ${interaction.channel.name}`);
+      } catch (error) {
+        console.error('❌ خطأ في حذف الـ Thread:', error);
+      }
     }, 3000);
+    
     return true;
   }
 
