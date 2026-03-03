@@ -361,10 +361,20 @@ async function onInteraction(client, interaction) {
     }
 
     if (ticket.mediatorId !== interaction.user.id) {
-      return interaction.reply({ 
-        content: `-# **انت لست الوسيط هنا <:s7_discord:1388214117365453062> **`, 
-        ephemeral: true 
-      });
+      const mediatorRoleId = await getMediatorRole(interaction.guild.id);
+      const isMediator = mediatorRoleId && interaction.member.roles.cache.has(mediatorRoleId);
+      
+      if (isMediator) {
+        return interaction.reply({ 
+          content: `-# ** الوسيط <@${ticket.mediatorId}> مهو مالي عينك ولا ايش <:emoji_38:1401773302619439147> **`, 
+          ephemeral: true 
+        });
+      } else {
+        return interaction.reply({ 
+          content: `-# **انت لست الوسيط هنا <:s7_discord:1388214117365453062> **`, 
+          ephemeral: true 
+        });
+      }
     }
 
     await interaction.reply({ content: `-# **جاري إغلاق التذكرة...**` });
@@ -384,6 +394,38 @@ async function onInteraction(client, interaction) {
   return false;
 }
 
+async function onMessage(client, message) {
+  if (!message.guild || message.author.bot) return;
+  if (!message.channel.isThread()) return;
+
+  // التحقق مما إذا كانت هذه تذكرة شراء
+  const ticket = await PurchaseTicket.findOne({ channelId: message.channel.id });
+  if (!ticket) return;
+
+  // أمر "تعال @منشن"
+  if (message.content.startsWith('تعال')) {
+    const mentionedUser = message.mentions.users.first();
+    if (!mentionedUser) return;
+
+    // التحقق من أن المرسل هو الوسيط المستلم
+    if (ticket.mediatorId !== message.author.id) {
+      return message.reply({
+        content: `-# ** الوسيط بس يقدر يسويها <:emoji_36:1474949953876000950> **`
+      });
+    }
+
+    // إضافة العضو للثريد
+    try {
+      await message.channel.members.add(mentionedUser.id);
+      await message.react('✅');
+    } catch (error) {
+      console.error('❌ خطأ في إضافة عضو للثريد:', error);
+      await message.reply({ content: `-# **حدث خطأ أثناء محاولة إضافة العضو.**` });
+    }
+  }
+}
+
 module.exports = {
-  onInteraction
+  onInteraction,
+  onMessage
 };
