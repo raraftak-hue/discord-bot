@@ -315,26 +315,6 @@ const slashCommands = [
     ]
   },
   /*
-  // أوامر whisper (معدل)
-  {
-    name: 'whisper',
-    description: 'إرسال همسة لشخص معين (يشوفها فقط هو)',
-    type: 1,
-    options: [
-      {
-        name: 'user',
-        description: 'الشخص اللي تبي ترسل له الهمسة',
-        type: 6,
-        required: true
-      },
-      {
-        name: 'message',
-        description: 'الهمسة',
-        type: 3,
-        required: true
-      }
-    ]
-  },
   // أوامر points
   {
     name: 'points',
