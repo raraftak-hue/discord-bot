@@ -45,8 +45,20 @@ for (const file of systemFiles) {
 
 // ==================== جمع أوامر السلاش (معدلة) ====================
 const slashCommands = [
-
-  // أمر بيع المنتجات
+  // ===== أوامر نظام البيع =====
+  {
+    name: 'set-seller-role',
+    description: 'تعيين رتبة البائعين في السيرفر',
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+    options: [
+      {
+        name: 'role',
+        description: 'الرتبة المسموح لها بالبيع',
+        type: 8,
+        required: true
+      }
+    ]
+  },
   {
     name: 'sell',
     description: 'بيع منتج في السيرفر',
@@ -65,7 +77,7 @@ const slashCommands = [
       },
       {
         name: 'price',
-        description: 'السعر بالدينار (10 دينار = 100k كريدت)',
+        description: 'السعر بالدينار',
         type: 4,
         required: true
       }
@@ -339,9 +351,9 @@ const slashCommands = [
         ]
       }
     ]
-  },
+  }
   /*
-  // أوامر points
+  // أوامر points (معلقة)
   {
     name: 'points',
     description: 'نظام النقاط (الإعدادات، الخزينة، إعادة التعيين)',
@@ -399,7 +411,7 @@ const slashCommands = [
       }
     ]
   },
-  // أوامر بيع الرولز (نسخة نهائية مع وصف + بدون list)
+  // أوامر بيع الرولز (معلقة)
   {
     name: 'shop',
     description: 'نظام الرتب الشرائية',
