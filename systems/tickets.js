@@ -13,10 +13,10 @@ const TicketSettingsSchema = new mongoose.Schema({
 });
 
 const TicketSchema = new mongoose.Schema({
-  channelId: String,
+  channelId: { type: String, required: true, unique: true },
   guildId: String,
   userId: String,
-  type: String, // 'support' or 'court'
+  type: String,
   claimedBy: { type: String, default: null },
   createdAt: { type: Date, default: Date.now }
 });
@@ -34,18 +34,17 @@ async function getTicketSettings(guildId) {
   return settings;
 }
 
-async function getTicketByChannel(channelId) {
-  return await Ticket.findOne({ channelId });
-}
-
 // ==================== onInteraction ====================
 async function onInteraction(client, interaction) {
   if (!interaction.isChatInputCommand() && !interaction.isButton()) return false;
 
+  const guildId = interaction.guild?.id;
+  if (!guildId) return false;
+
   // ===== أوامر السلاش =====
   if (interaction.isChatInputCommand() && interaction.commandName === 'tic') {
     const sub = interaction.options.getSubcommand();
-    const settings = await getTicketSettings(interaction.guild.id);
+    const settings = await getTicketSettings(guildId);
 
     // ===== /tic set =====
     if (sub === 'set') {
@@ -126,7 +125,8 @@ async function onInteraction(client, interaction) {
 
     // ===== استلام التذكرة =====
     if (interaction.customId === 'claim_ticket') {
-      const ticket = await getTicketByChannel(interaction.channel.id);
+      // البحث عن التذكرة
+      let ticket = await Ticket.findOne({ channelId: interaction.channel.id });
       
       if (!ticket) {
         return interaction.reply({ 
@@ -136,7 +136,7 @@ async function onInteraction(client, interaction) {
       }
 
       // التحقق من الرتبة المسموح لها
-      const settings = await getTicketSettings(interaction.guild.id);
+      const settings = await getTicketSettings(guildId);
       const allowedRoleId = ticket.type === 'court' ? settings.courtRoleId : settings.supportRoleId;
       
       if (!allowedRoleId || !interaction.member.roles.cache.has(allowedRoleId)) {
@@ -188,7 +188,8 @@ async function onInteraction(client, interaction) {
 
     // ===== إغلاق التذكرة =====
     if (interaction.customId === 'close_ticket') {
-      const ticket = await getTicketByChannel(interaction.channel.id);
+      // البحث عن التذكرة
+      let ticket = await Ticket.findOne({ channelId: interaction.channel.id });
       
       if (!ticket) {
         return interaction.reply({ 
@@ -197,9 +198,17 @@ async function onInteraction(client, interaction) {
         });
       }
 
+      // إذا لم يتم استلام التذكرة بعد
+      if (!ticket.claimedBy) {
+        return interaction.reply({ 
+          content: `-# **انتضروا الى ان يأتي أحد ويستلم التذكرة <:emoji_39:1474950143634706543> **`, 
+          ephemeral: true 
+        });
+      }
+
       // التحقق من الصلاحية: فقط المستلم يقدر يقفل
       if (ticket.claimedBy !== interaction.user.id) {
-        const settings = await getTicketSettings(interaction.guild.id);
+        const settings = await getTicketSettings(guildId);
         const allowedRoleId = ticket.type === 'court' ? settings.courtRoleId : settings.supportRoleId;
         const hasRole = allowedRoleId && interaction.member.roles.cache.has(allowedRoleId);
         
@@ -234,7 +243,7 @@ async function onInteraction(client, interaction) {
   return false;
 }
 
-// ==================== فتح تذكرة (نسخة ثريد) ====================
+// ==================== فتح تذكرة (نسخة ثريد بدون رسائل نظام) ====================
 async function handleOpenTicket(interaction, client, type) {
   const settings = await getTicketSettings(interaction.guild.id);
 
@@ -264,23 +273,25 @@ async function handleOpenTicket(interaction, client, type) {
     startMessage: false
   });
 
-  // إضافة صاحب التذكرة
+  // تسجيل التذكرة في قاعدة البيانات (قبل أي شيء)
+  const ticket = new Ticket({
+    channelId: thread.id,
+    guildId: interaction.guild.id,
+    userId: interaction.user.id,
+    type,
+    claimedBy: null
+  });
+  await ticket.save();
+  
+  // التأكد من حفظ التذكرة قبل الرد
+  await new Promise(resolve => setTimeout(resolve, 500));
+
+  // إضافة صاحب التذكرة (المنشن هيضيفه بدون رسالة نظام)
   await thread.members.add(interaction.user.id);
 
   // تجهيز المنشن للرتبة
-  let roleMention = '';
-  let roleId = null;
-  
-  if (type === 'court') {
-    roleId = settings.courtRoleId;
-  } else {
-    roleId = settings.supportRoleId;
-  }
-
-  let roleMentions = '';
-  if (roleId) {
-    roleMentions = `<@&${roleId}>`;
-  }
+  let roleId = type === 'court' ? settings.courtRoleId : settings.supportRoleId;
+  let roleMentions = roleId ? `<@&${roleId}>` : '';
 
   // أزرار الاستلام والإغلاق
   const row = new ActionRowBuilder().addComponents(
@@ -295,32 +306,19 @@ async function handleOpenTicket(interaction, client, type) {
       .setCustomId('close_ticket')
       .setLabel('إغلاق')
       .setStyle(ButtonStyle.Danger)
-      .setDisabled(true) // معطل لحد ما يستلمها أحد
+      .setDisabled(true)
   );
 
   // تحديد المحتوى حسب النوع
-  let content = '';
-  if (type === 'court') {
-    content = `-# **اهلا بكم في محكمة العدل الرجاء كتابة ما المشكلة و من هم الشهود عليها ان وجدوا <:emoji_35:1474845075950272756> **`;
-  } else {
-    content = `-# ** اكتب سبب فتحك للتذكرة و فريق الدعم بيتواصل معك قريب <:emoji_32:1471962578895769611> **`;
-  }
+  let content = type === 'court'
+    ? `-# **اهلا بكم في محكمة العدل الرجاء كتابة ما المشكلة و من هم الشهود عليها ان وجدوا <:emoji_35:1474845075950272756> **`
+    : `-# ** اكتب سبب فتحك للتذكرة و فريق الدعم بيتواصل معك قريب <:emoji_32:1471962578895769611> **`;
 
-  // إرسال الرسالة مع المنشن (المنشن يضيف الرتبة تلقائياً)
+  // إرسال الرسالة مع المنشن (المنشن يضيف الرتبة تلقائياً بدون رسائل نظام)
   await thread.send({
     content: `${interaction.user} ${roleMentions}\n${content}`,
     components: [row, closeRow]
   });
-
-  // تسجيل التذكرة في قاعدة البيانات
-  const ticket = new Ticket({
-    channelId: thread.id,
-    guildId: interaction.guild.id,
-    userId: interaction.user.id,
-    type,
-    claimedBy: null
-  });
-  await ticket.save();
 
   await interaction.reply({
     content: `-# **تم استلام طلبك ${thread} <:new_emoji:1388436089584226387> **`,
