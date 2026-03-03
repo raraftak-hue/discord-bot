@@ -166,7 +166,7 @@ async function onInteraction(client, interaction) {
     
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId(`buy_${product.productId}`)
+        .setCustomId(`sell_buy_${product.productId}`)
         .setLabel('شراء')
         .setStyle(ButtonStyle.Secondary)
     );
@@ -192,8 +192,8 @@ async function onInteraction(client, interaction) {
   }
 
   // ===== زر الشراء (نسخة المنشن السحري) =====
-  if (interaction.isButton() && interaction.customId.startsWith('buy_')) {
-    const productId = interaction.customId.split('_')[1];
+  if (interaction.isButton() && interaction.customId.startsWith('sell_buy_')) {
+    const productId = interaction.customId.split('_')[2];
     const product = await Product.findOne({ productId, isActive: true });
     
     if (!product) {
@@ -257,14 +257,14 @@ async function onInteraction(client, interaction) {
     // أزرار الاستلام والإغلاق
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId(`claim_${productId}`)
+        .setCustomId(`sell_claim_${productId}`)
         .setLabel('استلام التذكرة')
         .setStyle(ButtonStyle.Secondary)
     );
 
     const closeRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId(`close_${productId}`)
+        .setCustomId(`sell_close_${productId}`)
         .setLabel('إغلاق')
         .setStyle(ButtonStyle.Danger)
     );
@@ -300,8 +300,8 @@ async function onInteraction(client, interaction) {
   }
 
   // ===== زر استلام التذكرة =====
-  if (interaction.isButton() && interaction.customId.startsWith('claim_')) {
-    const productId = interaction.customId.split('_')[1];
+  if (interaction.isButton() && interaction.customId.startsWith('sell_claim_')) {
+    const productId = interaction.customId.split('_')[2];
     const mediatorRoleId = await getMediatorRole(interaction.guild.id);
     
     if (!mediatorRoleId || !interaction.member.roles.cache.has(mediatorRoleId)) {
@@ -342,8 +342,8 @@ async function onInteraction(client, interaction) {
   }
 
   // ===== زر إغلاق التذكرة =====
-  if (interaction.isButton() && interaction.customId.startsWith('close_')) {
-    const productId = interaction.customId.split('_')[1];
+  if (interaction.isButton() && interaction.customId.startsWith('sell_close_')) {
+    const productId = interaction.customId.split('_')[2];
     const ticket = await PurchaseTicket.findOne({ productId, guildId: interaction.guild.id });
 
     if (!ticket) {
