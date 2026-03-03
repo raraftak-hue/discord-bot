@@ -13,13 +13,16 @@ const TicketSettingsSchema = new mongoose.Schema({
 });
 
 const TicketSchema = new mongoose.Schema({
-  channelId: { type: String, required: true, unique: true },
+  channelId: { type: String, required: true },
   guildId: String,
   userId: String,
   type: String,
   claimedBy: { type: String, default: null },
   createdAt: { type: Date, default: Date.now }
 });
+
+// فهرسة عشان البحث يبقى أسرع
+TicketSchema.index({ channelId: 1 });
 
 const TicketSettings = mongoose.model('TicketSettings', TicketSettingsSchema);
 const Ticket = mongoose.model('Ticket', TicketSchema);
@@ -46,7 +49,6 @@ async function onInteraction(client, interaction) {
     const sub = interaction.options.getSubcommand();
     const settings = await getTicketSettings(guildId);
 
-    // ===== /tic set =====
     if (sub === 'set') {
       if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
         await interaction.reply({ content: `-# ** ما عندك صلاحية <:emoji_84:1389404919672340592> **`, ephemeral: true });
@@ -81,7 +83,6 @@ async function onInteraction(client, interaction) {
       return true;
     }
 
-    // ===== /tic panel =====
     if (sub === 'panel') {
       if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
         await interaction.reply({ content: `-# ** ما عندك صلاحية <:emoji_84:1389404919672340592> **`, ephemeral: true });
@@ -113,29 +114,25 @@ async function onInteraction(client, interaction) {
 
   // ===== الأزرار =====
   if (interaction.isButton()) {
-    // ===== فتح تذكرة دعم =====
     if (interaction.customId === 'open_ticket_support') {
       return handleOpenTicket(interaction, client, 'support');
     }
 
-    // ===== فتح تذكرة محكمة =====
     if (interaction.customId === 'open_ticket_court') {
       return handleOpenTicket(interaction, client, 'court');
     }
 
-    // ===== استلام التذكرة =====
     if (interaction.customId === 'claim_ticket') {
       // البحث عن التذكرة
       let ticket = await Ticket.findOne({ channelId: interaction.channel.id });
       
       if (!ticket) {
         return interaction.reply({ 
-          content: `-# **التذكرة غير موجودة <:emoji_84:1389404919672340592> **`, 
+          content: `-# **حدث خطأ في تحميل التذكرة، حاول مرة أخرى <:emoji_84:1389404919672340592> **`, 
           ephemeral: true 
         });
       }
 
-      // التحقق من الرتبة المسموح لها
       const settings = await getTicketSettings(guildId);
       const allowedRoleId = ticket.type === 'court' ? settings.courtRoleId : settings.supportRoleId;
       
@@ -146,7 +143,6 @@ async function onInteraction(client, interaction) {
         });
       }
 
-      // التحقق إذا كانت التذكرة مستلمة من قبل
       if (ticket.claimedBy) {
         const claimer = await interaction.guild.members.fetch(ticket.claimedBy).catch(() => null);
         return interaction.reply({ 
@@ -155,11 +151,9 @@ async function onInteraction(client, interaction) {
         });
       }
 
-      // استلام التذكرة
       ticket.claimedBy = interaction.user.id;
       await ticket.save();
 
-      // تحديث الأزرار
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId('claim_ticket')
@@ -186,9 +180,7 @@ async function onInteraction(client, interaction) {
       return true;
     }
 
-    // ===== إغلاق التذكرة =====
     if (interaction.customId === 'close_ticket') {
-      // البحث عن التذكرة
       let ticket = await Ticket.findOne({ channelId: interaction.channel.id });
       
       if (!ticket) {
@@ -198,7 +190,6 @@ async function onInteraction(client, interaction) {
         });
       }
 
-      // إذا لم يتم استلام التذكرة بعد
       if (!ticket.claimedBy) {
         return interaction.reply({ 
           content: `-# **انتضروا الى ان يأتي أحد ويستلم التذكرة <:emoji_39:1474950143634706543> **`, 
@@ -206,7 +197,6 @@ async function onInteraction(client, interaction) {
         });
       }
 
-      // التحقق من الصلاحية: فقط المستلم يقدر يقفل
       if (ticket.claimedBy !== interaction.user.id) {
         const settings = await getTicketSettings(guildId);
         const allowedRoleId = ticket.type === 'court' ? settings.courtRoleId : settings.supportRoleId;
@@ -243,7 +233,7 @@ async function onInteraction(client, interaction) {
   return false;
 }
 
-// ==================== فتح تذكرة (نسخة ثريد بدون رسائل نظام) ====================
+// ==================== فتح تذكرة ====================
 async function handleOpenTicket(interaction, client, type) {
   const settings = await getTicketSettings(interaction.guild.id);
 
@@ -251,7 +241,6 @@ async function handleOpenTicket(interaction, client, type) {
     ? `محكمة-${interaction.user.username}` 
     : `دعم-${interaction.user.username}`;
 
-  // التحقق من وجود تذكرة مفتوحة
   const existingThread = interaction.guild.channels.cache.find(c => 
     c.isThread() && c.name === threadName && !c.archived
   );
@@ -263,37 +252,21 @@ async function handleOpenTicket(interaction, client, type) {
     });
   }
 
-  // إنشاء ثريد (بدون رسالة نظام)
   const thread = await interaction.channel.threads.create({
     name: threadName,
     autoArchiveDuration: 1440,
-    type: 12, // Private Thread
+    type: 12,
     invitable: false,
     reason: `${type === 'court' ? 'محكمة' : 'دعم'} لـ ${interaction.user.username}`,
     startMessage: false
   });
 
-  // تسجيل التذكرة في قاعدة البيانات (قبل أي شيء)
-  const ticket = new Ticket({
-    channelId: thread.id,
-    guildId: interaction.guild.id,
-    userId: interaction.user.id,
-    type,
-    claimedBy: null
-  });
-  await ticket.save();
-  
-  // التأكد من حفظ التذكرة قبل الرد
-  await new Promise(resolve => setTimeout(resolve, 500));
-
-  // إضافة صاحب التذكرة (المنشن هيضيفه بدون رسالة نظام)
+  // إضافة صاحب التذكرة
   await thread.members.add(interaction.user.id);
 
-  // تجهيز المنشن للرتبة
   let roleId = type === 'court' ? settings.courtRoleId : settings.supportRoleId;
   let roleMentions = roleId ? `<@&${roleId}>` : '';
 
-  // أزرار الاستلام والإغلاق
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('claim_ticket')
@@ -309,16 +282,24 @@ async function handleOpenTicket(interaction, client, type) {
       .setDisabled(true)
   );
 
-  // تحديد المحتوى حسب النوع
   let content = type === 'court'
     ? `-# **اهلا بكم في محكمة العدل الرجاء كتابة ما المشكلة و من هم الشهود عليها ان وجدوا <:emoji_35:1474845075950272756> **`
     : `-# ** اكتب سبب فتحك للتذكرة و فريق الدعم بيتواصل معك قريب <:emoji_32:1471962578895769611> **`;
 
-  // إرسال الرسالة مع المنشن (المنشن يضيف الرتبة تلقائياً بدون رسائل نظام)
   await thread.send({
     content: `${interaction.user} ${roleMentions}\n${content}`,
     components: [row, closeRow]
   });
+
+  // تسجيل التذكرة في قاعدة البيانات
+  const ticket = new Ticket({
+    channelId: thread.id,
+    guildId: interaction.guild.id,
+    userId: interaction.user.id,
+    type,
+    claimedBy: null
+  });
+  await ticket.save();
 
   await interaction.reply({
     content: `-# **تم استلام طلبك ${thread} <:new_emoji:1388436089584226387> **`,
