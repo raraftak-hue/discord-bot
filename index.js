@@ -266,6 +266,54 @@ const slashCommands = [
       }
     ]
   },
+  {
+    name: 'react',
+    description: 'نظام الريأكشن التلقائي',
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+    options: [
+      {
+        name: 'add',
+        description: 'إضافة ريأكشن تلقائي لروم',
+        type: 1,
+        options: [
+          { name: 'channel', description: 'الروم', type: 7, required: true },
+          { name: 'reaction', description: 'الريأكشن (👍)', type: 3, required: true }
+        ]
+      },
+      {
+        name: 'remove',
+        description: 'إزالة ريأكشن تلقائي من روم',
+        type: 1,
+        options: [
+          { name: 'channel', description: 'الروم', type: 7, required: true }
+        ]
+      }
+    ]
+  },
+  {
+    name: 'reply',
+    description: 'نظام الردود التلقائية',
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+    options: [
+      {
+        name: 'add',
+        description: 'إضافة رد تلقائي لروم',
+        type: 1,
+        options: [
+          { name: 'channel', description: 'الروم', type: 7, required: true },
+          { name: 'text', description: 'نص الرد', type: 3, required: true }
+        ]
+      },
+      {
+        name: 'remove',
+        description: 'إزالة رد تلقائي من روم',
+        type: 1,
+        options: [
+          { name: 'channel', description: 'الروم', type: 7, required: true }
+        ]
+      }
+    ]
+  },
   /*
   // أوامر whisper (معدل)
   {
