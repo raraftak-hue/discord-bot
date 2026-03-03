@@ -192,7 +192,7 @@ async function onInteraction(client, interaction) {
 
       if (!ticket.claimedBy) {
         return interaction.reply({ 
-          content: `-# **انتضروا الى ان يأتي أحد ويستلم التذكرة <:emoji_39:1474950143634706543> **`, 
+          content: `-# **انتظروا إلى أن يأتي أحد ويستلم التذكرة <:emoji_39:1474950143634706543> **`, 
           ephemeral: true 
         });
       }
@@ -209,7 +209,7 @@ async function onInteraction(client, interaction) {
           });
         } else {
           return interaction.reply({ 
-            content: `-# **انت لست مسؤول التذكرة هنا <:s7_discord:1388214117365453062> **`, 
+            content: `-# **أنت لست مسؤول التذكرة هنا <:s7_discord:1388214117365453062> **`, 
             ephemeral: true 
           });
         }
@@ -255,14 +255,14 @@ async function handleOpenTicket(interaction, client, type) {
   const thread = await interaction.channel.threads.create({
     name: threadName,
     autoArchiveDuration: 1440,
-    type: 12,
+    type: 12, // Private Thread
     invitable: false,
     reason: `${type === 'court' ? 'محكمة' : 'دعم'} لـ ${interaction.user.username}`,
     startMessage: false
   });
 
-  // إضافة صاحب التذكرة
-  await thread.members.add(interaction.user.id);
+  // 🧙‍♂️ تم إلغاء thread.members.add(interaction.user.id) لتقليل رسائل النظام المزعجة
+  // ديسكورد يضيف الشخص تلقائياً عند منشنته في Private Thread
 
   let roleId = type === 'court' ? settings.courtRoleId : settings.supportRoleId;
   let roleMentions = roleId ? `<@&${roleId}>` : '';
@@ -271,10 +271,7 @@ async function handleOpenTicket(interaction, client, type) {
     new ButtonBuilder()
       .setCustomId('claim_ticket')
       .setLabel('استلام التذكرة')
-      .setStyle(ButtonStyle.Secondary)
-  );
-
-  const closeRow = new ActionRowBuilder().addComponents(
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('close_ticket')
       .setLabel('إغلاق')
@@ -283,15 +280,16 @@ async function handleOpenTicket(interaction, client, type) {
   );
 
   let content = type === 'court'
-    ? `-# **اهلا بكم في محكمة العدل الرجاء كتابة ما المشكلة و من هم الشهود عليها ان وجدوا <:emoji_35:1474845075950272756> **`
+    ? `-# **أهلاً بكم في محكمة العدل الرجاء كتابة ما المشكلة و من هم الشهود عليها إن وجدوا <:emoji_35:1474845075950272756> **`
     : `-# ** اكتب سبب فتحك للتذكرة و فريق الدعم بيتواصل معك قريب <:emoji_32:1471962578895769611> **`;
 
+  // إرسال المنشن في أول رسالة يضيف الكل تلقائياً بدون رسائل نظام مزعجة
   await thread.send({
     content: `${interaction.user} ${roleMentions}\n${content}`,
-    components: [row, closeRow]
+    components: [row]
   });
 
-  // تسجيل التذكرة في قاعدة البيانات
+  // تسجيل التذكرة في قاعدة البيانات (نتأكد من استخدام thread.id)
   const ticket = new Ticket({
     channelId: thread.id,
     guildId: interaction.guild.id,
