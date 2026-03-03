@@ -239,11 +239,11 @@ async function onInteraction(client, interaction) {
     // جلب رتبة الوسيط
     const mediatorRoleId = await getMediatorRole(interaction.guild.id);
 
-    // إنشاء Thread
-    const ticketName = `شراء-${product.name}-${interaction.user.username}`;
+    // إنشاء Thread (باسم بدون فواصل)
+    const ticketName = `شراء ${product.name} ${interaction.user.username}`;
     
     const thread = await interaction.channel.threads.create({
-      name: ticketName.slice(0, 50),
+      name: ticketName.slice(0, 100),
       autoArchiveDuration: 1440,
       type: 12, // Private Thread
       invitable: false,
@@ -255,9 +255,9 @@ async function onInteraction(client, interaction) {
     await thread.members.add(interaction.user.id); // المشتري
     await thread.members.add(seller.id); // البائع
 
-    // إضافة رتبة الوسيط باستخدام Permission Overwrites (ما بتظهرش رسائل نظام)
+    // إضافة رتبة الوسيط باستخدام Permission Overwrites
     if (mediatorRoleId) {
-      await thread.permissionOverwrites.edit(mediatorRoleId, {
+      await thread.permissionOverwrites.create(mediatorRoleId, {
         ViewChannel: true,
         SendMessages: true
       }).catch(() => {});
