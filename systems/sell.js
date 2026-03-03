@@ -263,29 +263,27 @@ async function onInteraction(client, interaction) {
       mediatorId: null
     });
 
-    // زر الاستلام
-    const claimRow = new ActionRowBuilder().addComponents(
+    // زر واحد للاستلام (نفس الزر القديم)
+    const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`claim_${productId}`)
         .setLabel('استلام التذكرة')
         .setStyle(ButtonStyle.Secondary)
     );
 
-    // زر الإغلاق (معطل في البداية)
+    // زر الإغلاق (موجود من الأول)
     const closeRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`close_${productId}`)
-        .setLabel('إغلاق التذكرة')
+        .setLabel('إغلاق')
         .setStyle(ButtonStyle.Danger)
-        .setDisabled(true)
     );
 
     await ticketChannel.send({
       content: `${seller.user} ${interaction.user}\n` +
-               `-# **تم استلام طلبك <:new_emoji:1388436089584226387> **\n\n` +
                `-# **انت الحين في صدد شراء ${product.name} من البائع ${seller.user}**\n` +
                `-# **عند الاتفاق على السعر يفضّل استخدام أحد الوسطاء ${mediatorRole} الي ياخذون ٥٪؜ فقط من المبلغ <:emoji_36:1474949953876000950> **`,
-      components: [claimRow, closeRow]
+      components: [row, closeRow]
     });
 
     await interaction.reply({ 
@@ -336,26 +334,9 @@ async function onInteraction(client, interaction) {
       SendMessages: true
     });
 
-    // تحديث الأزرار
-    const claimRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`claim_${productId}`)
-        .setLabel('استلام التذكرة')
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(true)
-    );
-
-    const closeRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`close_${productId}`)
-        .setLabel('إغلاق التذكرة')
-        .setStyle(ButtonStyle.Danger)
-        .setDisabled(false)
-    );
-
+    // إرسال رسالة التعيين
     await channel.send({ 
-      content: `-# **تم تعيينك وسيط لهذه العملية <:new_emoji:1388436089584226387> **`,
-      components: [claimRow, closeRow]
+      content: `-# **تم تعيين ${interaction.user} وسيطاً لهذه العملية <:new_emoji:1388436089584226387> **`
     });
 
     await interaction.reply({ 
