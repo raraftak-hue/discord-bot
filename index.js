@@ -46,6 +46,31 @@ for (const file of systemFiles) {
 // ==================== جمع أوامر السلاش (معدلة) ====================
 const slashCommands = [
 
+  // أمر بيع المنتجات
+  {
+    name: 'sell',
+    description: 'بيع منتج في السيرفر',
+    options: [
+      {
+        name: 'name',
+        description: 'اسم المنتج',
+        type: 3,
+        required: true
+      },
+      {
+        name: 'description',
+        description: 'وصف المنتج',
+        type: 3,
+        required: true
+      },
+      {
+        name: 'price',
+        description: 'السعر بالدينار (10 دينار = 100k كريدت)',
+        type: 4,
+        required: true
+      }
+    ]
+  },
   // أوامر wel
   {
     name: 'wel',
