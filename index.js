@@ -45,6 +45,11 @@ for (const file of systemFiles) {
 
 // ==================== جمع أوامر السلاش (معدلة) ====================
 const slashCommands = [
+  // أمر فراغ
+  {
+    name: 'فراغ',
+    description: 'إرسال رسالة فارغة مكونة من 30 سطراً',
+  },
   // أوامر wel
   {
     name: 'wel',
@@ -478,12 +483,18 @@ client.on('messageCreate', async (message) => {
       .setColor(0x2b2d31)
       .setDescription(
         `** members<:emoji_32:1471962578895769611> **\n` +
-        `-# **text - دنانير، تحويل، اغنياء، سجل**\n\n` + // نقاط، اسبوعي، يومي (معلقة)
+        `-# **text - دنانير، تحويل، اغنياء، سجل، فراغ**\n\n` + // نقاط، اسبوعي، يومي (معلقة)
         `** Mods <:emoji_38:1470920843398746215>**\n` +
         `-# **wel, tic, give, pre, emb, eco**\n` + // whisper (معلقة)
         `-# **text - تايم، طرد، حذف**` // ارقام، ايقاف (معلقة)
       );
     await message.channel.send({ embeds: [embed] });
+    return;
+  }
+
+  if (command === 'فراغ') {
+    await message.delete().catch(() => {});
+    await message.channel.send('\n'.repeat(30));
     return;
   }
   
@@ -502,6 +513,12 @@ client.on('messageCreate', async (message) => {
 
 client.on('interactionCreate', async (interaction) => {
   console.log(`📢 أمر سلاش: ${interaction.commandName}`);
+
+  if (interaction.isChatInputCommand() && interaction.commandName === 'فراغ') {
+    await interaction.reply({ content: 'تم إرسال الفراغ', ephemeral: true });
+    await interaction.channel.send('\n'.repeat(30));
+    return;
+  }
   
   for (const [name, system] of client.systems) {
     if (system.onInteraction) {

@@ -108,8 +108,8 @@ module.exports = {
         const embed = new EmbedBuilder()
           .setDescription(
             `-# **سحب عشوائي على ${prize} ينتهي في <t:${Math.floor(endTime.getTime() / 1000)}:R> <:emoji_45:1397804598110195863> **\n` +
-            `-# **المنظم: ${interaction.user} <:y_coroa:1404576666105417871> **\n` +
-            `-# **الشروط: ${condition} <:new_emoji:1388436089584226387> **`
+            `-# **الي سوا السحب العشوائي ${interaction.user} <:y_coroa:1404576666105417871> **\n` +
+            `-# **الشروط ${condition} <:new_emoji:1388436089584226387> **`
           )
           .setColor(0x2b2d31);
         
