@@ -191,7 +191,7 @@ async function onInteraction(client, interaction) {
     return true;
   }
 
-  // ===== زر الشراء (نسخة Threads مع Permission Overwrites) =====
+  // ===== زر الشراء (نسخة المنشن السحري) =====
   if (interaction.isButton() && interaction.customId.startsWith('buy_')) {
     const productId = interaction.customId.split('_')[1];
     const product = await Product.findOne({ productId, isActive: true });
@@ -251,25 +251,8 @@ async function onInteraction(client, interaction) {
       startMessage: false
     });
 
-    // إضافة الأعضاء الأساسيين
-    await thread.members.add(interaction.user.id); // المشتري
-    await thread.members.add(seller.id); // البائع
-
-    // إضافة رتبة الوسيط باستخدام Permission Overwrites
-    if (mediatorRoleId) {
-      await thread.permissionOverwrites.create(mediatorRoleId, {
-        ViewChannel: true,
-        SendMessages: true
-      }).catch(() => {});
-    }
-
-    await PurchaseTicket.create({
-      productId,
-      buyerId: interaction.user.id,
-      guildId: interaction.guild.id,
-      channelId: thread.id,
-      mediatorId: null
-    });
+    // 🧙‍♂️ السحر هنا: ما نستخدمش thread.members.add أبداً!
+    // بنضيف الكل عن طريق المنشن في أول رسالة
 
     // أزرار الاستلام والإغلاق
     const row = new ActionRowBuilder().addComponents(
@@ -286,13 +269,27 @@ async function onInteraction(client, interaction) {
         .setStyle(ButtonStyle.Danger)
     );
 
-    const mediatorRole = mediatorRoleId ? `<@&${mediatorRoleId}>` : 'وسيط';
+    // تجهيز المنشن للكل
+    let mentions = `${interaction.user} ${seller.user}`; // المشتري + البائع
+    
+    if (mediatorRoleId) {
+      mentions += ` <@&${mediatorRoleId}>`; // منشن لرتبة الوسطاء كلها
+    }
 
+    // إرسال الرسالة السحرية (المنشن هيضيف الكل تلقائياً بدون رسائل نظام)
     await thread.send({
-      content: `${seller.user} ${interaction.user}\n` +
+      content: `${mentions}\n` +
                `-# **انت الحين في صدد شراء ${product.name} من البائع ${seller.user}**\n` +
-               `-# **عند الاتفاق على السعر يفضّل استخدام أحد الوسطاء ${mediatorRole} الي ياخذون ٥٪؜ فقط من المبلغ <:emoji_36:1474949953876000950> **`,
+               `-# **عند الاتفاق على السعر يفضّل استخدام أحد الوسطاء ${mediatorRoleId ? `<@&${mediatorRoleId}>` : 'الوسطاء'} الي ياخذون ٥٪؜ فقط من المبلغ <:emoji_36:1474949953876000950> **`,
       components: [row, closeRow]
+    });
+
+    await PurchaseTicket.create({
+      productId,
+      buyerId: interaction.user.id,
+      guildId: interaction.guild.id,
+      channelId: thread.id,
+      mediatorId: null
     });
 
     await interaction.reply({ 
