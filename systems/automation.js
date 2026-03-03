@@ -51,10 +51,11 @@ async function handleTextCommand(client, message, command, args, prefix) {
   if (!message.guild) return false;
 
   if (command === 'فراغ') {
-    await message.channel.send('‎');
-    await message.delete().catch(() => null);
-    return true;
-  }
+  const emptyLines = '\n'.repeat(30); // 30 سطر فاضي
+  await message.channel.send(emptyLines);
+  await message.delete().catch(() => null);
+  return true;
+}
 
   return false;
 }
