@@ -1,3 +1,4 @@
+/*
 const { EmbedBuilder, PermissionsBitField } = require('discord.js');
 const mongoose = require('mongoose');
 const cron = require('node-cron'); // <-- إضافة مكتبة cron
@@ -364,10 +365,11 @@ async function onReady(client) {
 
   console.log(`⏰ تم تشغيل المؤقتات اليومية والأسبوعية بنجاح حسب توقيت مكة المكرمة (${TIMEZONE})`);
 }
+*/
 
 module.exports = {
-  onMessage,
-  handleTextCommand,
-  onInteraction,
-  onReady
+  // onMessage,
+  // handleTextCommand,
+  // onInteraction,
+  // onReady
 };

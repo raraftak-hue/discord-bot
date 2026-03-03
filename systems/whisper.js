@@ -1,3 +1,4 @@
+/*
 // ==================== 🤫 نظام الهمسة (بالأزرار) ====================
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
@@ -104,4 +105,9 @@ module.exports = {
 
     return false;
   }
+};
+*/
+
+module.exports = {
+  // onInteraction
 };

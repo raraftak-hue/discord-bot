@@ -1,3 +1,4 @@
+/*
 const { EmbedBuilder, PermissionsBitField } = require('discord.js');
 const mongoose = require('mongoose');
 
@@ -196,8 +197,9 @@ async function handleTextCommand(client, message, command, args, prefix) {
 
   return false;
 }
+*/
 
 module.exports = {
-  onInteraction,
-  handleTextCommand
+  // onInteraction,
+  // handleTextCommand
 };

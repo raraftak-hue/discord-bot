@@ -266,6 +266,7 @@ const slashCommands = [
       }
     ]
   },
+  /*
   // أوامر whisper (معدل)
   {
     name: 'whisper',
@@ -312,7 +313,7 @@ const slashCommands = [
         options: [
           {
             name: 'amount',
-            description: 'المبلغ المضاف للخزينة',
+            description: 'المبلغ',
             type: 4,
             required: true
           },
@@ -371,6 +372,7 @@ const slashCommands = [
       }
     ]
   }
+  */
 ];
 
 // ==================== الأحداث ====================
@@ -448,10 +450,10 @@ client.on('messageCreate', async (message) => {
       .setColor(0x2b2d31)
       .setDescription(
         `** members<:emoji_32:1471962578895769611> **\n` +
-        `-# **text - دنانير، تحويل، اغنياء، نقاط، اسبوعي، يومي، سجل**\n\n` +
+        `-# **text - دنانير، تحويل، اغنياء، سجل**\n\n` + // نقاط، اسبوعي، يومي (معلقة)
         `** Mods <:emoji_38:1470920843398746215>**\n` +
-        `-# **wel, tic, give, pre, emb, eco, whisper**\n` +
-        `-# **text - تايم، طرد، حذف، ارقام، ايقاف**`
+        `-# **wel, tic, give, pre, emb, eco**\n` + // whisper (معلقة)
+        `-# **text - تايم، طرد، حذف**` // ارقام، ايقاف (معلقة)
       );
     await message.channel.send({ embeds: [embed] });
     return;

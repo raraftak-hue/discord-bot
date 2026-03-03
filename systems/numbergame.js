@@ -1,3 +1,4 @@
+/*
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionsBitField } = require('discord.js');
 
 // ==================== 🎮 دوال مساعدة ====================
@@ -252,10 +253,11 @@ async function onInteraction(client, interaction) {
 
   return false;
 }
+*/
 
 // ==================== تصدير النظام ====================
 module.exports = {
-  onMessage,
-  handleTextCommand,
-  onInteraction
+  // onMessage,
+  // handleTextCommand,
+  // onInteraction
 };
