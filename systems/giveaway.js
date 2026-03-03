@@ -19,8 +19,12 @@ const GiveawaySchema = new mongoose.Schema({
 const Giveaway = mongoose.model('Giveaway', GiveawaySchema);
 
 // ==================== 🔧 الدوال المساعدة ====================
-async function endGiveaway(client, giveaway) {
+async function endGiveaway(client, giveawayId) {
   try {
+    // جلب أحدث نسخة من القيف أوي من قاعدة البيانات لضمان وجود جميع المشاركين
+    const giveaway = await Giveaway.findById(giveawayId);
+    if (!giveaway || giveaway.ended) return;
+
     const guild = await client.guilds.fetch(giveaway.guildId).catch(() => null);
     if (!guild) return;
 
@@ -74,10 +78,10 @@ module.exports = {
     for (const g of activeGiveaways) {
       if (g.endTime > new Date()) {
         const timeLeft = g.endTime.getTime() - Date.now();
-        setTimeout(() => endGiveaway(client, g), timeLeft);
+        setTimeout(() => endGiveaway(client, g._id), timeLeft);
         console.log(`🔄 تم استعادة قيف: ${g.prize}`);
       } else { 
-        await endGiveaway(client, g); 
+        await endGiveaway(client, g._id); 
       }
     }
   },
@@ -135,27 +139,30 @@ module.exports = {
         });
         
         await giveaway.save();
-        setTimeout(async () => { await endGiveaway(client, giveaway); }, durationMs);
+        setTimeout(async () => { await endGiveaway(client, giveaway._id); }, durationMs);
         return true;
       }
     }
 
     if (interaction.isButton() && interaction.customId === 'join_giveaway') {
-      const giveaway = await Giveaway.findOne({ messageId: interaction.message.id, ended: false });
+      // استخدام findOneAndUpdate لضمان عدم تداخل العمليات عند الانضمام
+      const giveaway = await Giveaway.findOneAndUpdate(
+        { messageId: interaction.message.id, ended: false, participants: { $ne: interaction.user.id } },
+        { $push: { participants: interaction.user.id } },
+        { new: true }
+      );
       
-      if (!giveaway || giveaway.ended) {
-        return interaction.reply({ content: '❌ هذا القيف أوي انتهى أو غير موجود', ephemeral: true });
+      if (!giveaway) {
+        // التحقق مما إذا كان القيف انتهى أو المستخدم موجود بالفعل
+        const existing = await Giveaway.findOne({ messageId: interaction.message.id });
+        if (!existing || existing.ended) {
+          return interaction.reply({ content: '❌ هذا القيف أوي انتهى أو غير موجود', ephemeral: true });
+        }
+        if (existing.participants.includes(interaction.user.id)) {
+          return interaction.reply({ content: `-# **انت داخل القيف اصلا <:__:1467633552408576192> **`, ephemeral: true });
+        }
+        return interaction.reply({ content: '❌ حدث خطأ ما، حاول مرة أخرى.', ephemeral: true });
       }
-      
-      // التأكد من وجود مصفوفة المشاركين
-      if (!giveaway.participants) giveaway.participants = [];
-      
-      if (giveaway.participants.includes(interaction.user.id)) {
-        return interaction.reply({ content: `-# **انت داخل القيف اصلا <:__:1467633552408576192> **`, ephemeral: true });
-      }
-      
-      giveaway.participants.push(interaction.user.id);
-      await giveaway.save();
       
       await interaction.reply({ content: `-# **تم دخولك في السحب <:2thumbup:1467287897429512396> **`, ephemeral: true });
       return true;
