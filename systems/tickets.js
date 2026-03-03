@@ -291,8 +291,8 @@ async function handleOpenTicket(interaction, client, type) {
   const settings = await getTicketSettings(interaction.guild.id);
 
   const threadName = type === 'court' 
-    ? `محكمة-${interaction.user.username}` 
-    : `دعم-${interaction.user.username}`;
+    ? `محكمة ${interaction.user.username}` 
+    : `دعم ${interaction.user.username}`;
 
   console.log(`📝 [TICKETS] اسم الثريد: ${threadName}`);
 
