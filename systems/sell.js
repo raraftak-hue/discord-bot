@@ -14,7 +14,9 @@ const MediatorRoleSchema = new mongoose.Schema({
 
 const SellMentionSchema = new mongoose.Schema({
   guildId: String,
-  roleId: String
+  roleId: String,
+  text: { type: String, default: "" },
+  deleteAfter: { type: Number, default: null }
 });
 
 const ProductSchema = new mongoose.Schema({
@@ -58,18 +60,18 @@ async function getMediatorRole(guildId) {
   return data?.roleId || null;
 }
 
-async function getSellMentionRole(guildId) {
-  const data = await SellMention.findOne({ guildId });
-  return data?.roleId || null;
+async function getSellMentionData(guildId) {
+  return await SellMention.findOne({ guildId });
 }
 
 async function createProductEmbed(product) {
   return new EmbedBuilder()
     .setColor(0x2b2d31)
     .setDescription(
-      `**${product.name}**\n` +
+      `**${product.name} <:emoji_35:1474845075950272756> **\n` +
       `-# **${product.description}**\n\n` +
-      `**السعر ${product.price} دينار <:emoji_41:1471619709936996406>**`
+      `**السعر <:emoji_41:1471619709936996406> **\n` +
+      `-# ** ${product.price} دينار **`
     );
 }
 
@@ -149,18 +151,19 @@ async function onInteraction(client, interaction) {
       });
     }
 
-    const input = interaction.options.getString('role_or_action');
+    const roleInput = interaction.options.getString('role');
+    const mentionText = interaction.options.getString('text') || "";
+    const deleteAfter = interaction.options.getInteger('delete_after');
 
-    if (input === 'حذف') {
+    if (roleInput === 'حذف') {
       await SellMention.deleteOne({ guildId: interaction.guild.id });
       return interaction.reply({ 
-        content: `-# **تم حذف رتبة المنشن التلقائي بنجاح <:2thumbup:1467287897429512396> **`, 
+        content: `-# **تم حذف إعدادات المنشن التلقائي بنجاح <:2thumbup:1467287897429512396> **`, 
         ephemeral: true 
       });
     }
 
-    // محاولة استخراج ID الرتبة من المنشن أو النص
-    const roleId = input.replace(/[<@&>]/g, '');
+    const roleId = roleInput.replace(/[<@&>]/g, '');
     const role = interaction.guild.roles.cache.get(roleId);
 
     if (!role) {
@@ -172,12 +175,16 @@ async function onInteraction(client, interaction) {
 
     await SellMention.findOneAndUpdate(
       { guildId: interaction.guild.id },
-      { roleId: role.id },
+      { 
+        roleId: role.id,
+        text: mentionText,
+        deleteAfter: deleteAfter
+      },
       { upsert: true }
     );
 
     await interaction.reply({ 
-      content: `-# **تم تعيين رتبة المنشن التلقائي إلى ${role} <:2thumbup:1467287897429512396> **`, 
+      content: `-# **تم تعيين إعدادات المنشن: ${role} | النص: ${mentionText || 'لا يوجد'} | وقت الحذف: ${deleteAfter ? deleteAfter + ' ثانية' : 'لا يوجد'} <:2thumbup:1467287897429512396> **`, 
       ephemeral: true 
     });
     return true;
@@ -206,9 +213,8 @@ async function onInteraction(client, interaction) {
     const description = interaction.options.getString('description');
     const price = interaction.options.getInteger('price');
     
-    // جلب رتبة المنشن التلقائية من قاعدة البيانات
-    const autoMentionRoleId = await getSellMentionRole(interaction.guild.id);
-    const mention = autoMentionRoleId ? `<@&${autoMentionRoleId}>` : '';
+    // جلب بيانات المنشن التلقائية من قاعدة البيانات
+    const mentionData = await getSellMentionData(interaction.guild.id);
 
     const product = new Product({
       sellerId: interaction.user.id,
@@ -231,8 +237,20 @@ async function onInteraction(client, interaction) {
 
     const webhook = await getOrCreateWebhook(interaction.channel, interaction.member);
     
+    // إرسال المنشن في رسالة منفصلة إذا كان مفعلاً
+    if (mentionData && mentionData.roleId) {
+      const mentionContent = `<@&${mentionData.roleId}> ${mentionData.text}`;
+      const mentionMsg = await interaction.channel.send({ content: mentionContent });
+      
+      // الحذف التلقائي للمنشن إذا تم تحديد وقت
+      if (mentionData.deleteAfter && mentionData.deleteAfter > 0) {
+        setTimeout(() => {
+          mentionMsg.delete().catch(() => null);
+        }, mentionData.deleteAfter * 1000);
+      }
+    }
+
     const msg = await webhook.send({
-      content: mention,
       embeds: [embed],
       components: [row],
       wait: true

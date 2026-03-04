@@ -62,7 +62,11 @@ const slashCommands = [
     name: 'sell-mention',
     description: 'إعدادات المنشن التلقائي (اكتب "حذف" للإلغاء)',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
-    options: [{ name: 'role_or_action', description: 'الرتبة أو كلمة "حذف"', type: 3, required: true }]
+    options: [
+      { name: 'role', description: 'الرتبة التي سيتم منشنها (أو اكتب "حذف" للإلغاء)', type: 3, required: true },
+      { name: 'text', description: 'النص الذي سيظهر مع المنشن', type: 3, required: false },
+      { name: 'delete_after', description: 'وقت الحذف بالثواني (اختياري)', type: 4, required: false }
+    ]
   },
   {
     name: 'sell',
