@@ -90,9 +90,15 @@ const slashCommands = [
       },
       {
         name: 'price',
-        description: 'السعر بالدينار',
+        description: 'السعر بالدينار (10 دينار = 100k كريديت)',
         type: 4,
         required: true
+      },
+      {
+        name: 'mention',
+        description: 'المنشن الذي يظهر فوق المنتج (اختياري)',
+        type: 3,
+        required: false
       }
     ]
   },

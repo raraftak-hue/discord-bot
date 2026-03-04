@@ -151,6 +151,7 @@ async function onInteraction(client, interaction) {
     const name = interaction.options.getString('name');
     const description = interaction.options.getString('description');
     const price = interaction.options.getInteger('price');
+    const mention = interaction.options.getString('mention') || '';
 
     const product = new Product({
       sellerId: interaction.user.id,
@@ -174,6 +175,7 @@ async function onInteraction(client, interaction) {
     const webhook = await getOrCreateWebhook(interaction.channel, interaction.member);
     
     const msg = await webhook.send({
+      content: mention,
       embeds: [embed],
       components: [row],
       wait: true
