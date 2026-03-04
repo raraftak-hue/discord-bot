@@ -45,68 +45,32 @@ for (const file of systemFiles) {
 
 // ==================== جمع أوامر السلاش (معدلة) ====================
 const slashCommands = [
-  // ===== أوامر نظام البيع =====// ===== أوامر نظام البيع =====
+  // ===== أوامر نظام البيع (معدلة ومختصرة) =====
   {
-    name: 'set-seller-role',
-    description: 'تعيين رتبة البائعين في السيرفر',
+    name: 'sell-role',
+    description: 'إعدادات رتبة البائعين',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
-    options: [
-      {
-        name: 'role',
-        description: 'الرتبة المسموح لها بالبيع',
-        type: 8,
-        required: true
-      }
-    ]
+    options: [{ name: 'role', description: 'الرتبة', type: 8, required: true }]
   },
   {
-    name: 'set-mediator-role',
-    description: 'تعيين رتبة الوسطاء في السيرفر',
+    name: 'sell-med',
+    description: 'إعدادات رتبة الوسطاء',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
-    options: [
-      {
-        name: 'role',
-        description: 'الرتبة المسموح لها بالتوسط',
-        type: 8,
-        required: true
-      }
-    ]
+    options: [{ name: 'role', description: 'الرتبة', type: 8, required: true }]
   },
   {
-    name: 'set-sell-mention',
-    description: 'تعيين رتبة يتم منشنها تلقائياً عند كل عملية بيع',
+    name: 'sell-mention',
+    description: 'إعدادات المنشن التلقائي (اكتب "حذف" للإلغاء)',
     default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
-    options: [
-      {
-        name: 'role',
-        description: 'الرتبة التي سيتم منشنها',
-        type: 8,
-        required: true
-      }
-    ]
+    options: [{ name: 'role_or_action', description: 'الرتبة أو كلمة "حذف"', type: 3, required: true }]
   },
   {
     name: 'sell',
-    description: 'بيع منتج في السيرفر',
+    description: 'بيع منتج جديد',
     options: [
-      {
-        name: 'name',
-        description: 'اسم المنتج',
-        type: 3,
-        required: true
-      },
-      {
-        name: 'description',
-        description: 'وصف المنتج',
-        type: 3,
-        required: true
-      },
-      {
-        name: 'price',
-        description: 'السعر بالدينار (10 دينار = 100k كريديت)',
-        type: 4,
-        required: true
-      },
+      { name: 'name', description: 'اسم المنتج', type: 3, required: true },
+      { name: 'description', description: 'وصف المنتج', type: 3, required: true },
+      { name: 'price', description: 'السعر (10 دينار = 100k كريديت)', type: 4, required: true }
     ]
   },
   // أوامر wel

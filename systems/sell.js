@@ -92,8 +92,8 @@ async function getOrCreateWebhook(channel, seller) {
 async function onInteraction(client, interaction) {
   if (!interaction.isChatInputCommand() && !interaction.isButton()) return false;
 
-  // ===== أمر /set-seller-role =====
-  if (interaction.isChatInputCommand() && interaction.commandName === 'set-seller-role') {
+  // ===== أمر /sell-role =====
+  if (interaction.isChatInputCommand() && interaction.commandName === 'sell-role') {
     if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
       return interaction.reply({ 
         content: `-# **ما عندك صلاحية <:emoji_84:1389404919672340592> **`, 
@@ -116,8 +116,8 @@ async function onInteraction(client, interaction) {
     return true;
   }
 
-  // ===== أمر /set-mediator-role =====
-  if (interaction.isChatInputCommand() && interaction.commandName === 'set-mediator-role') {
+  // ===== أمر /sell-med =====
+  if (interaction.isChatInputCommand() && interaction.commandName === 'sell-med') {
     if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
       return interaction.reply({ 
         content: `-# **ما عندك صلاحية <:emoji_84:1389404919672340592> **`, 
@@ -140,8 +140,8 @@ async function onInteraction(client, interaction) {
     return true;
   }
 
-  // ===== أمر /set-sell-mention =====
-  if (interaction.isChatInputCommand() && interaction.commandName === 'set-sell-mention') {
+  // ===== أمر /sell-mention =====
+  if (interaction.isChatInputCommand() && interaction.commandName === 'sell-mention') {
     if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
       return interaction.reply({ 
         content: `-# **ما عندك صلاحية <:emoji_84:1389404919672340592> **`, 
@@ -149,7 +149,26 @@ async function onInteraction(client, interaction) {
       });
     }
 
-    const role = interaction.options.getRole('role');
+    const input = interaction.options.getString('role_or_action');
+
+    if (input === 'حذف') {
+      await SellMention.deleteOne({ guildId: interaction.guild.id });
+      return interaction.reply({ 
+        content: `-# **تم حذف رتبة المنشن التلقائي بنجاح <:2thumbup:1467287897429512396> **`, 
+        ephemeral: true 
+      });
+    }
+
+    // محاولة استخراج ID الرتبة من المنشن أو النص
+    const roleId = input.replace(/[<@&>]/g, '');
+    const role = interaction.guild.roles.cache.get(roleId);
+
+    if (!role) {
+      return interaction.reply({ 
+        content: `-# **رتبة غير صالحة، يرجى منشن الرتبة أو كتابة "حذف" <:emoji_84:1389404919672340592> **`, 
+        ephemeral: true 
+      });
+    }
 
     await SellMention.findOneAndUpdate(
       { guildId: interaction.guild.id },
