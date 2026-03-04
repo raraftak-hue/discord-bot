@@ -12,6 +12,11 @@ const MediatorRoleSchema = new mongoose.Schema({
   roleId: String
 });
 
+const SellMentionSchema = new mongoose.Schema({
+  guildId: String,
+  roleId: String
+});
+
 const ProductSchema = new mongoose.Schema({
   productId: { type: String, default: () => new mongoose.Types.ObjectId().toString() },
   sellerId: String,
@@ -38,6 +43,7 @@ const PurchaseTicketSchema = new mongoose.Schema({
 
 const SellerRole = mongoose.model('SellerRole', SellerRoleSchema);
 const MediatorRole = mongoose.model('MediatorRole', MediatorRoleSchema);
+const SellMention = mongoose.model('SellMention', SellMentionSchema);
 const Product = mongoose.model('Product', ProductSchema);
 const PurchaseTicket = mongoose.model('PurchaseTicket', PurchaseTicketSchema);
 
@@ -49,6 +55,11 @@ async function getSellerRole(guildId) {
 
 async function getMediatorRole(guildId) {
   const data = await MediatorRole.findOne({ guildId });
+  return data?.roleId || null;
+}
+
+async function getSellMentionRole(guildId) {
+  const data = await SellMention.findOne({ guildId });
   return data?.roleId || null;
 }
 
@@ -129,6 +140,30 @@ async function onInteraction(client, interaction) {
     return true;
   }
 
+  // ===== أمر /set-sell-mention =====
+  if (interaction.isChatInputCommand() && interaction.commandName === 'set-sell-mention') {
+    if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+      return interaction.reply({ 
+        content: `-# **ما عندك صلاحية <:emoji_84:1389404919672340592> **`, 
+        ephemeral: true 
+      });
+    }
+
+    const role = interaction.options.getRole('role');
+
+    await SellMention.findOneAndUpdate(
+      { guildId: interaction.guild.id },
+      { roleId: role.id },
+      { upsert: true }
+    );
+
+    await interaction.reply({ 
+      content: `-# **تم تعيين رتبة المنشن التلقائي إلى ${role} <:2thumbup:1467287897429512396> **`, 
+      ephemeral: true 
+    });
+    return true;
+  }
+
   // ===== أمر /sell =====
   if (interaction.isChatInputCommand() && interaction.commandName === 'sell') {
     
@@ -151,7 +186,10 @@ async function onInteraction(client, interaction) {
     const name = interaction.options.getString('name');
     const description = interaction.options.getString('description');
     const price = interaction.options.getInteger('price');
-    const mention = interaction.options.getString('mention') || '';
+    
+    // جلب رتبة المنشن التلقائية من قاعدة البيانات
+    const autoMentionRoleId = await getSellMentionRole(interaction.guild.id);
+    const mention = autoMentionRoleId ? `<@&${autoMentionRoleId}>` : '';
 
     const product = new Product({
       sellerId: interaction.user.id,

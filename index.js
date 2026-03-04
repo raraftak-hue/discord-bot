@@ -73,6 +73,19 @@ const slashCommands = [
     ]
   },
   {
+    name: 'set-sell-mention',
+    description: 'تعيين رتبة يتم منشنها تلقائياً عند كل عملية بيع',
+    default_member_permissions: PermissionsBitField.Flags.Administrator.toString(),
+    options: [
+      {
+        name: 'role',
+        description: 'الرتبة التي سيتم منشنها',
+        type: 8,
+        required: true
+      }
+    ]
+  },
+  {
     name: 'sell',
     description: 'بيع منتج في السيرفر',
     options: [
@@ -94,12 +107,6 @@ const slashCommands = [
         type: 4,
         required: true
       },
-      {
-        name: 'mention',
-        description: 'المنشن الذي يظهر فوق المنتج (اختياري)',
-        type: 3,
-        required: false
-      }
     ]
   },
   // أوامر wel
