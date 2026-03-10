@@ -353,6 +353,14 @@ async function onInteraction(client, interaction) {
       mentions += ` <@&${mediatorRoleId}>`; // منشن لرتبة الوسطاء كلها
     }
 
+    // إضافة المشتري والبائع للثريد لضمان صلاحيات الكتابة
+    try {
+      await thread.members.add(interaction.user.id);
+      await thread.members.add(seller.id);
+    } catch (error) {
+      console.error('❌ [SELL] خطأ في إضافة الأعضاء للثريد:', error);
+    }
+
     // إرسال الرسالة السحرية (المنشن هيضيف الكل تلقائياً بدون رسائل نظام)
     await thread.send({
       content: `${mentions}\n` +
