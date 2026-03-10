@@ -339,11 +339,15 @@ async function handleOpenTicket(interaction, client, type) {
     ? `-# **أهلاً بكم في محكمة العدل الرجاء كتابة ما المشكلة و من هم الشهود عليها إن وجدوا <:emoji_35:1474845075950272756> **`
     : `-# ** اكتب سبب فتحك للتذكرة و فريق الدعم بيتواصل معك قريب <:emoji_32:1471962578895769611> **`;
 
-  // إضافة العضو للثريد برمجياً لضمان صلاحيات الكتابة (هذا هو الحل المضمون تقنياً)
+  // منح العضو صلاحية الكتابة داخل الثريد بشكل خاص (Overwrites) لتجاوز قيود القناة الأساسية
   try {
-    await thread.members.add(interaction.user.id);
+    await thread.permissionOverwrites.create(interaction.user.id, {
+      SendMessages: true,
+      ViewChannel: true,
+      ReadMessageHistory: true
+    });
   } catch (error) {
-    console.error('❌ [TICKETS] خطأ في إضافة العضو للثريد:', error);
+    console.error('❌ [TICKETS] خطأ في تعديل صلاحيات العضو للثريد:', error);
   }
 
   await thread.send({
