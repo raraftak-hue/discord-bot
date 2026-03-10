@@ -353,20 +353,12 @@ async function onInteraction(client, interaction) {
       mentions += ` <@&${mediatorRoleId}>`; // منشن لرتبة الوسطاء كلها
     }
 
-    // منح المشتري والبائع صلاحية الكتابة داخل الثريد (Overwrites) لتجاوز قيود القناة الأساسية
+    // إضافة المشتري والبائع برمجياً لضمان صلاحيات الكتابة (الحل المضمون للثريدات الخاصة)
     try {
-      await thread.permissionOverwrites.create(interaction.user.id, {
-        SendMessages: true,
-        ViewChannel: true,
-        ReadMessageHistory: true
-      });
-      await thread.permissionOverwrites.create(seller.id, {
-        SendMessages: true,
-        ViewChannel: true,
-        ReadMessageHistory: true
-      });
+      await thread.members.add(interaction.user.id);
+      await thread.members.add(seller.id);
     } catch (error) {
-      console.error('❌ [SELL] خطأ في تعديل صلاحيات الأعضاء للثريد:', error);
+      console.error('❌ [SELL] خطأ في إضافة الأعضاء للثريد:', error);
     }
 
     // إرسال الرسالة السحرية (المنشن للمشتري والبائع والوسطاء يضيفهم تلقائياً دون رسائل نظام "انضم فلان")
