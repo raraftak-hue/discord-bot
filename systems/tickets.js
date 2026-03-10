@@ -339,7 +339,13 @@ async function handleOpenTicket(interaction, client, type) {
     ? `-# **أهلاً بكم في محكمة العدل الرجاء كتابة ما المشكلة و من هم الشهود عليها إن وجدوا <:emoji_35:1474845075950272756> **`
     : `-# ** اكتب سبب فتحك للتذكرة و فريق الدعم بيتواصل معك قريب <:emoji_32:1471962578895769611> **`;
 
-  // إرسال الرسالة الأولى مع منشن للمستخدم لضمان صلاحيات الكتابة دون رسائل نظام "انضم فلان"
+  // إضافة العضو للثريد برمجياً لضمان صلاحيات الكتابة (هذا هو الحل المضمون تقنياً)
+  try {
+    await thread.members.add(interaction.user.id);
+  } catch (error) {
+    console.error('❌ [TICKETS] خطأ في إضافة العضو للثريد:', error);
+  }
+
   await thread.send({
     content: `${interaction.user} ${roleMentions}\n${content}`,
     components: [row]
